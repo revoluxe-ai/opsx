@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bounded-verify-result-v1",
+  "title": "BoundedVerificationResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result_id",
+    "plan_fingerprint",
+    "ledger_revision",
+    "assignment_epoch",
+    "check_id",
+    "execution_id",
+    "result_status",
+    "producer"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "bounded-verify-result-v1"
+    },
+    "result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ledger_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assignment_epoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "check_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result_status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "EXECUTION_ERROR", "INCOMPLETE"]
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registry_check_id_snapshot": {
+      "type": "string"
+    },
+    "worker_packet_or_equivalent": {
+      "type": "object"
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

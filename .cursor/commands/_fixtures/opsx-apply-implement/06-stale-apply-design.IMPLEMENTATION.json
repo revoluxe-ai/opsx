@@ -1,0 +1,18 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "STALE_APPLY_DESIGN",
+      "detail": "APPLY DESIGN planning_digest no longer matches current planning file bytes.",
+      "paths": ["openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json"]
+    }
+  ],
+  "next_stage": "NONE"
+}

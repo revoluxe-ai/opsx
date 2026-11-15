@@ -1,0 +1,118 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 2,
+  "evidence_contract": "per_command_v1",
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T12:01:00Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": [
+    "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "tests/unit/fixtureNoSessionRed.test.mjs",
+    "tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "node --test --test-name-pattern ^no session skips hydrate$ tests/unit/fixtureNoSessionRed.test.mjs",
+    "node --test --test-name-pattern ^novel and wardrobe hydrates stay separate$ tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "command_executions": [
+    {
+      "test_path": "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "test_title": "hydrate coordinator coalesces in-flight hydrates",
+      "command": "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "expected coalesced=true, received coalesced=false",
+          "intended_seam": "hydrateCoordinator",
+          "relevant_output": "AssertionError: expected coalesced=true, received coalesced=false"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "expected coalesced=true, received coalesced=false",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureNoSessionRed.test.mjs",
+      "test_title": "no session skips hydrate",
+      "command": "node --test --test-name-pattern ^no session skips hydrate$ tests/unit/fixtureNoSessionRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureWardrobeFlightRed.test.mjs",
+      "test_title": "novel and wardrobe hydrates stay separate",
+      "command": "node --test --test-name-pattern ^novel and wardrobe hydrates stay separate$ tests/unit/fixtureWardrobeFlightRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureResumeJwtRed.test.mjs",
+      "test_title": "resume reuses current JWT",
+      "command": "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "TEST_SETUP_FAILURE",
+          "failure_signature": "SyntaxError: Unexpected token",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "SyntaxError: Unexpected token"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "TEST_SETUP_FAILURE",
+      "final_failure_signature": "SyntaxError: Unexpected token",
+      "intended_seam_reached": false,
+      "red_qualified": false
+    }
+  ],
+  "product_files_modified": false,
+  "tests_frozen": false,
+  "blockers": [
+    {
+      "code": "TEST_SETUP_FAILURE",
+      "detail": "Fourth frozen command failed with SyntaxError. Do not freeze the suite.",
+      "unqualified_commands": [
+        "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs"
+      ]
+    }
+  ],
+  "next_stage": "NONE"
+}

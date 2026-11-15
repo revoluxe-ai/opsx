@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx-orch-core/worker-dispatch.schema.json",
+  "title": "OPSX Outer Worker Dispatch Record",
+  "description": "One outer background Task dispatch for an opaque worker command. Authority: OPSX-ORCH-ASYNC-TRANSPORT-01.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dispatch_id",
+    "mission_id",
+    "work_item_id",
+    "command",
+    "transport",
+    "state",
+    "dispatched_at"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "dispatch_id": { "type": "string" },
+    "mission_id": { "type": "string" },
+    "work_item_id": { "type": "string" },
+    "worker_id": { "type": "string" },
+    "task_id": { "type": ["string", "null"] },
+    "command": { "type": "string" },
+    "transport": { "enum": ["TASK_BACKGROUND", "HOST_INLINE"] },
+    "state": {
+      "enum": [
+        "DISPATCHED",
+        "RUNNING",
+        "HARVEST_PENDING",
+        "EXECUTION_TERMINAL",
+        "STOP_UNCONFIRMED",
+        "CANCELLED"
+      ]
+    },
+    "waiting_for": { "const": "TERMINAL_RESULT" },
+    "execution_terminal_reason": {
+      "enum": [
+        "SUCCESS",
+        "FAILURE",
+        "CANCELLED",
+        "WORKER_NOT_RUNNING_CONFIRMED",
+        null
+      ]
+    },
+    "timeout_reached_at": { "type": ["string", "null"], "format": "date-time" },
+    "stop_unconfirmed": { "type": "boolean", "default": false },
+    "ui_stopped_observed": { "type": "boolean", "description": "Informational only; never terminal authority" },
+    "dispatched_at": { "type": "string", "format": "date-time" },
+    "harvested_at": { "type": ["string", "null"], "format": "date-time" },
+    "semantic_result_status": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}

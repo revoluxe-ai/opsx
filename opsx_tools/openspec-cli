@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ============================================================================
+# openspec-cli — canonical TARGET-local OpenSpec CLI invocation (fail-closed).
+# ============================================================================
+# Назначение: запуск pinned @fission-ai/openspec без global PATH / npx fallback.
+# Bootstrap: `opsx_tools/openspec-cli-node/setup.sh` (явная сеть, не auto-run).
+# ============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+NODE_ENV="${REPO_ROOT}/opsx_tools/openspec-cli-node"
+MANIFEST="${NODE_ENV}/provider.manifest.json"
+BIN="${NODE_ENV}/node_modules/.bin/openspec"
+
+fail() {
+  echo "OPENSPEC_CLI_FAIL: $1" >&2
+  exit 1
+}
+
+[[ -f "${MANIFEST}" ]] || fail "missing provider manifest ${MANIFEST}"
+[[ -f "${NODE_ENV}/package-lock.json" ]] || fail "missing package-lock.json (run setup.sh)"
+[[ -x "${BIN}" ]] || fail "provider not installed (run opsx_tools/openspec-cli-node/setup.sh)"
+
+EXPECTED_VERSION="1.14.1"
+ACTUAL_VERSION="$("${BIN}" --version 2>/dev/null || true)"
+[[ "${ACTUAL_VERSION}" == "${EXPECTED_VERSION}" ]] || fail "wrong openspec version (expected ${EXPECTED_VERSION}, got ${ACTUAL_VERSION:-<empty>})"
+
+# Engineering adoption gate for OpenSpec CLI writes (fail-closed).
+pre_write_gate() {
+  local subcmd="${1:-}"
+  case "${subcmd}" in
+    new|archive)
+      if ! python3 -m tools.openspec.opsx_mutation_authority \
+        --enforce \
+        --entrypoint-id bash.openspec_cli.write \
+        --root "${REPO_ROOT}"; then
+        fail "OPSX_ADOPTION_REQUIRED (run /opsx-adopt)"
+      fi
+      ;;
+  esac
+}
+
+if [[ $# -ge 1 ]]; then
+  pre_write_gate "$1"
+fi
+
+exec "${BIN}" "$@"

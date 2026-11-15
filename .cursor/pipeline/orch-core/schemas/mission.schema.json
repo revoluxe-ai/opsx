@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx-orch-core/mission.schema.json",
+  "title": "OPSX Orchestration Mission Record",
+  "description": "Durable mission identity and terminal state for /opsx-orch-* scenarios. Authority: OPSX-ORCH-CORE-01.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mission_id",
+    "scenario_command",
+    "created_at",
+    "updated_at",
+    "mission_status"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "mission_id": { "type": "string", "minLength": 1 },
+    "scenario_command": { "type": "string", "pattern": "^/opsx-orch-" },
+    "change_id": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "mission_status": {
+      "enum": [
+        "ACTIVE",
+        "BLOCKED_OWNER_DECISION",
+        "BLOCKED_RESOURCE",
+        "BLOCKED_WORKER_STATE",
+        "BLOCKED_GLOBAL_BLOCKER",
+        "PARTIAL_COMPLETE",
+        "BUG_BATCH_CLEAR",
+        "CANCELLED",
+        "FAIL_CLOSED"
+      ]
+    },
+    "current_stage": { "type": "string" },
+    "plan_ids": { "type": "array", "items": { "type": "string" } },
+    "work_item_ids": { "type": "array", "items": { "type": "string" } },
+    "bug_batch_clear": { "type": "boolean" },
+    "return_to_caller_discovery_gate": { "type": "boolean" },
+    "stop_unconfirmed_workers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Worker IDs where liveness could not be confirmed after timeout"
+    },
+    "product_writer_lock_holder": { "type": ["string", "null"] },
+    "created_by": { "type": "string" },
+    "auto_persist_pending": {
+      "type": ["string", "null"],
+      "description": "Stage substage awaiting delegated persist (e.g. S2b_DISPOSITION_AUTO_PERSIST)"
+    },
+    "worktree_ownership_receipts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Receipt paths under receipts/worktree-ownership-<WORK_ITEM_ID>.json"
+    }
+  },
+  "additionalProperties": true
+}

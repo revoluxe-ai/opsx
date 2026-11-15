@@ -1,0 +1,21 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "production_paths_modified": ["src/store/progress.js"],
+  "production_paths_created": [],
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "BLOCKED_SCOPE_EXPANSION",
+      "detail": "Wrote src/store/progress.js which is not an expected_product_write_surface for SLICE-001 and is not justified by architectural_intent.",
+      "paths": ["src/store/progress.js"]
+    }
+  ],
+  "next_stage": "NONE"
+}

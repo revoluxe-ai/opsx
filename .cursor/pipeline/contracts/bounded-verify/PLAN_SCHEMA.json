@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bounded-verify-plan-v1",
+  "title": "BoundedVerificationPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "change_id",
+    "plan_id",
+    "plan_status",
+    "plan_fingerprint",
+    "required_checks",
+    "implementation_snapshot"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "bounded-verify-plan-v1"
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_status": {
+      "type": "string",
+      "enum": ["DRAFT", "FROZEN"]
+    },
+    "plan_fingerprint": {
+      "type": "string"
+    },
+    "required_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "order"],
+        "properties": {
+          "check_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "implementation_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content_digest"],
+      "properties": {
+        "content_digest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completion_policy": {
+          "type": "string",
+          "enum": ["SPLIT_APPLY_CURRENT_GREEN", "LEGACY_TASKS_MD"]
+        },
+        "split_apply_marker": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "plan_status": {
+            "const": "FROZEN"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan_fingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "plan_status": {
+            "const": "DRAFT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "plan_fingerprint": {
+            "const": ""
+          }
+        }
+      }
+    }
+  ]
+}

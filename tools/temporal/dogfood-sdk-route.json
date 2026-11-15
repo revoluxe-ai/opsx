@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "default_tier": "sol",
+  "steps": {
+    "review": "sol",
+    "repair": "sol",
+    "next_check": "sol",
+    "verification_executor": "sol"
+  },
+  "tiers": {
+    "sol": {
+      "label": "GPT-5.6 Sol (dogfood)",
+      "model": "gpt-5.6-sol",
+      "reasoning": "high",
+      "speed": "standard",
+      "cli_model": "gpt-5.6-sol"
+    }
+  },
+  "speed_variants": {},
+  "notes": {
+    "purpose": "Lane SDK migration dogfood — exact proven SDK route only"
+  }
+}

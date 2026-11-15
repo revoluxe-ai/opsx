@@ -1,0 +1,16 @@
+chore(opsx_runtime): verify runner entrypoints and main graph wiring (точки входа verify runtime)
+
+What:
+- Wire verify runners into run.py, main graph, and smoke entry scripts.
+
+Why:
+- CLI/runner wiring separate from agent implementations.
+
+How:
+- Update run_verify_* and workflows/main*.py.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- medium until integration tests run in CI.

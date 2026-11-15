@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.current_byte_adoption_authority.v2",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "schema_version",
+    "authorization_class",
+    "candidate_digest",
+    "audit_receipt_sha256",
+    "owner_attestation_ref",
+    "bindings"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.current_byte_adoption_authority" },
+    "schema_version": { "const": 2 },
+    "authorization_class": { "const": "CURRENT_BYTE_OWNER_ADOPTION" },
+    "candidate_digest": { "type": "string", "minLength": 64 },
+    "audit_receipt_sha256": { "type": "string", "minLength": 64 },
+    "owner_attestation_ref": { "type": "string", "minLength": 1 },
+    "bindings": {
+      "type": "object",
+      "required": ["candidate_digest", "audit_receipt_sha256", "owner_attestation_ref"],
+      "properties": {
+        "candidate_digest": { "type": "string" },
+        "audit_receipt_sha256": { "type": "string" },
+        "owner_attestation_ref": { "type": "string" }
+      }
+    }
+  }
+}

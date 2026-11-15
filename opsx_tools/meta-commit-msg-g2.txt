@@ -1,0 +1,16 @@
+feat(opsx_runtime): add verify sub-agent packages (специализированные verify-агенты)
+
+What:
+- Add diagnostic, dispatcher, triage, repair, and review agent packages under verify/.
+
+Why:
+- Replace monolithic results_analyst with focused verify sub-agents.
+
+How:
+- New packages under .opsx/opsx_runtime/agents/verify/*.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- medium until orchestration graphs land in follow-up commits.

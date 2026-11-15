@@ -1,0 +1,78 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "red_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-red/SLICE-001/RED.json",
+    "status": "RED_PROVEN",
+    "slice_id": "SLICE-001",
+    "test_content_identity": "d2ffe1639ce73ccdef6794a6225357062c13880641bc1a7da0f1d136bed5e667",
+    "artifact_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "frozen_test_content_identity": "d2ffe1639ce73ccdef6794a6225357062c13880641bc1a7da0f1d136bed5e667",
+  "frozen_test_identity_before": "d2ffe1639ce73ccdef6794a6225357062c13880641bc1a7da0f1d136bed5e667",
+  "frozen_test_identity_after": "d2ffe1639ce73ccdef6794a6225357062c13880641bc1a7da0f1d136bed5e667",
+  "status": "IMPLEMENTATION_WRITTEN",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "repository_identity_before": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64"
+  },
+  "repository_identity_after": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js"
+    ],
+    "inspected_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "production_paths_modified": [
+    "src/services/hydrateCoordinator.js"
+  ],
+  "production_paths_created": [],
+  "unexpected_but_required_paths": [],
+  "implementation_summary": "Extended hydrateCoordinator to coalesce in-flight hydrates on the existing single entry.",
+  "architectural_intent_satisfied": true,
+  "reuse_decisions_followed": [
+    "RD-001",
+    "RD-003"
+  ],
+  "invariants_preserved": [
+    "Exactly one hydrate orchestration SoT"
+  ],
+  "tests_modified": false,
+  "tests_executed": false,
+  "frozen_red_test_paths": [
+    "tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "frozen_red_test_commands": [
+    "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "expected_product_write_surfaces": [
+    "src/services/hydrateCoordinator.js"
+  ],
+  "other_eligible_slice_ids": [
+    "SLICE-002"
+  ],
+  "blockers": [],
+  "next_stage": "APPLY_GREEN",
+  "scaffold_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-scaffold/SLICE-001/SCAFFOLD.json",
+    "status": "SCAFFOLD_READY",
+    "slice_id": "SLICE-001",
+    "candidate_digest_after": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "no_op": true
+  }
+}

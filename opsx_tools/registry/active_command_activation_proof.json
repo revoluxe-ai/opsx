@@ -1,0 +1,35 @@
+{
+  "schema_version": "active_command_activation_proof_v1",
+  "commands": [
+    {
+      "command": "opsx-orch-bug-fix",
+      "proof_pass": true,
+      "command_sha256": "3a2c91189f8f0e09fd4c11d8b383b0c7f48b1e9cf09f1fcc1bb518093ec6679b"
+    },
+    {
+      "command": "opsx-orch-bugbot-converge",
+      "proof_pass": true,
+      "command_sha256": "5644bbe7f6bbf0701491434bd47051097e8edca911ee15ec39c0ff479e1008b2"
+    },
+    {
+      "command": "tempo-bugbot",
+      "proof_pass": true,
+      "command_sha256": "a72b7caea62066b285d5d342c0171b084499cc2c546fabcbb7fe9f4d8c9c553e"
+    },
+    {
+      "command": "tempo-project-bug-hunt",
+      "proof_pass": true,
+      "command_sha256": "e6b546ad20506378d258f27c8fc4fe4d2635e4e3bc4abc97f3bb4b94009d9a3d"
+    },
+    {
+      "command": "tempo-security",
+      "proof_pass": true,
+      "command_sha256": "acb590c182441e602b82860d3036abe94def2dc113a4a661bed86e3aac062371"
+    },
+    {
+      "command": "tempo-verification",
+      "proof_pass": true,
+      "command_sha256": "01d5d71e108ac7771e833b3ba3ea12b16cdfd17a1558b33990572474bde403af"
+    }
+  ]
+}

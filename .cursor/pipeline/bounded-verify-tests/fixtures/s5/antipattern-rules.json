@@ -1,0 +1,4 @@
+{
+  "revision": "s5-fixture-v1",
+  "forbidden_patterns": ["eval\\(", "exec\\("]
+}

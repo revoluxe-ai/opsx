@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.4",
+  "analysis_identity": {"change_id": "fixture-a", "identity_status": "PARTIAL"},
+  "input_integrity": {"status": "COMPLETE", "issues": []},
+  "finding_groups": [
+    {
+      "group_id": "TG-A-IMPORT",
+      "matched_problem": "lib/x: missing implementation or stub for import",
+      "match_basis": "Same module path lib/x.py:1; pyright stub error aligns with mypy missing implementation",
+      "finding_ids": ["F-0001", "F-0002"],
+      "diagnostic_sources": ["pyright", "mypy"],
+      "evidence_refs": [
+        "quality_gate_diagnostics.pyright",
+        "quality_gate_diagnostics.mypy"
+      ],
+      "linked_evidence": ["quality_gate_diagnostics.pyright", "quality_gate_diagnostics.mypy"],
+      "match_evidence": ["lib/x.py:1", "import/stub on lib/x"]
+    }
+  ],
+  "ungrouped_finding_ids": [],
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "source_tool": "pyright",
+      "observation": "src/stroy/x.py:1: error: missing stub",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pyright"]
+    },
+    {
+      "finding_id": "F-0002",
+      "source_tool": "mypy",
+      "observation": "src/stroy/x.py:1: error: Cannot find implementation",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.mypy"]
+    }
+  ],
+  "triage_summary": {"findings_total": 2, "finding_groups_total": 1, "ungrouped_total": 0}
+}

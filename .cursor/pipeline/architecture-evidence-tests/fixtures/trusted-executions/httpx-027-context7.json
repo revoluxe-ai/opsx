@@ -1,0 +1,8 @@
+{
+  "issuer_profile": "context7-mcp-offline-fixture-v1",
+  "permitted_tool": "context7-mcp",
+  "source_uri": "https://www.python-httpx.org/",
+  "publisher": "encode",
+  "documented_version": "0.27.x",
+  "bound_content_sha256": "c34a39818dd925ce2c913ad37735bd734b0cfa4f4d4745d7495a87b05f7330bd"
+}

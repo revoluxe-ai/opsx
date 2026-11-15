@@ -1,0 +1,63 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 2,
+  "evidence_contract": "per_command_v1",
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T08:12:00Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": ["tests/unit/fixtureHydrateCoordinatorRed.test.mjs"],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "command_executions": [
+    {
+      "test_path": "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "test_title": "",
+      "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "SCAFFOLD_DEFECT",
+          "failure_signature": "requestHydrate is not a function",
+          "intended_seam": "hydrateCoordinator",
+          "relevant_output": "TypeError: requestHydrate is not a function"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "SCAFFOLD_DEFECT",
+      "final_failure_signature": "requestHydrate is not a function",
+      "intended_seam_reached": false,
+      "red_qualified": false
+    }
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "exit_code": 1,
+      "failure_classification": "SCAFFOLD_DEFECT",
+      "notes": "missing export requestHydrate after SCAFFOLD_READY"
+    }
+  ],
+  "final_execution": {
+    "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "exit_code": 1,
+    "relevant_output": "TypeError: requestHydrate is not a function",
+    "failure_signature": "requestHydrate is not a function",
+    "failure_classification": "SCAFFOLD_DEFECT"
+  },
+  "product_files_modified": false,
+  "tests_frozen": false,
+  "blockers": [
+    {
+      "code": "SCAFFOLD_DEFECT",
+      "detail": "Missing symbol / broken scaffold is not RED_PROVEN."
+    }
+  ],
+  "next_stage": "NONE"
+}

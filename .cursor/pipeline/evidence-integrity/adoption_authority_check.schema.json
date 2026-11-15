@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.adoption_authority_check",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "contract_id",
+    "live_authority",
+    "platform_attestation",
+    "owner_authentication",
+    "gating",
+    "effective_audit_status",
+    "authority_permitted",
+    "authority_emitted",
+    "implementation_adopted_authorized",
+    "candidate_digest",
+    "audit_receipt_sha256",
+    "red_status",
+    "causal_witness_kind",
+    "slice_class",
+    "findings",
+    "writes"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.adoption_authority_check" },
+    "schema_version": { "const": 1 },
+    "contract_id": { "const": "EVIDENCE_INTEGRITY_ADOPTION_V0" },
+    "live_authority": { "const": "NO" },
+    "platform_attestation": { "const": "UNPROVEN" },
+    "owner_authentication": { "const": "UNPROVEN" },
+    "gating": { "const": "ADOPTION_AUTHORITY_CHECK" },
+    "effective_audit_status": {
+      "enum": [
+        "ABSENT",
+        "AUDIT_PASS",
+        "AUDIT_FAIL",
+        "AUDIT_INCONCLUSIVE",
+        "AUDIT_NOT_INDEPENDENT",
+        "AUDIT_STALE"
+      ]
+    },
+    "authority_permitted": { "type": "boolean" },
+    "authority_emitted": { "type": "boolean" },
+    "implementation_adopted_authorized": { "type": "boolean" },
+    "candidate_digest": { "type": "string" },
+    "audit_receipt_sha256": { "type": "string" },
+    "red_status": { "type": "string" },
+    "causal_witness_kind": { "type": "string" },
+    "slice_class": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "evidence"],
+        "properties": {
+          "code": {
+            "enum": [
+              "ADOPTION_AUDIT_MISSING",
+              "AUDIT_NOT_INDEPENDENT",
+              "AUDIT_STALE",
+              "ADOPTION_AUTHORITY_INVALID",
+              "AUDIT_FAIL",
+              "AUDIT_INCONCLUSIVE",
+              "ATTESTATION_REF_NOT_OWNER_HELD",
+              "ATTESTATION_CONTENT_UNVERIFIED",
+              "ADOPTION_AUTHORITY_LEGACY",
+              "OWNER_AUTHENTICATION_UNPROVEN"
+            ]
+          },
+          "severity": { "enum": ["HARD", "INFO"] },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "writes": { "const": [] }
+  }
+}

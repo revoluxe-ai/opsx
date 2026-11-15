@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "opsx.apply_green",
+  "title": "APPLY GREEN",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "opsx.apply_green" },
+    "schema_version": { "const": 1 },
+    "chat_history_required": { "const": false },
+    "whole_change_verified": { "const": false }
+  }
+}

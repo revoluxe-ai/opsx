@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adr-archive-authorization-v1",
+  "title": "AdrArchiveAuthorization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "change_id",
+    "worktree_fingerprint",
+    "decisions",
+    "owner_signature",
+    "signed_canonical"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "adr-archive-authorization-v1"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "authorized"]
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "worktree_fingerprint": {
+      "type": "string",
+      "pattern": "^HEAD=[0-9a-f]{40}$"
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_id",
+          "decision_path",
+          "approval_path",
+          "adr_content_hash"
+        ],
+        "properties": {
+          "decision_id": { "type": "string", "minLength": 1 },
+          "decision_path": { "type": "string", "minLength": 1 },
+          "approval_path": { "type": "string", "minLength": 1 },
+          "adr_content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "owner_signature": {
+      "type": ["string", "null"]
+    },
+    "signed_canonical": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

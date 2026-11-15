@@ -1,0 +1,151 @@
+{
+  "schema": "opsx.apply_design_review",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "status": "REPAIRS_REQUIRED",
+  "generated_at": "2026-09-01T10:05:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "apply_design": false,
+    "planning": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.md",
+      "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-hydrate",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9"
+  },
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "protected_context_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e",
+    "artifact_sha256": "7a5a63813570343aeffca01cba72d91576d8958ad75ef6023ebbed6078ca82c7"
+  },
+  "protected_context_identity": {
+    "paths": ["src/store/progress.js"],
+    "content_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e"
+  },
+  "review_questions": [
+    {
+      "id": 1,
+      "question": "Is slice decomposition coherent?",
+      "verdict": "pass",
+      "detail": "Local slice responsibilities look coherent in isolation."
+    },
+    {
+      "id": 2,
+      "question": "Are slices too broad or too granular?",
+      "verdict": "pass",
+      "detail": "Granularity is acceptable; defect is interaction coverage, not slice size."
+    },
+    {
+      "id": 3,
+      "question": "Are dependency edges complete and correctly directed?",
+      "verdict": "pass",
+      "detail": "Edges name SLICE-001/002 → SLICE-003; direction is fine."
+    },
+    {
+      "id": 4,
+      "question": "Could one slice implement future-slice semantics on an allowed path?",
+      "verdict": "pass",
+      "detail": "No FUTURE_SLICE_LEAK detected from path lists alone."
+    },
+    {
+      "id": 5,
+      "question": "Are reusable mechanisms correctly reused rather than duplicated?",
+      "verdict": "pass",
+      "detail": "Reuse of hydrateCoordinator is stated; not the blocking issue."
+    },
+    {
+      "id": 6,
+      "question": "Does every planned behavior have an implementation owner?",
+      "verdict": "pass",
+      "detail": "Tasks map to slices; local owners exist."
+    },
+    {
+      "id": 7,
+      "question": "Does every critical invariant have a proof owner?",
+      "verdict": "pass",
+      "detail": "Slice-local invariants have owners; composed join invariant is the gap (Q8/Q12)."
+    },
+    {
+      "id": 8,
+      "question": "Are cross-slice interactions sufficiently modeled?",
+      "verdict": "fail",
+      "detail": "Critical in-flight join / control-result-as-failure interaction between coordinator and resume is uncovered; dogfood pattern for locally GREEN slices with wrong composed behavior."
+    },
+    {
+      "id": 9,
+      "question": "Are special return/control states interpreted consistently downstream?",
+      "verdict": "fail",
+      "detail": "Control / race results from coordinator lack durable consumer interpretation for SLICE-003."
+    },
+    {
+      "id": 10,
+      "question": "Are concurrency / reentrancy / stale-result cases considered where the architecture creates them?",
+      "verdict": "fail",
+      "detail": "Architecture creates concurrent bootstrap/resume entry but DESIGN does not freeze join semantics."
+    },
+    {
+      "id": 11,
+      "question": "Are bootstrap vs already-running semantics distinguished where relevant?",
+      "verdict": "fail",
+      "detail": "Already-running coordinator hydrate during resume bootstrap is not modeled."
+    },
+    {
+      "id": 12,
+      "question": "Could all slices individually GREEN while the composed behavior remains wrong?",
+      "verdict": "fail",
+      "detail": "Yes — each slice can GREEN on local contracts while in-flight join and control-result mishandling leave composed resume wrong."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-UNCOVERED-INTERACTION",
+      "question": 8,
+      "severity": "blocking",
+      "code": "INCOMPLETE_COMPOSITION",
+      "detail": "Critical cross-slice interaction (resume/bootstrap joins in-flight coordinator hydrate; control results must not fail-close) is not covered by required_composition_behavior / failure_classes."
+    },
+    {
+      "id": "F-COMPOSED-BEHAVIOR-GAP",
+      "question": 12,
+      "severity": "blocking",
+      "code": "COMPOSED_BEHAVIOR_GAP",
+      "detail": "All slices can individually GREEN while composed resume behavior remains wrong without CSC-style join/control-result obligations."
+    }
+  ],
+  "composed_behavior_risk": {
+    "answered": true,
+    "all_slices_green_composed_wrong_possible": true,
+    "detail": "Local completeness without in-flight-join and CONTROL_RESULT_AS_FAILURE treatment allows GREEN per slice while composed startup/resume stays incorrect."
+  },
+  "blockers": [
+    {
+      "code": "INCOMPLETE_COMPOSITION",
+      "detail": "Uncovered critical interaction between SLICE-001 coordinator and SLICE-003 resume (Q8)."
+    },
+    {
+      "code": "COMPOSED_BEHAVIOR_GAP",
+      "detail": "Q12: all_slices_green_composed_wrong_possible=true without composition proof owners."
+    }
+  ],
+  "repair_handoff": {
+    "summary": "Add cross_slice_contracts / composition_completeness treatment for in-flight join and control-result interpretation before re-review.",
+    "required_design_repairs": [
+      "Freeze required_composition_behavior for resume joining in-flight coordinator hydrate (IN_FLIGHT_JOIN_BY_BOOTSTRAP).",
+      "Document special_result_interpretations so control/race results are not API fail-closed (CONTROL_RESULT_AS_FAILURE).",
+      "Assign proof_placement B_RED and/or B_GREEN_ADJACENT for the composed obligations; re-run /opsx-apply-design-review."
+    ]
+  },
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.md",
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.json"
+  },
+  "next_stage": "APPLY_DESIGN"
+}

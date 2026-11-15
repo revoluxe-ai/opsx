@@ -1,0 +1,18 @@
+feat(langgraph): add study verification graph demo (учебный граф verify)
+
+What:
+- tools/langgraph_study verification_graph, demo, tests, README, requirements
+
+Why:
+- Isolated LangGraph study harness for verification flow experiments.
+
+How:
+- Added verification_graph module with pytest coverage and demo entrypoint.
+
+OpenSpec:
+- product tooling
+
+Risk:
+- Low; standalone study package.
+
+Verification: not evaluated by /opsx-commit

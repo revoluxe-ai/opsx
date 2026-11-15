@@ -1,0 +1,11 @@
+[
+  {
+    "claim_id": "c1",
+    "compatibility": "PASS",
+    "verified_facts": {
+      "library_name": "httpx",
+      "version_claim": "0.27.x",
+      "content_markers": ["Client.post", "0.27.x"]
+    }
+  }
+]

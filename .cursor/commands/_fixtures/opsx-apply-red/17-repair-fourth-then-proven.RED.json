@@ -1,0 +1,179 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 2,
+  "evidence_contract": "per_command_v1",
+  "change_id": "fixture-hydrate",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "slice_id": "SLICE-001",
+  "slice_identity": {
+    "slice_id": "SLICE-001",
+    "slice_digest": "182e387ed0d0789b055ac97be919d1f670554c817dd22f1a2463bf4beacbc4ff"
+  },
+  "status": "RED_PROVEN",
+  "generated_at": "2026-08-31T12:02:00Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": [
+    "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "tests/unit/fixtureNoSessionRed.test.mjs",
+    "tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "node --test --test-name-pattern ^no session skips hydrate$ tests/unit/fixtureNoSessionRed.test.mjs",
+    "node --test --test-name-pattern ^novel and wardrobe hydrates stay separate$ tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "command_executions": [
+    {
+      "test_path": "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "test_title": "hydrate coordinator coalesces in-flight hydrates",
+      "command": "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "expected coalesced=true, received coalesced=false",
+          "intended_seam": "hydrateCoordinator",
+          "relevant_output": "AssertionError: expected coalesced=true, received coalesced=false"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "expected coalesced=true, received coalesced=false",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureNoSessionRed.test.mjs",
+      "test_title": "no session skips hydrate",
+      "command": "node --test --test-name-pattern ^no session skips hydrate$ tests/unit/fixtureNoSessionRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureWardrobeFlightRed.test.mjs",
+      "test_title": "novel and wardrobe hydrates stay separate",
+      "command": "node --test --test-name-pattern ^novel and wardrobe hydrates stay separate$ tests/unit/fixtureWardrobeFlightRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    },
+    {
+      "test_path": "tests/unit/fixtureResumeJwtRed.test.mjs",
+      "test_title": "resume reuses current JWT",
+      "command": "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 1,
+          "failure_classification": "TEST_SETUP_FAILURE",
+          "failure_signature": "SyntaxError: Unexpected token",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "SyntaxError: Unexpected token"
+        },
+        {
+          "attempt": 2,
+          "exit_code": 1,
+          "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+          "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+          "intended_seam": "requestHydrate",
+          "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate"
+        }
+      ],
+      "final_exit_code": 1,
+      "final_classification": "INTENDED_BEHAVIOR_MISSING",
+      "final_failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+      "intended_seam_reached": true,
+      "red_qualified": true
+    }
+  ],
+  "test_content_identity": "cd3f279967b99ac0979f4b022c962d9e8415caa6ac17dae6b3f0c9c32a256431",
+  "repository_identity_before_red": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "command": "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs",
+      "exit_code": 1,
+      "failure_classification": "TEST_SETUP_FAILURE",
+      "notes": "fourth test syntax; repaired fixture/test"
+    },
+    {
+      "attempt": 2,
+      "command": "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs",
+      "exit_code": 1,
+      "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+      "notes": "fourth test repaired; sentinel through seam"
+    }
+  ],
+  "final_execution": {
+    "command": "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs",
+    "exit_code": 1,
+    "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED\n      at requestHydrate",
+    "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+    "failure_classification": "INTENDED_BEHAVIOR_MISSING"
+  },
+  "expected_behavior": "All four frozen commands independently RED.",
+  "observed_behavior": "After RED-owned repair of the fourth test, all four qualify.",
+  "red_reason": "INTENDED_BEHAVIOR_MISSING after repairing the fourth test; identity is post-repair bytes.",
+  "product_files_modified": false,
+  "tests_frozen": true,
+  "other_eligible_slice_ids": [
+    "SLICE-002"
+  ],
+  "blockers": [],
+  "next_stage": "APPLY_IMPLEMENT",
+  "scaffold_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-scaffold/SLICE-001/SCAFFOLD.json",
+    "status": "SCAFFOLD_READY",
+    "slice_id": "SLICE-001",
+    "candidate_digest_after": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "no_op": true
+  },
+  "behavior_obligation_identity": {
+    "slice_id": "SLICE-001",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "obligation_digest": "9834af39297d1cac92d23e2a760962c47b5750d1d135e172af8f1b66d7091c3e"
+  }
+}

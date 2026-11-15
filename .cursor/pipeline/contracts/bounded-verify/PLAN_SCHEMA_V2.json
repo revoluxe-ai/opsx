@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bounded-verify-plan-v2",
+  "title": "BoundedVerificationPlanV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "change_id",
+    "plan_id",
+    "plan_status",
+    "plan_fingerprint",
+    "verification_profile",
+    "verification_policy",
+    "required_checks",
+    "implementation_snapshot"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "bounded-verify-plan-v2"
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_status": {
+      "type": "string",
+      "enum": ["DRAFT", "FROZEN"]
+    },
+    "plan_fingerprint": {
+      "type": "string"
+    },
+    "verification_profile": {
+      "type": "string",
+      "enum": ["static_fast", "static_full", "bounded_minimal", "full_required"]
+    },
+    "verification_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "obligation_set_id",
+        "verification_profile",
+        "policy_revisions",
+        "mandatory_required_check_ids",
+        "applicability_decisions"
+      ],
+      "properties": {
+        "obligation_set_id": { "type": "string", "minLength": 1 },
+        "verification_profile": { "type": "string" },
+        "policy_revisions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "mandatory_required_check_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "applicability_decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["obligation_id", "disposition", "notes"],
+            "properties": {
+              "obligation_id": { "type": "string" },
+              "disposition": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "required_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "order"],
+        "properties": {
+          "check_id": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "implementation_snapshot": {
+      "type": "object",
+      "required": ["content_digest", "role_digests"],
+      "properties": {
+        "content_digest": { "type": "string", "minLength": 64 },
+        "role_digests": { "type": "object" },
+        "content_paths": { "type": "array", "items": { "type": "string" } },
+        "coverage_manifest": { "type": "object" },
+        "provenance_head": { "type": "string" },
+        "task_identity_digest": { "type": "string" },
+        "split_apply": { "type": "object" }
+      }
+    }
+  }
+}

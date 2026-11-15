@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx-ecr-lite-v0",
+  "title": "OPSX Engineering Change Record (LITE)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pcp_id",
+    "pcp_tier",
+    "revision_sha",
+    "why",
+    "what_paths",
+    "author_principal",
+    "integration",
+    "impact",
+    "evidence_refs",
+    "review",
+    "required_tests"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opsx-ecr-lite-v0"
+    },
+    "pcp_id": {
+      "type": "string",
+      "pattern": "^PCP-[0-9]{8}-[a-z0-9][a-z0-9-]{0,31}$"
+    },
+    "pcp_tier": {
+      "const": "LITE"
+    },
+    "revision_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "why": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "what_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "author_principal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["promotion_target"],
+      "properties": {
+        "promotion_target": {
+          "enum": ["dev", "stage"]
+        }
+      }
+    },
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["closure"],
+      "properties": {
+        "closure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "predicate_version"],
+          "properties": {
+            "status": {
+              "enum": ["PASS", "FAIL", "STALE_IDENTITY"]
+            },
+            "predicate_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "l3_artifact_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "waived_blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["block_id", "waiver_owner_principal", "reason"],
+            "properties": {
+              "block_id": { "type": "string" },
+              "waiver_owner_principal": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {
+            "enum": ["l3_closure", "l3_gate_report", "l3_pytest", "review_attestation"]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attestations"],
+      "properties": {
+        "attestations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "reviewer_principal",
+              "attestation_type",
+              "evidence_path"
+            ],
+            "properties": {
+              "reviewer_principal": { "type": "string" },
+              "attestation_type": {
+                "enum": ["chat_command_audit", "control_plane_security"]
+              },
+              "evidence_path": { "type": "string" }
+            }
+          }
+        },
+        "waiver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scoped_policy_id",
+            "waiver_owner_principal",
+            "reason"
+          ],
+          "properties": {
+            "scoped_policy_id": { "type": "string" },
+            "waiver_owner_principal": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "required_tests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["test_id", "evidence_ref"],
+        "properties": {
+          "test_id": { "type": "string" },
+          "evidence_ref": { "type": "string" }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim": { "type": "string" },
+        "verifier_report_ref": { "type": "string" }
+      }
+    }
+  }
+}

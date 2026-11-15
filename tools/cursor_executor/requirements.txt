@@ -1,0 +1,2 @@
+# Isolated executor runtime (not wired into repo root package.json).
+cursor-sdk==1.2.0

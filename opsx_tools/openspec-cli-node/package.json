@@ -1,0 +1,16 @@
+{
+  "name": "@stroy-system/openspec-cli-node",
+  "version": "1.0.0",
+  "description": "TARGET-local pinned @fission-ai/openspec CLI (not production app deps)",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fission-ai/openspec": "1.14.1"
+  }
+}

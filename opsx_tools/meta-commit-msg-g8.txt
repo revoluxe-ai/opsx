@@ -1,0 +1,16 @@
+docs(adapters): poetry-python adapter README tweak (пояснение poetry-python адаптера)
+
+What:
+- Clarify poetry-python adapter README for target capability resolution.
+
+Why:
+- Doc delta unrelated to verify graph refactor.
+
+How:
+- Update .opsx/adapters/poetry-python/README.md.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- none.

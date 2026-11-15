@@ -1,0 +1,142 @@
+{
+  "schema": "opsx.mutation_entrypoint_matrix_v1",
+  "implementation_id": "stroy-opsx-mutation-authority-v1.0.0",
+  "entrypoints": [
+    {
+      "id": "python.skill.opsx_continue",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/opsx_continue_skill_contract.py:evaluate_planning_write_preflight",
+      "command_id": "opsx-continue"
+    },
+    {
+      "id": "python.guard.opsx_continue",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/openspec_guard.py:run_scenario",
+      "command_id": "opsx-continue"
+    },
+    {
+      "id": "python.guard.opsx_ff",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/openspec_guard.py:run_scenario",
+      "command_id": "opsx-ff"
+    },
+    {
+      "id": "python.guard.opsx_update",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/openspec_guard.py:run_scenario",
+      "command_id": "opsx-update"
+    },
+    {
+      "id": "python.guard.opsx_sync",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/openspec_guard.py:run_scenario",
+      "command_id": "opsx-sync"
+    },
+    {
+      "id": "python.guard.opsx_apply",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": "tools/openspec/openspec_guard.py:run_scenario",
+      "command_id": "opsx-apply"
+    },
+    {
+      "id": "node.apply_change_writer.acquire",
+      "layer": "node",
+      "mutation_capable": true,
+      "enforcement_hook": "opsx_tools/opsx-apply-change-writer.mjs:acquireManualChangeWriterLock"
+    },
+    {
+      "id": "node.apply_change_writer.mutation_guard",
+      "layer": "node",
+      "mutation_capable": true,
+      "enforcement_hook": "opsx_tools/opsx-apply-change-writer.mjs:assertManualWriterLeaseForMutation"
+    },
+    {
+      "id": "bash.openspec_cli.write",
+      "layer": "bash",
+      "mutation_capable": true,
+      "enforcement_hook": "opsx_tools/openspec-cli:pre_write_gate"
+    },
+    {
+      "id": "python.pipeline.browser_check",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/browser-check/browser_check.py:run"
+    },
+    {
+      "id": "python.pipeline.post_deploy_acceptance",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/post-deploy-acceptance/post_deploy_acceptance.py:run"
+    },
+    {
+      "id": "python.pipeline.security_learn",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/security-learn/security_learn.py:run"
+    },
+    {
+      "id": "python.pipeline.security_review",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/security-review/security_review.py:run"
+    },
+    {
+      "id": "python.pipeline.security_triage",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/security-triage/security_triage.py:run"
+    },
+    {
+      "id": "python.pipeline.control_plane_security_review",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/control-plane-security-review/control_plane_security_review.py:run"
+    },
+    {
+      "id": "python.pipeline.orch_bug_fix",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/orch-bug-fix/orch_bug_fix.py:run"
+    },
+    {
+      "id": "python.pipeline.orch_bugbot_converge",
+      "layer": "python",
+      "mutation_capable": true,
+      "enforcement_hook": ".cursor/pipeline/orch-bugbot-converge/orch_bugbot_converge.py:run"
+    }
+  ],
+  "outside_enforcement": [
+    {
+      "id": "markdown.slash_command.agent_direct_write",
+      "classification": "OUTSIDE_ENFORCEMENT",
+      "reason": "Cursor slash commands are markdown; protected writes require agents to invoke registered hooks (guard, skill contract, openspec-cli, apply writer, pipeline gates). Uninstrumented agent file edits are not OS-enforceable in v1."
+    },
+    {
+      "id": "markdown.slash_command.read_only",
+      "classification": "OUTSIDE_ENFORCEMENT",
+      "reason": "READ_ONLY diagnostics (opsx-verify, opsx-doctor, opsx-execution-preflight, planning-review read paths) do not perform adoption-gated protected writes."
+    },
+    {
+      "id": "control_plane.temporal_dispatch",
+      "classification": "OUTSIDE_ENFORCEMENT",
+      "reason": "tools/temporal and tools/cursor_executor orchestration are control-plane runtime, not product OpenSpec artifact writers per stroy-system capability split."
+    }
+  ],
+  "bootstrap_exempt_command_ids": [
+    "opsx-adopt",
+    "opsx-projectize",
+    "opsx-meta-bootstrap",
+    "opsx-execution-preflight",
+    "opsx-doctor",
+    "opsx-source-resolution",
+    "opsx-resolve-conflict",
+    "opsx-meta-discover",
+    "opsx-meta-consult"
+  ]
+}

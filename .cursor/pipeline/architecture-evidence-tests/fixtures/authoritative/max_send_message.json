@@ -1,0 +1,10 @@
+{
+  "api_contract": {
+    "method": "POST",
+    "path": "/messages",
+    "success_semantics": {
+      "status_codes": [200],
+      "body_fields": ["message_id"]
+    }
+  }
+}

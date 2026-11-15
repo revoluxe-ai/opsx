@@ -1,0 +1,22 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T14:00:00Z",
+  "chat_history_required": false,
+  "production_paths_modified": ["src/services/hydrateCoordinator.js"],
+  "production_paths_created": [],
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "DESIGN_REALITY_DRIFT",
+      "detail": "Frozen reuse_decision RD-004 (src/api/softProdNovelSave.js) was silently duplicated as a local fetch/novelSaveGet client instead of importing the approved reusable mechanism.",
+      "planning_claim": "reuse softProdNovelSave.js for novel-save GET/PUT client ownership",
+      "repository_fact": "local novelSaveGet using softProdApiBaseUrl + fetch without importing softProdNovelSaveGet"
+    }
+  ],
+  "next_stage": "NONE"
+}

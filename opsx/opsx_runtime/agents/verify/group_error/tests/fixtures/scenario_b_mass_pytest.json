@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.4",
+  "analysis_identity": {"change_id": "fixture-b", "identity_status": "PARTIAL"},
+  "input_integrity": {"status": "COMPLETE", "issues": []},
+  "finding_groups": [],
+  "ungrouped_finding_ids": ["F-0001", "F-0002", "F-0003"],
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "source_tool": "pytest",
+      "observation": "FAILED tests/a/test_one.py::test_a - AssertionError",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pytest"]
+    },
+    {
+      "finding_id": "F-0002",
+      "source_tool": "pytest",
+      "observation": "FAILED tests/a/test_two.py::test_b - AssertionError",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pytest"]
+    },
+    {
+      "finding_id": "F-0003",
+      "source_tool": "pytest",
+      "observation": "FAILED tests/a/test_three.py::test_c - AssertionError",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pytest"]
+    }
+  ],
+  "triage_summary": {"findings_total": 3, "finding_groups_total": 0, "ungrouped_total": 3}
+}

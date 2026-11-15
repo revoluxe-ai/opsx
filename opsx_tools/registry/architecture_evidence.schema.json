@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stroy-system.local/opsx/architecture_evidence.schema.json",
+  "title": "ArchitectureDependencyEvidenceReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_id",
+    "change_id",
+    "applicability",
+    "design_writer_id",
+    "design_digest",
+    "inputs_digest",
+    "execution_identity",
+    "verifier",
+    "claims",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "contract_id": { "type": "string", "const": "ARCHITECTURE_DEPENDENCY_EVIDENCE_V1" },
+    "change_id": { "type": "string", "minLength": 1 },
+    "applicability": { "type": "string", "enum": ["REQUIRED", "NOT_APPLICABLE"] },
+    "scope_rationale": { "type": "string" },
+    "design_writer_id": { "type": "string", "minLength": 1 },
+    "design_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "inputs_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "execution_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validator_implementation_id", "schema_version"],
+      "properties": {
+        "validator_implementation_id": { "type": "string" },
+        "schema_version": { "type": "integer" }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["INDEPENDENT_TOOL", "INDEPENDENT_REVIEW_AGENT"] },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "design_policy_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idempotency_asserted_proven": { "type": "boolean" },
+        "unsafe_auto_retry_after_timeout": { "type": "boolean" },
+        "safe_retry_policy_documented": { "type": "boolean" }
+      }
+    },
+    "coverage_obligations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/coverage_obligation" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ready_for_design_freeze",
+        "ready_for_tasks",
+        "ready_for_apply_preflight"
+      ],
+      "properties": {
+        "ready_for_design_freeze": { "type": "boolean" },
+        "ready_for_tasks": { "type": "boolean" },
+        "ready_for_apply_preflight": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "coverage_obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obligation_id", "category", "design_anchor"],
+      "properties": {
+        "obligation_id": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["LIBRARY", "EXTERNAL_API", "ARCHITECTURE_INVARIANT"]
+        },
+        "design_anchor": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "lockfile_pin",
+            "fixture_snapshot",
+            "authoritative_doc_digest",
+            "captured_doc",
+            "mcp_discovery"
+          ]
+        },
+        "capture_id": { "type": "string" },
+        "path": { "type": "string" },
+        "revision": { "type": "string" },
+        "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "category", "design_anchor", "obligation_id", "result"],
+      "properties": {
+        "claim_id": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["LIBRARY", "EXTERNAL_API", "ARCHITECTURE_INVARIANT"]
+        },
+        "design_anchor": { "type": "string" },
+        "obligation_id": { "type": "string" },
+        "result": { "type": "string", "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_APPLICABLE"] },
+        "failure_code": { "type": ["string", "null"] },
+        "library": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "version_claim": { "type": "string" }
+          }
+        },
+        "api": {
+          "type": "object",
+          "properties": {
+            "method": { "type": "string" },
+            "path": { "type": "string" },
+            "success_semantics": {
+              "type": "object",
+              "properties": {
+                "status_codes": { "type": "array", "items": { "type": "integer" } },
+                "body_fields": { "type": "array", "items": { "type": "string" } }
+              }
+            },
+            "idempotency_posture": {
+              "type": "string",
+              "enum": ["PROVEN", "UNKNOWN", "NOT_IDEMPOTENT"]
+            }
+          }
+        },
+        "architecture_invariant": {
+          "type": "object",
+          "properties": {
+            "invariant_id": { "type": "string" },
+            "statement": { "type": "string" }
+          }
+        },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,357 @@
+---
+component_id: opsx.commands.meta_wire_workflow_agent
+component_version: 0.1.0
+ownership: TARGET_ONLY
+runtime_class: ACTIVE_WITH_LIMITS
+local_modification_note: "LangGraph wiring front door: colocated declarative block doctrine (Owner 2026-11)"
+local_override_policy: TARGET_OVERRIDE_HIGHEST_PRIORITY
+contract_id: OPSX-WB-META-WIRE-WORKFLOW-01
+newline_normalization: none
+description: "Owner describes how a LangGraph agent hops; command plans colocated wiring (handlers + routing + add_node) and routes to one implement owner; intake READ_ONLY."
+argument-hint: "<свободный текст: какой агент, в какой workflow, откуда/куда>; опционально AGENT=, WORKFLOW=, SIMILAR_TO="
+---
+
+# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+
+This command was transferred from a project-specific OPSX realization.
+For stroy-system, product-specific realization MUST resolve through:
+
+  opsx/project/capabilities.yaml
+  opsx/shared/target-capability-resolution.md
+
+Any inherited donor literal (WB Sky, adv-bot, Poetry, pyproject.toml, app/**,
+tests/**, npm/package.json, src/**, public/**, deploy names) is historical or
+compatibility text only and is NOT execution authority.
+
+Before any product-specific read/write/command execution, resolve the
+corresponding TARGET capability. If unresolved, fail closed:
+
+```text
+STATUS: FAIL_CLOSED
+REASON: TARGET_CAPABILITY_UNRESOLVED
+CAPABILITY: <required capability>
+NEXT_ACTION: define/discover capability in opsx/project/capabilities.yaml
+```
+
+Control-plane paths under `tools/temporal` and `tools/cursor_executor` are
+separate from LangGraph wiring in `opsx/opsx_runtime/workflows/**`.
+
+# TARGET OVERRIDE — HIGHEST PRIORITY
+
+**Contract:** `OPSX-WB-META-WIRE-WORKFLOW-01`
+**Runtime class:** `ACTIVE_WITH_LIMITS`
+
+```text
+IMPLEMENTATION_STATUS: IMPLEMENTED_UNVERIFIED
+SCOPE: LANGGRAPH_OPSX_RUNTIME_ONLY
+AUTONOMOUS_IMPL_TERMINAL: BLOCKED
+NOT_COMMITTED_THIS_RUN: true
+```
+
+### Scope (mandatory)
+
+This command is **only** for **LangGraph / OPSX runtime** workflows:
+
+- `opsx/opsx_runtime/workflows/verify/**`
+- `opsx/opsx_runtime/workflows/repair/**`
+- `opsx/opsx_runtime/workflows/implementation/**`
+- factories such as `build_check_workflow_graph`, `build_gate_repair_graph`,
+  `build_verify_graph`, `build_repair_graph`
+
+It does **not** wire:
+
+- Cursor `/opsx-*` slash orchestrators (→ `/opsx-meta-add-command`)
+- bug-team Task workers without LangGraph (→ `/opsx-meta-add-agent` → worker spec)
+- Temporal obligations without a graph node (document hop separately)
+- Archive verify as **Cursor-only** PHASE_ARCHIVE (no graph hop until
+  `ArchiveVerifyAgent` exists)
+
+### Reads / writes (this invocation)
+
+- **Reads:** projectization, bounded workflow/agent paths, chat transcript hints
+  if Owner cites them.
+- **Writes:** none default (`MODE: READ_ONLY` intake + wiring **plan** only).
+
+### Hard bans
+
+- No `graph.py` / `subgraph.py` edits in this invocation.
+- No pytest / verify / archive runs.
+- No commit, push, PR, deploy.
+- No new agent package here — missing agent → `/opsx-meta-add-agent` first.
+- **Anti-pattern to flag, never recommend:** add_node in parent graph first, define
+  `route_*` elsewhere later (`green_loop.py`, scattered conditionals).
+
+### Lexicon: SDK (Subagent/Task — mandatory)
+
+**`SDK` = Cursor SDK only** in `WIRING_PLAN` and Subagent/Task briefs:
+`cursor_sdk/*`, `GetRun`, stream, **`agent.run` (Cursor SDK transport)**,
+`SDK_*` recovery on live dispatch.
+
+Не называть plan / `implementation_execute_hop_node` / `hop_lane_status` /
+stagnation **SDK hop** — **implementation hop**, **execute hop**, **mutating hop**,
+**OPSX implementation lane**; Cursor live path —
+**mutating hop via Cursor SDK**. SoT:
+`.cursor/commands/opsx-meta-fix-command-defects.md` § Lexicon: SDK.
+
+### Prerequisite gate
+
+Before routing to implementation:
+
+1. **Agent package must exist** (or Owner explicitly wires a **deterministic**
+   node with no Cursor-SDK-backed `agent.run` hop):
+   - Path like `opsx/opsx_runtime/agents/verify/<role>/agent.py` or
+     `agents/repair/<role>/agent.py`, **or**
+   - Owner names an existing `*Agent` already constructed in `build_*_graph`.
+2. If agent missing → `PREREQ_MISSING: AGENT_PACKAGE` →
+   `NEXT_ACTION: /opsx-meta-add-agent` (same mission text) then re-run this command.
+
+### Named references (gold patterns)
+
+| Pattern | File | Use when |
+|---------|------|----------|
+| **Colocated subgraph factory** | `opsx/opsx_runtime/workflows/verify/check_workflow.py` | discovery/repair loop; `route_*` beside handlers and `add_node` |
+| **Thin parent assembly** | `opsx/opsx_runtime/workflows/verify/graph.py` | compiled subgraph + one conditional; avoid fat routing here |
+| **Check receipt dual hook** | `check_workflow_receipt.py` + `register_check_workflow_receipt` | inner `receipt.check` + outer `is_established` — document both in plan |
+| **Gate repair subgraph** | `opsx/opsx_runtime/workflows/verify/gate_repair/subgraph.py` | multi-agent repair chain inside one builder |
+| **Agent role README** | `opsx/opsx_runtime/agents/repair/README.md` | ABCAgent + `prompt/get_prompt.py`; graph only orchestrates |
+| **Prior intake** | `.cursor/commands/opsx-meta-add-agent.md` | agent exists before wire |
+
+### Projectization gate
+
+Read `opsx/projectization.yaml`. If incomplete:
+
+```text
+STATUS: FAIL_CLOSED
+REASON: OPSX_PROJECTIZATION_REQUIRED
+NEXT_ACTION: /opsx-projectize
+```
+
+---
+
+# /opsx-meta-wire-workflow-agent
+
+Подключить **существующий** LangGraph-агент (или deterministic hop) к workflow
+**декларативно и в одном месте**: в одном factory-блоке должны жить handler(ы),
+функции маршрутизации (`route_*` / `route_check`), `add_node`, `add_edge`,
+`add_conditional_edges` — **до** того, как parent graph только монтирует subgraph.
+
+Owner описывает задачу **свободным текстом**. Шаблонные поля не обязательны.
+При блокирующей неясности — **≤3** вопроса (`AskQuestion`).
+
+## User input
+
+```text
+$ARGUMENTS
+```
+
+Примеры:
+
+```text
+/opsx-meta-wire-workflow-agent
+archive_verify как impl_verify, после frozen plan, read-only PHASE_ARCHIVE, при NO_GO — стоп, не archive
+```
+
+```text
+/opsx-meta-wire-workflow-agent
+Новый diagnostic hop уже в agents/ — воткни в gate_repair после repair_order, маршрут при PAUSE — в owner attention
+```
+
+Опциональные подсказки: `AGENT:`, `WORKFLOW:`, `WORKFLOW_TARGET:`, `NODE_ID:`,
+`PREDECESSOR:`, `SUCCESSOR:`, `SIMILAR_TO:`, `NON_GOALS:`.
+
+## WORKFLOW_TARGET (internal)
+
+| WORKFLOW_TARGET | Primary builder | Typical parent |
+|-----------------|-----------------|----------------|
+| `VERIFY_MAIN` | `build_verify_graph` | verify CLI / Temporal verify loop |
+| `VERIFY_CHECK_SUBGRAPH` | `build_check_workflow_graph` | embedded in VERIFY_MAIN |
+| `VERIFY_GATE_REPAIR` | `build_gate_repair_graph` | VERIFY_MAIN `static_repair` node |
+| `VERIFY_DISPATCH_CYCLE` | `workflows/verify/dispatch_cycle/subgraph.py` | inside gate repair |
+| `REPAIR_MAIN` | `build_repair_graph` | repair runner |
+| `REPAIR_BUG_TEAM` | `build_bug_team_graph` | repair README composition |
+| `IMPLEMENTATION` | `workflows/implementation/graph.py` | super-implement lane |
+| `NEW_FACTORY` | new `build_*_graph` in one module | when no existing factory fits |
+
+## Parent vs default entry (mandatory intake)
+
+Classify Owner ask before `WIRING_PLAN`; emit `WIRING_CLASS:` in output.
+
+| WIRING_CLASS | Touch | Do NOT |
+|--------------|-------|--------|
+| `PARENT_TOPOLOGY` | `build_main_graph`, nested `implementation`, `route_main_after_implementation` | Flip default verify entry to always-mutate without receipt skip |
+| `RECEIPT_GATE` | `super-implement/RUN.json`, `implementation_begin`, idempotent skip | CLI flags `skip_*`, `--with-implementation`, `--live-execution` as default product contract |
+| `ENTRY_ONLY` | `run_verify_impl`, `run_implementation`, `workflows/main.py` invoke | New duplicate `build_*_parent_graph.py` when parent already in HEAD |
+
+When `build_main_graph` parent is **already in HEAD**: allowed delta ∈
+`INVOKE_PATH` | `RECEIPT_GATE` | `TEST` only — not a second parent graph file.
+
+### Receipt idempotent skip (split-APPLY)
+
+- SoT: `openspec/changes/<id>/super-implement/RUN.json` with `status: APPLY_COMPLETE`.
+- Skip = short-circuit at `implementation_begin` / route — not verify-only bypass.
+- Live gate: `RUN.json` / ledger — not new CLI attestation flags in wiring plans.
+
+### Split-apply hop outcomes (mandatory)
+
+При планировании wiring split-APPLY / implementation lane:
+
+- **`NO_CHANGE`** после machine **PASS** + durable receipt обязан **advance lane**,
+  не маппить в `APPLY_BLOCKED`.
+- Цепочка runtime (имена для плана и grep, без scatter):
+  `implementation_execute_hop_node` → `agent.run` → `merge_split_apply_hop_result`
+  → `hop_lane_status` → `stagnation_patch_after_hop`.
+- **Preservation prompts** в agent/prompt должны **1:1** совпадать с runtime
+  mapping hop outcomes (не отдельная семантика в prompt).
+- **Design redo** — только при `APPLY_GREEN`; **mid-slice** →
+  `DESIGN_REDO_MID_SLICE_FORBIDDEN` (route/stop, не silent redo).
+- После смены design digest: receipts **invalidate**; prefer **skip/patch**,
+  не wipe-first пересборка артефактов.
+
+## COLLOCATED WIRING DOCTRINE (Owner — non-negotiable)
+
+When producing `WIRING_PLAN`, enforce this order **in the target source file**:
+
+```text
+1. NODE_IDS + constants (checkpoint string ids)
+2. async/sync node handler(s) / partial(agent=…)
+3. route_* functions (all conditional targets defined here or above)
+4. optional: receipt / establish / register hooks declared beside factory
+5. StateGraph builder: add_node → add_edge → add_conditional_edges
+6. return builder.compile(...)
+```
+
+Parent file (`graph.py`) may **only**:
+
+- instantiate agent(s) passed into factory;
+- `builder.add_node("<name>", compiled_subgraph)`;
+- **one** conditional from parent router to that node (or START/END chain
+  already documented in VERIFY docs).
+
+**Forbidden plan patterns** (must appear in `ANTI_PATTERNS_CAUTION` if detected
+in existing code being extended):
+
+- New `route_after_*` in `green_loop.py` without moving logic into the factory block
+  being edited.
+- Separate `add_node` in `graph.py` without the handler living in the same PR
+  section as its `route_*`.
+- Third file for routing-only helpers when the hop fits in the peer factory file.
+- Default CLI flags instead of disk receipt for implementation skip (`--with-implementation`,
+  `--skip-implementation`, `--live-execution` as wiring “fix”).
+
+### Dual-consumer registration (check workflows)
+
+If plan touches project_bug / bugbot / security style checks, **explicitly** state:
+
+- `receipt=` passed into `build_check_workflow_graph` (inner skip/establish)
+- `register_check_workflow_receipt(...)` (outer `cycle_checks.is_established`)
+
+These are **not duplicates** — both belong in the wiring plan with comments.
+
+## Intake steps
+
+1. **Normalize** → `AGENT_REF`, `WORKFLOW_TARGET`, `PREDECESSOR_GUESS`,
+   `SUCCESSOR_GUESS`, `ROUTING_RULES_SUMMARY`.
+2. **Projectization** gate.
+3. **Bounded recon:**
+   - Confirm agent module path or deterministic node name.
+   - Read **one** peer factory (`SIMILAR_TO` or nearest hop in same graph).
+   - Grep `build_verify_graph` / target builder for existing node id collisions.
+   - Read `agents/verify/graph_validation.py` or repair routing only if
+     verify main-line conditional is affected.
+4. **«КАК ПОНЯЛ»** (русский): где в графе, откуда вход, куда выходы, read/write.
+5. If agent missing → prereq route (above).
+6. Emit **`WIRING_PLAN`** (markdown inside `ROUTING_PACKET`) with:
+   - `TARGET_FILE` (single primary; secondary only for thin parent wire)
+   - ordered blocks per COLLOCATED DOCTRINE
+   - `PARENT_WIRE` section if subgraph mounted in `graph.py`
+   - `CHECKPOINT_NODE_IDS` list
+   - `TESTS_TO_TOUCH` (e.g. `workflows/verify/tests/test_*_graph.py`)
+   - `ANTI_PATTERNS_CAUTION`
+7. Route **exactly one** implementation owner (no execution here).
+
+## Implementation routing (after intake)
+
+| Situation | ROUTE_CLASS | NEXT_ACTION |
+|-----------|-------------|-------------|
+| New wiring, agent package uncommitted | `WIRE_NEW_UNCOMMITTED` | `/opsx-meta-design-command` with `WIRING_PLAN` + agent brief if needed |
+| New wiring, agent already in HEAD | `WIRE_NEW_COMMITTED_AGENT` | `/opsx-meta-design-command` or Owner **GO** inline implement in follow-up chat with `WIRING_PLAN` attached |
+| Change existing graph routing in HEAD | `WIRE_FIX` | `/opsx-meta-fix-command-defects` `AUTHORIZE_COMMAND_FIX` + `WIRING_PLAN` |
+| Need agent + wire together | `AGENT_THEN_WIRE` | `/opsx-meta-add-agent` then re-run **this** command |
+| Not LangGraph (Cursor archive only) | `REDIRECT_CURSOR_VERIFY` | explain; `/opsx-verify` hop — not this command |
+| Unclear graph | `CONSULT` | `/opsx-meta-consult` |
+
+`opsx-meta-design-runtime-wire` **does not exist** yet — until added, design-command
+carries the `WIRING_PLAN` as the implementation brief.
+
+## Output contract
+
+```text
+STATUS: ROUTED | BLOCKED_NEEDS_INPUT | FAIL_CLOSED | PREREQ_MISSING
+MODE: READ_ONLY
+WORKFLOW_TARGET:
+AGENT_REF:
+REFERENCE_MAP:
+  - <path> — <why>
+PREREQ_MISSING: AGENT_PACKAGE | none
+WIRING_PLAN:
+  TARGET_FILE:
+  PARENT_WIRE:
+  NODE_IDS:
+  ROUTE_FUNCTIONS:
+  COLLOCATED_BLOCK_OUTLINE: |
+    (pseudocode section headers only — not full impl in intake)
+  TESTS_TO_TOUCH:
+ANTI_PATTERNS_CAUTION: []
+ROUTE_CLASS:
+ROUTING_PACKET:
+  (full pasteable brief for downstream owner)
+WHY:
+NEXT_ACTION:
+DO_NOT_DO_YET:
+- edit graph files in this command
+- /opsx-meta-commit
+- /opsx-archive / authorize archive
+ORIENTATION_HINT:
+  LANE: META
+  NEXT_META: /opsx-meta
+  NEXT_ACTION: <same>
+```
+
+## Failure / recovery
+
+| Condition | STATUS | NEXT |
+|-----------|--------|------|
+| Empty input | `BLOCKED_NEEDS_INPUT` | пример свободного текста |
+| Agent package not found | `PREREQ_MISSING` | `/opsx-meta-add-agent` |
+| Owner wants only Cursor verify | `ROUTED` | `REDIRECT_CURSOR_VERIFY` explanation |
+| Colliding node id without resolution | `BLOCKED_NEEDS_INPUT` | rename vs replace hop |
+
+## Anti-patterns
+
+- **NOT THIS:** adding `/opsx-meta-wire-workflow-agent` or any `/opsx-meta-*` to
+  `agents/**/agent.py` module docstring because Owner said «рядом с hop» — wiring
+  intake stays **chat slash**; procedure/slice labels belong in workflow+CLI apply
+  (`implementation_procedure`, `cli_outcome`, `code_pipeline/graph.py`), not agent
+  docstring meta links (unless Owner explicitly **задокументируй команду** →
+  fix-command-defects on `.cursor/commands/**` only)
+- Implementing wiring in the intake turn
+- Scattered routing across `green_loop.py` + `graph.py` without colocation plan
+- Wiring archive PHASE_ARCHIVE as graph node without `ArchiveVerifyAgent` package
+- Universal subgraph that runs classify+fix+test
+- Omitting tests section in `WIRING_PLAN`
+- Naming `implementation_execute_hop_node` / `hop_lane_status` / stagnation **SDK hop**
+  in Subagent/Task briefs — **execute hop** / **OPSX implementation lane**; **SDK** =
+  `cursor_sdk/*` transport only (`GetRun`, stream, `SDK_ACTIVE_RUN_CONFLICT`)
+
+## Meta chain
+
+```text
+/opsx-meta-review-langgraph    → аудит перед правками
+/opsx-meta-add-agent           → новая роль
+/opsx-meta-wire-workflow-agent → wiring LangGraph
+/opsx-meta-refactor-agent      → выровнять / DRY существующего
+/opsx-meta-repair-langgraph     → сломан wiring / hop / tests
+/opsx-meta-debrief-chat        → после сессии: уроки → правки meta-команд
+```
+
+Re-run wire after scaffold. Messy agent package → refactor before re-wire.

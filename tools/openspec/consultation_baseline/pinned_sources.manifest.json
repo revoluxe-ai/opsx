@@ -1,0 +1,11 @@
+{
+  "schema_version": "consultation-baseline-pinned-sources-v1",
+  "base_sha": "f0c28f98c86cc90aad94d107f647dfe770416e49",
+  "note": "Documented byte pin for BASE_SHA (hermetic loaders read pinned/ only; SHA-256 over exact vendored file bytes).",
+  "sources": {
+    "src/stroy/channels/telegram/invest_yalta/data/ux_state_contract.json": "b5d83a211eea9c0a34b786bf594fe99ee770021736af164bca5657383ff284cc",
+    "src/stroy/channels/telegram/invest_yalta/fsm.py": "bb1fe8e6923caa7d1ffd485639337e4864f3df762d359c0116cee444251adc1f",
+    "src/stroy/channels/telegram/invest_yalta/goals.py": "efd774b11167b6626894ad6eb7698c56ce20aaa54b4abfb53baca9ac1d20216f",
+    "src/stroy/channels/telegram/invest_yalta/telegram_present.py": "1128fbdfb6729b90b13b44d1b747aedbad030b9e9ff63ca48b76f221a2d24ff9"
+  }
+}

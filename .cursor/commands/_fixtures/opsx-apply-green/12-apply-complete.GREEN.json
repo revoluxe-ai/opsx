@@ -1,0 +1,88 @@
+{
+  "schema": "opsx.apply_green",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-003",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "red_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-red/SLICE-003/RED.json",
+    "status": "RED_PROVEN",
+    "slice_id": "SLICE-003",
+    "test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+    "artifact_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "implementation_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-implement/SLICE-003/IMPLEMENTATION.json",
+    "status": "IMPLEMENTATION_WRITTEN",
+    "slice_id": "SLICE-003",
+    "frozen_test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+    "artifact_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "frozen_test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_before": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_after": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "status": "GREEN_PROVEN",
+  "generated_at": "2026-08-31T11:00:00Z",
+  "chat_history_required": false,
+  "repository_identity_before_green": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js",
+      "src/auth/sessionResume.js"
+    ],
+    "inspected_digest": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "repository_identity_after_green": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js",
+      "src/auth/sessionResume.js"
+    ],
+    "inspected_digest": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "red_executions": [
+    {
+      "phase": "initial",
+      "iteration": 0,
+      "command": "node --test tests/unit/crossDeviceVisibilityResumeHydrate.test.mjs",
+      "exit_code": 0,
+      "relevant_output": "ok",
+      "executed_at": "2026-08-31T11:00:01Z"
+    }
+  ],
+  "green_fix_iterations": [],
+  "focused_checks": [],
+  "adjacent_checks": [],
+  "production_paths_modified_during_green": [],
+  "tests_modified": false,
+  "red_final_status": "PASS",
+  "adjacent_final_status": "NOT_REQUIRED",
+  "iteration_count": 0,
+  "iteration_limit": 5,
+  "whole_change_verified": false,
+  "task_completion": {
+    "policy": "GREEN_PROVEN_SLICE_LOCAL",
+    "checkbox_writes": "deferred_unmapped",
+    "completable_task_ids": [
+      "T4"
+    ],
+    "deferred_task_ids": []
+  },
+  "other_eligible_slice_ids": [],
+  "blockers": [],
+  "next_stage": "APPLY_COMPLETE",
+  "scaffold_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-scaffold/SLICE-003/SCAFFOLD.json",
+    "status": "SCAFFOLD_READY",
+    "slice_id": "SLICE-003",
+    "candidate_digest_after": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "no_op": true
+  }
+}

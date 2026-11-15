@@ -1,0 +1,79 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "red_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-red/SLICE-001/RED.json",
+    "status": "RED_PROVEN",
+    "slice_id": "SLICE-001",
+    "test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+    "artifact_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "frozen_test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_before": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_after": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "status": "IMPLEMENTATION_WRITTEN",
+  "generated_at": "2026-08-31T09:05:00Z",
+  "chat_history_required": false,
+  "repository_identity_before": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64"
+  },
+  "repository_identity_after": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js",
+      "src/services/hydrateCoalesce.js"
+    ],
+    "inspected_digest": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "production_paths_modified": [
+    "src/services/hydrateCoordinator.js"
+  ],
+  "production_paths_created": [
+    "src/services/hydrateCoalesce.js"
+  ],
+  "unexpected_but_required_paths": [
+    {
+      "path": "src/services/hydrateCoalesce.js",
+      "reason": "architectural_intent requires extracting coalesce helper beside the existing coordinator; not a second hydrate SoT."
+    }
+  ],
+  "implementation_summary": "Coordinator remains the sole hydrate SoT; coalesce helper extracted beside it as required by frozen architectural_intent.",
+  "architectural_intent_satisfied": true,
+  "reuse_decisions_followed": [
+    "RD-001"
+  ],
+  "invariants_preserved": [
+    "Exactly one hydrate orchestration SoT"
+  ],
+  "tests_modified": false,
+  "tests_executed": false,
+  "expected_product_write_surfaces": [
+    "src/services/hydrateCoordinator.js"
+  ],
+  "other_eligible_slice_ids": [
+    "SLICE-002"
+  ],
+  "blockers": [],
+  "next_stage": "APPLY_GREEN",
+  "scaffold_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-scaffold/SLICE-001/SCAFFOLD.json",
+    "status": "SCAFFOLD_READY",
+    "slice_id": "SLICE-001",
+    "candidate_digest_after": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "no_op": true
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "opsx-process-surfaces-v0",
+  "description": "Closed process-surface set for OPSX self-development (architecture §1). Extend only by Owner DECISION.",
+  "path_globs": [
+    ".cursor/commands/**",
+    ".cursor/rules/**",
+    ".cursor/skills/**",
+    ".agents/**",
+    ".cursor/pipeline/**",
+    "opsx_tools/registry/**",
+    "opsx/shared/**",
+    "opsx_tools/**",
+    "opsx/schemas/**",
+    "opsx/process-changes/**",
+    "opsx/policies/**",
+    ".github/workflows/*opsx*",
+    "tools/openspec/**",
+    "tools/cursor_executor/**"
+  ],
+  "commands_prefix": ".cursor/commands/",
+  "ecr_root": "opsx/process-changes/"
+}

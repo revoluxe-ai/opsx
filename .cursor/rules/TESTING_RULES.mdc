@@ -1,0 +1,14 @@
+---
+description: DEPRECATED migration pointer — use testing-rules.mdc
+alwaysApply: false
+---
+
+# DEPRECATED — migration pointer
+
+Canonical Cursor test-design/execution rule:
+
+`.cursor/rules/testing-rules.mdc`
+
+Do not treat this file as testing policy.
+Do not copy obsolete clauses from older revisions of this file.
+All test-design and execution rules live only in `testing-rules.mdc`.

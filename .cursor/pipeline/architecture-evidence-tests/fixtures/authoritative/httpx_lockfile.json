@@ -1,0 +1,7 @@
+{
+  "lockfile_pin": {
+    "package": "httpx",
+    "version": "0.27.0"
+  },
+  "documented_api_version": "2.x"
+}

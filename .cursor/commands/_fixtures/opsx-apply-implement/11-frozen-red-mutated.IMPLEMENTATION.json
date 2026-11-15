@@ -1,0 +1,23 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "frozen_test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_before": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_after": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "production_paths_modified": ["src/services/hydrateCoordinator.js"],
+  "tests_modified": true,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "FROZEN_RED_MUTATED",
+      "detail": "Frozen RED test bytes changed during IMPLEMENT. Do not repair or rewrite the test from this command.",
+      "paths": ["tests/unit/fixtureHydrateCoordinatorRed.test.mjs"]
+    }
+  ],
+  "next_stage": "NONE"
+}

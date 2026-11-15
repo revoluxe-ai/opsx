@@ -1,0 +1,190 @@
+{
+  "schema": "opsx.apply_design",
+  "schema_version": 3,
+  "change_id": "fixture-hydrate",
+  "status": "APPLY_DESIGN_READY",
+  "generated_at": "2026-08-31T07:00:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.md",
+      "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-hydrate",
+    "inputs": [
+      {
+        "path": "openspec/changes/fixture-hydrate/design.md",
+        "role": "design",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "path": "openspec/changes/fixture-hydrate/specs/hydrate-coord/spec.md",
+        "role": "spec",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "path": "openspec/changes/fixture-hydrate/tasks.md",
+        "role": "tasks",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9"
+  },
+  "repository_identity": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js",
+      "src/store/progress.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "candidate_note": "fixture HEAD placeholder"
+  },
+  "protected_context_identity": {
+    "paths": ["src/store/progress.js"],
+    "content_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e"
+  },
+  "pipeline_mutable_paths": [
+    "src/services/hydrateCoordinator.js",
+    "src/components/views/HomeView.vue",
+    "src/auth/sessionResume.js",
+    "tests/unit/cloudProgressHydrateCoordinatorEntryPoint.test.mjs",
+    "tests/unit/crossDeviceVisibilityResumeHydrate.test.mjs"
+  ],
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.md",
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json"
+  },
+  "architecture_summary": "Slices are locally coherent but composition contracts were omitted — invalid READY under schema_version 3.",
+  "reuse_decisions": [
+    {
+      "id": "RD-001",
+      "kind": "reuse",
+      "surface": "src/services/hydrateCoordinator.js",
+      "rationale": "Existing coordinator already owns hydrate sequencing."
+    }
+  ],
+  "architectural_constraints": [
+    {
+      "id": "AC-001",
+      "constraint": "Single hydrate orchestration SoT in hydrateCoordinator",
+      "source": "code"
+    }
+  ],
+  "slices": [
+    {
+      "slice_id": "SLICE-001",
+      "title": "Hydrate coordination core",
+      "responsibility": "Keep a single coordinator as the hydrate SoT.",
+      "source_task_ids": ["T1", "T2"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#coordination"],
+      "architectural_intent": "Reuse hydrateCoordinator.",
+      "reuse_decisions": ["RD-001"],
+      "expected_product_write_surfaces": ["src/services/hydrateCoordinator.js"],
+      "relevant_existing_surfaces": ["src/services/hydrateCoordinator.js"],
+      "red_test_targets_or_seams": ["src/services/hydrateCoordinator.js"],
+      "required_behavior": "All hydrate starts go through the coordinator.",
+      "invariants": ["Exactly one hydrate orchestration SoT"],
+      "must_not_change": ["backend hydrate API contract"],
+      "dependencies_on_prior_slices": [],
+      "implementation_notes": "Grouped T1+T2.",
+      "completion_contract": "Single coordinator entry.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/services/hydrateCoordinator.js",
+            "action": "EXISTING",
+            "required_symbols": ["requestHydrate"],
+            "structural_contract": "Existing coordinator export remains the hydrate seam.",
+            "allowed_scaffold_writes": [],
+            "behavior_deferred": ["in-flight GET dedupe"]
+          }
+        ],
+        "no_op_allowed": true,
+        "forbidden_behavior": ["dedupe"]
+      }
+    },
+    {
+      "slice_id": "SLICE-002",
+      "title": "Cloud progress UI branches",
+      "responsibility": "Display coordinator progress without owning hydrate.",
+      "source_task_ids": ["T3"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#progress-ui"],
+      "architectural_intent": "UI reads coordinator state.",
+      "reuse_decisions": ["RD-001"],
+      "expected_product_write_surfaces": ["src/components/views/HomeView.vue"],
+      "relevant_existing_surfaces": ["src/services/hydrateCoordinator.js"],
+      "red_test_targets_or_seams": ["src/components/views/HomeView.vue"],
+      "required_behavior": "Progress UI reflects coordinator phases.",
+      "invariants": ["UI is not a hydrate SoT"],
+      "must_not_change": ["hydrateCoordinator public sequencing contract"],
+      "dependencies_on_prior_slices": [],
+      "implementation_notes": "Independent UI slice.",
+      "completion_contract": "Progress branches without second hydrate helper.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/components/views/HomeView.vue",
+            "action": "EXTEND",
+            "required_symbols": ["displayCoordinatorProgress"],
+            "structural_contract": "Host adapter for coordinator progress.",
+            "allowed_scaffold_writes": ["src/components/views/HomeView.vue"],
+            "behavior_deferred": ["progress phase mapping"]
+          }
+        ],
+        "no_op_allowed": false,
+        "forbidden_behavior": ["api_orchestration"]
+      }
+    },
+    {
+      "slice_id": "SLICE-003",
+      "title": "Resume hydrate triggers",
+      "responsibility": "Wire resume triggers into the existing coordinator.",
+      "source_task_ids": ["T4"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#resume"],
+      "architectural_intent": "Extend coordinator; no resume-only orchestrator.",
+      "reuse_decisions": ["RD-001"],
+      "expected_product_write_surfaces": [
+        "src/services/hydrateCoordinator.js",
+        "src/auth/sessionResume.js"
+      ],
+      "relevant_existing_surfaces": ["src/services/hydrateCoordinator.js"],
+      "red_test_targets_or_seams": ["src/auth/sessionResume.js"],
+      "required_behavior": "Resume calls the same coordinator entry as bootstrap.",
+      "invariants": ["Resume must not bypass coordinator"],
+      "must_not_change": ["SLICE-002 display-only mapping"],
+      "dependencies_on_prior_slices": ["SLICE-001", "SLICE-002"],
+      "implementation_notes": "Depends on 001 and 002.",
+      "completion_contract": "Resume uses requestHydrate only.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/auth/sessionResume.js",
+            "action": "INTRODUCE",
+            "required_symbols": ["installSessionResumeHydrate"],
+            "structural_contract": "Resume module will later invoke coordinator entry.",
+            "allowed_scaffold_writes": ["src/auth/sessionResume.js"],
+            "behavior_deferred": ["resume hydrate application"]
+          }
+        ],
+        "no_op_allowed": false,
+        "forbidden_behavior": ["cross_device_semantics"]
+      }
+    }
+  ],
+  "slice_order": {
+    "kind": "dependency_graph",
+    "nodes": ["SLICE-001", "SLICE-002", "SLICE-003"],
+    "edges": [
+      { "from": "SLICE-001", "to": "SLICE-003" },
+      { "from": "SLICE-002", "to": "SLICE-003" }
+    ],
+    "independent_groups": [["SLICE-001", "SLICE-002"]]
+  },
+  "unresolved_items": [],
+  "blockers": [],
+  "next_stage": "APPLY_DESIGN_REVIEW"
+}

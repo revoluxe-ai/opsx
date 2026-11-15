@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx-orch-core/evolution-queue-entry.schema.json",
+  "title": "OPSX Orch Evolution Queue Entry",
+  "description": "One mechanical debt-tail handoff item built ONLY from persisted /opsx-bug-disposition receipts. Orch must not merge or invent tails.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "queue_entry_id",
+    "plan_id",
+    "work_item_id",
+    "disposition_id",
+    "member_id",
+    "debt_tail",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "queue_entry_id": { "type": "string" },
+    "plan_id": { "type": "string" },
+    "work_item_id": { "type": "string" },
+    "family_id": { "type": ["string", "null"] },
+    "member_id": { "type": "string" },
+    "disposition_id": { "type": "string" },
+    "debt_tail": {
+      "type": "object",
+      "required": ["problem", "why_beyond_minimum_repair", "evidence"],
+      "properties": {
+        "problem": { "type": "string" },
+        "why_beyond_minimum_repair": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "evolution_handoff_required": { "const": true },
+    "debt_waiver_forbidden": { "type": "boolean" },
+    "provenance": {
+      "type": "object",
+      "required": ["disposition_receipt_path"],
+      "properties": {
+        "disposition_receipt_path": { "type": "string" }
+      }
+    },
+    "orch_merge_forbidden": { "const": true }
+  },
+  "additionalProperties": false
+}

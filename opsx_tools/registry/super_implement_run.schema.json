@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.super_implement_run",
+  "title": "Super Implement durable run ledger",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "schema_version",
+    "change_id",
+    "change_root",
+    "status",
+    "live_execution_authorized",
+    "execution_identity",
+    "last_transition"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.super_implement_run" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "change_id": { "type": "string", "minLength": 1 },
+    "change_root": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["RUNNING", "PAUSED", "FAILED", "APPLY_COMPLETE"]
+    },
+    "live_execution_authorized": { "type": "boolean" },
+    "canonical_branch": { "type": "string" },
+    "expected_head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "run_ledger_id": { "type": "string", "minLength": 8 },
+    "writer_lease_id": { "type": "string", "minLength": 8 },
+    "ledger_revision": { "type": "integer", "minimum": 0 },
+    "execution_identity": {
+      "type": "object",
+      "required": ["planning_digest", "run_sequence"],
+      "properties": {
+        "planning_digest": { "type": "string" },
+        "repository_head": { "type": "string" },
+        "run_sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "in_flight_dispatch": {
+      "type": ["object", "null"],
+      "properties": {
+        "dispatch_id": { "type": "string" },
+        "stage": { "type": "string" },
+        "slice_id": { "type": ["string", "null"] },
+        "primitive_command": { "type": "string" },
+        "started_at": { "type": "string" }
+      }
+    },
+    "last_transition": {
+      "type": "object",
+      "required": ["at", "kind"],
+      "properties": {
+        "at": { "type": "string" },
+        "kind": { "type": "string" },
+        "stage": { "type": ["string", "null"] },
+        "slice_id": { "type": ["string", "null"] },
+        "code": { "type": ["string", "null"] }
+      }
+    },
+    "recovery_contract": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": { "type": "string" },
+        "next_action": { "type": "string" },
+        "resume_requires": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sequence": { "type": "integer" },
+          "stage": { "type": "string" },
+          "primitive_command": { "type": "string" },
+          "outcome": { "type": "string" }
+        }
+      }
+    }
+  }
+}

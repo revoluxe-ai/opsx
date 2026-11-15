@@ -1,0 +1,119 @@
+{
+  "schema": "opsx.apply_design_review",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "status": "APPLY_DESIGN_REVIEW_PASS",
+  "generated_at": "2026-09-01T10:00:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "apply_design": false,
+    "planning": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.md",
+      "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-hydrate",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9"
+  },
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "protected_context_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e",
+    "artifact_sha256": "7a5a63813570343aeffca01cba72d91576d8958ad75ef6023ebbed6078ca82c7"
+  },
+  "protected_context_identity": {
+    "paths": ["src/store/progress.js"],
+    "content_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e"
+  },
+  "review_questions": [
+    {
+      "id": 1,
+      "question": "Is slice decomposition coherent?",
+      "verdict": "pass",
+      "detail": "SLICE-001 coordinator core, SLICE-002 UI display, SLICE-003 resume triggers; responsibilities align with tasks T1–T4."
+    },
+    {
+      "id": 2,
+      "question": "Are slices too broad or too granular?",
+      "verdict": "pass",
+      "detail": "T1+T2 grouped into SLICE-001; UI and resume split; no micro-slices or kitchen-sink slice."
+    },
+    {
+      "id": 3,
+      "question": "Are dependency edges complete and correctly directed?",
+      "verdict": "pass",
+      "detail": "Edges 001→003 and 002→003 match dependencies_on_prior_slices; independent_groups lists 001|002."
+    },
+    {
+      "id": 4,
+      "question": "Could one slice implement future-slice semantics on an allowed path?",
+      "verdict": "pass",
+      "detail": "scaffold_contract behavior_deferred and must_not_change fences keep resume semantics off SLICE-001/002 paths."
+    },
+    {
+      "id": 5,
+      "question": "Are reusable mechanisms correctly reused rather than duplicated?",
+      "verdict": "pass",
+      "detail": "RD-001/RD-002 reuse hydrateCoordinator; RD-003 forbids ad-hoc per-view hydrate."
+    },
+    {
+      "id": 6,
+      "question": "Does every planned behavior have an implementation owner?",
+      "verdict": "pass",
+      "detail": "composition_completeness.task_coverage maps T1–T4 to slices; each slice has expected_product_write_surfaces."
+    },
+    {
+      "id": 7,
+      "question": "Does every critical invariant have a proof owner?",
+      "verdict": "pass",
+      "detail": "Invariant classifications name proof_owner SLICE-001 or CSC-003 for cross-slice join/control-result rules."
+    },
+    {
+      "id": 8,
+      "question": "Are cross-slice interactions sufficiently modeled?",
+      "verdict": "pass",
+      "detail": "CSC-003 freezes consumed_semantics, race/lifecycle boundaries, required_composition_behavior, and proof_placement."
+    },
+    {
+      "id": 9,
+      "question": "Are special return/control states interpreted consistently downstream?",
+      "verdict": "pass",
+      "detail": "special_result_interpretations cover put_in_flight_or_join and stale_generation for SLICE-003 consumers."
+    },
+    {
+      "id": 10,
+      "question": "Are concurrency / reentrancy / stale-result cases considered where the architecture creates them?",
+      "verdict": "pass",
+      "detail": "race_applicability.applicable=true with concurrent_invocation, stale_result, cancellation_skip, retry_reentry text."
+    },
+    {
+      "id": 11,
+      "question": "Are bootstrap vs already-running semantics distinguished where relevant?",
+      "verdict": "pass",
+      "detail": "lifecycle_applicability covers bootstrap, already_running, visibility_resume, teardown_remount."
+    },
+    {
+      "id": 12,
+      "question": "Could all slices individually GREEN while the composed behavior remains wrong?",
+      "verdict": "pass",
+      "detail": "CSC-003 + B_RED / B_GREEN_ADJACENT proof_placement and failure_classes close the in-flight-join / control-result gap; composed wrong while all GREEN is not plausible under this freeze."
+    }
+  ],
+  "findings": [],
+  "composed_behavior_risk": {
+    "answered": true,
+    "all_slices_green_composed_wrong_possible": false,
+    "detail": "Composition contracts (CSC-003) require in-flight join and forbid treating control results as API fail-closed; B_RED and B_GREEN_ADJACENT own proofs so local GREEN without those obligations is not accepted by the freeze."
+  },
+  "blockers": [],
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.md",
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design-review/APPLY-DESIGN-REVIEW.json"
+  },
+  "next_stage": "APPLY_SCAFFOLD"
+}

@@ -1,0 +1,18 @@
+"""Общие подстановки prompt для repair-группы агентов."""
+
+from .substitutions import (
+    BUG_TEAM_POLICY_PATH,
+    OPSX_ORCHESTRATION_PATH,
+    REPAIR_AGENT_SHARED_RULES,
+)
+
+ORCHESTRATION_PATH = OPSX_ORCHESTRATION_PATH
+POLICY_PATH = BUG_TEAM_POLICY_PATH
+
+__all__ = [
+    "BUG_TEAM_POLICY_PATH",
+    "OPSX_ORCHESTRATION_PATH",
+    "ORCHESTRATION_PATH",
+    "POLICY_PATH",
+    "REPAIR_AGENT_SHARED_RULES",
+]

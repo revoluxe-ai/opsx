@@ -1,0 +1,19 @@
+# Ordered bounded-verify obligations (WHAT). HOW lives in static-check registry packs.
+#
+# Composer: bounded_verify_compose.compose_required_checks
+
+split_apply_prefix:
+  - opsx-split-apply-impl-ready
+  - opsx-apply-green-fresh
+  - opsx-scenario-plan-receipt
+
+product_acceptance_prefix:
+  - opsx-pg-provider-receipt
+
+static_quality_tail:
+  - pyright-strict
+  - mypy
+  - pytest-targeted
+  - pytest-unit
+  - pytest-integration
+  - pytest-destructive

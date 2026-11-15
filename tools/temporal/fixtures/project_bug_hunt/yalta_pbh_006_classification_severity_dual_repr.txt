@@ -1,0 +1,15 @@
+# SYNTHETIC — CURRENT incident semantics (PBH-006 class)
+# PRODUCTION_CLASSIFICATION vs SEVERITY on duplicate canonical ID (compatible).
+
+STATUS: HUNT_COMPLETE
+- findings_total: 1
+
+### FINDING_ID: PBH-006
+- PRODUCTION_CLASSIFICATION: confirmed production bug
+- TITLE: Callback ack parity drops max_update_id on drain retry
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:88
+
+### FINDING_ID: PBH-006
+- SEVERITY: medium
+- TITLE: Callback ack parity drops max_update_id on drain retry
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:88

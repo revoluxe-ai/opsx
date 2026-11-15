@@ -1,0 +1,66 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 2,
+  "evidence_contract": "per_command_v1",
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T08:00:00Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": ["tests/unit/fixtureHydrateCoordinatorRed.test.mjs"],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "command_executions": [
+    {
+      "test_path": "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "test_title": "",
+      "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 0,
+          "failure_classification": "ALREADY_SATISFIED",
+          "failure_signature": "none (pass)",
+          "intended_seam": "hydrateCoordinator",
+          "relevant_output": "pass 1"
+        }
+      ],
+      "final_exit_code": 0,
+      "final_classification": "ALREADY_SATISFIED",
+      "final_failure_signature": "none (pass)",
+      "intended_seam_reached": true,
+      "red_qualified": false
+    }
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "exit_code": 0,
+      "failure_classification": "ALREADY_SATISFIED",
+      "notes": "tests passed before any production edit; do not fake RED"
+    }
+  ],
+  "final_execution": {
+    "command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "exit_code": 0,
+    "relevant_output": "pass 1",
+    "failure_signature": "none (pass)",
+    "failure_classification": "ALREADY_SATISFIED"
+  },
+  "expected_behavior": "Coordinator coalesces in-flight hydrates.",
+  "observed_behavior": "Current production already coalesces; tests PASS.",
+  "red_reason": "ALREADY_SATISFIED — do not manufacture a failing test.",
+  "product_files_modified": false,
+  "tests_frozen": false,
+  "blockers": [
+    {
+      "code": "ALREADY_SATISFIED",
+      "detail": "Required slice tests PASS before implementation. Do not invent RED. Downstream IMPLEMENT is not authorized as if RED_PROVEN."
+    }
+  ],
+  "next_stage": "NONE"
+}

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "default_tier": "low",
+  "steps": {
+    "review": "low",
+    "repair": "low",
+    "next_check": "low",
+    "verification_executor": "low"
+  },
+  "tiers": {
+    "low": {
+      "label": "Composer 2.5",
+      "model": "composer-2.5",
+      "reasoning": "low",
+      "speed": "standard",
+      "cli_model": "composer-2.5"
+    },
+    "medium": {
+      "label": "GPT-5.6 Luna Extra High",
+      "model": "gpt-5.6-luna-xhigh",
+      "reasoning": "high",
+      "speed": "standard",
+      "cli_model": "composer-2.5"
+    },
+    "high": {
+      "label": "Cursor Grok 4.6 Medium",
+      "model": "cursor-grok-4.6-medium",
+      "reasoning": "medium",
+      "speed": "standard",
+      "cli_model": "composer-2.5"
+    }
+  },
+  "speed_variants": {
+    "composer-2.5": "composer-2.5",
+    "cursor-grok-4.6-high": "cursor-grok-4.6-high-fast",
+    "cursor-grok-4.6-medium": "cursor-grok-4.6-medium-fast",
+    "cursor-grok-4.6-low": "cursor-grok-4.6-low-fast",
+    "gpt-5.6-luna-xhigh": "gpt-5.6-luna-xhigh-fast"
+  },
+  "notes": {
+    "cli_flag": "agent --model <cli_model>",
+    "id_policy": "label is display text; model and cli_model are exact agent --model identifiers",
+    "verified_at": "2026-09-12",
+    "verified_via": "/opsx-models GO scope=project"
+  }
+}

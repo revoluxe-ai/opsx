@@ -1,0 +1,91 @@
+{
+  "analysis_result": {
+    "schema_version": "1.5",
+    "agent": "group_error",
+    "analysis_identity": {
+      "change_id": "fixture-change",
+      "identity_status": "PARTIAL"
+    },
+    "input_integrity": {
+      "status": "COMPLETE",
+      "issues": []
+    },
+    "grouped_errors": [
+      {
+        "error_id": "TG-A",
+        "problem": "import pkg.foo missing",
+        "match_basis": "same module path in pytest and pyright",
+        "instruments": ["pytest", "pyright"],
+        "finding_ids": ["F-0001", "F-0002"]
+      },
+      {
+        "error_id": "F-0003",
+        "problem": "F-0003",
+        "match_basis": "singleton finding",
+        "instruments": ["mypy"],
+        "finding_ids": ["F-0003"]
+      }
+    ],
+    "finding_groups": [],
+    "ungrouped_finding_ids": [],
+    "additional_finding_links": [],
+    "findings": [
+      {
+        "finding_id": "F-0001",
+        "source_tool": "pytest",
+        "repair_workflow": "WF_PYTEST_FAILURE",
+        "classification": "FACT",
+        "criterion_ids": [],
+        "evidence_refs": []
+      },
+      {
+        "finding_id": "F-0002",
+        "source_tool": "pyright",
+        "repair_workflow": "WF_PYRIGHT_TYPE",
+        "classification": "FACT",
+        "criterion_ids": [],
+        "evidence_refs": []
+      },
+      {
+        "finding_id": "F-0003",
+        "source_tool": "mypy",
+        "repair_workflow": "WF_MYPY_TYPE",
+        "classification": "FACT",
+        "criterion_ids": [],
+        "evidence_refs": []
+      }
+    ],
+    "triage_summary": {
+      "findings_total": 3,
+      "finding_groups_total": 2,
+      "ungrouped_total": 0
+    }
+  },
+  "repair_order_result": {
+    "schema_version": "1.1",
+    "agent": "repair_order",
+    "status": "SORTED",
+    "source_identity": {
+      "change_id": "fixture-change",
+      "identity_status": "PARTIAL",
+      "group_error_schema_version": "1.5"
+    },
+    "ordered_units": [
+      {
+        "position": 1,
+        "unit_type": "GROUP",
+        "unit_id": "TG-A",
+        "finding_ids": ["F-0001", "F-0002"],
+        "placement_rationale": "preserve grouped_errors order"
+      },
+      {
+        "position": 2,
+        "unit_type": "GROUP",
+        "unit_id": "F-0003",
+        "finding_ids": ["F-0003"],
+        "placement_rationale": "preserve singleton row order"
+      }
+    ],
+    "confirmed_dependencies": []
+  }
+}

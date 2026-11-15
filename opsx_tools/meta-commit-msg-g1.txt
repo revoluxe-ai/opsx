@@ -1,0 +1,17 @@
+refactor(opsx_runtime): remove results_analyst verify agent (удалить legacy results_analyst)
+
+What:
+- Remove results_analyst package and rewire impl_verify/bugbot agents off it.
+
+Why:
+- Retire legacy single-agent results path in favor of specialized verify agents.
+
+How:
+- Delete .opsx/opsx_runtime/agents/verify/results_analyst/**.
+- Update impl_verify and bugbot agent entrypoints.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- low; follow-up commits add replacement agents and graphs.

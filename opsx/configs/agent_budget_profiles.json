@@ -1,0 +1,56 @@
+{
+  "profiles": {
+    "light_json": {
+      "max_observed_input_per_hop": 500000,
+      "max_observed_output_per_hop": 32000,
+      "max_observed_input_per_task": 5000000,
+      "max_observed_output_per_task": 320000,
+      "max_model_turns_per_hop": 4,
+      "max_internal_model_events_per_hop": 40,
+      "max_tool_invocations_per_hop": 40,
+      "estimate_reserve_ratio": 1.15
+    },
+    "standard_impl": {
+      "max_observed_input_per_hop": 1500000,
+      "max_observed_output_per_hop": 64000,
+      "max_observed_input_per_task": 15000000,
+      "max_observed_output_per_task": 640000,
+      "max_model_turns_per_hop": 4,
+      "max_internal_model_events_per_hop": 80,
+      "max_tool_invocations_per_hop": 80,
+      "estimate_reserve_ratio": 1.15,
+      "deadline_wall_clock_s": 7200
+    },
+    "heavy_hunt_red": {
+      "max_observed_input_per_hop": 3000000,
+      "max_observed_output_per_hop": 128000,
+      "max_observed_input_per_task": 25000000,
+      "max_observed_output_per_task": 1000000,
+      "max_model_turns_per_hop": 4,
+      "max_internal_model_events_per_hop": 120,
+      "max_tool_invocations_per_hop": 120,
+      "estimate_reserve_ratio": 1.15,
+      "deadline_wall_clock_s": 7200
+    },
+    "classifier_discover": {
+      "max_observed_input_per_hop": 500000,
+      "max_observed_output_per_hop": 32000,
+      "max_observed_input_per_task": 5000000,
+      "max_observed_output_per_task": 320000,
+      "max_model_turns_per_hop": 4,
+      "max_internal_model_events_per_hop": 60,
+      "max_tool_invocations_per_hop": 80,
+      "estimate_reserve_ratio": 1.15
+    }
+  },
+  "role_defaults": {
+    "default": "standard_impl",
+    "RED_TEST_WORKER": "heavy_hunt_red",
+    "BOUNDED_HUNTER": "heavy_hunt_red",
+    "CLASSIFIER": "classifier_discover",
+    "FAN_IN_ASSEMBLER": "light_json",
+    "COMMIT": "light_json",
+    "IMPLEMENTATION_EXECUTOR": "heavy_hunt_red",
+    "GREEN_VERIFIER": "standard_impl"
+  }
+}

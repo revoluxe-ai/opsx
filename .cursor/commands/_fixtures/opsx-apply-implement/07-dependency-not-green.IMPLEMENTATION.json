@@ -1,0 +1,19 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-003",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "DEPENDENCY_NOT_GREEN",
+      "detail": "SLICE-003 is RED_PROVEN but prior slices lack GREEN_PROVEN.",
+      "unmet_dependencies": ["SLICE-001", "SLICE-002"]
+    }
+  ],
+  "next_stage": "NONE"
+}

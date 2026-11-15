@@ -1,0 +1,10 @@
+{
+  "schema_version": "opsx-openspec-cli-provider-v0.1.0",
+  "package_name": "@fission-ai/openspec",
+  "package_version": "1.14.1",
+  "node_env_dir": "opsx_tools/openspec-cli-node",
+  "wrapper_relpath": "opsx_tools/openspec-cli",
+  "setup_script_relpath": "opsx_tools/openspec-cli-node/setup.sh",
+  "lockfile_relpath": "opsx_tools/openspec-cli-node/package-lock.json",
+  "binary_relpath": "opsx_tools/openspec-cli-node/node_modules/.bin/openspec"
+}

@@ -1,0 +1,54 @@
+I have enough to write the findings. I'm confirming the epoch-bump on step change (lines 526-528, 561-562). When the step changes, `session_epoch` increments. So the fallback idempotency key `book:{session_epoch}:{slot_ref}` in `fsm.py:970` is epoch-scoped: a re-tap of the same confirm after a step transition produces a new key and bypasses the port's replay protection. I'll weigh that severity honestly below.
+
+Scope check: I did not edit any product code. This is a hunt-only pass, as the contract requires.
+
+---
+
+**STATUS: HUNT_COMPLETE** (product lane only; `tools/**`, `.cursor/**`, `.opsx/**` excluded)
+
+**PROJECT_BUG_HUNT_RECEIPT**
+- base: `stage`
+- head: `integrate/consultation-funnel-baseline` (`fbc194487470557c1081a0b232a80b0875bdb31e`)
+- change: `consultation-funnel-baseline`
+- merge_base: `5cd32c424103c98db6e6b6684bc960bd219cd64c`
+- review_scope: FULL_BRANCH_DIFF
+- product_lane_roots: `src/stroy`, `tests/unit`, `tests/integration`, `openspec/changes/**`
+- findings_total: **2**
+
+---
+
+**FINDINGS**
+
+**F-1 [MEDIUM] Confirm-booking idempotency key is epoch-scoped when the client supplies no key**
+LOC_LINK: `src/stroy/channels/telegram/invest_yalta/fsm.py:970`
+
+```python
+idem = event.idempotency_key or f"book:{snapshot.session_epoch}:{slot_ref}"
+```
+
+The fallback key embeds `session_epoch`. `session_epoch` is bumped on every step change (`handler.py:526-528`, `561-562`). A repeat `CONFIRM_YES` for the same slot after the epoch has moved therefore gets a different key, so the booking port's `ALREADY_DONE` replay protection (`booking_adapter.py` → `book_in_session`) does not catch it. The P0 gap `BEHAVIOR-IDEM-001` in `evidence/p0-open-blockers.md` is consistent with this but does not name the epoch-keying mechanism. Impact depends on whether the CTA path can reach `CONFIRM_YES` with an empty key while the step has already advanced.
+Suggested direction: key the fallback on the stable business identity (`slot_ref` plus `active_booking_id`/inquiry), not on the mutable `session_epoch`.
+
+**F-2 [LOW] Test asserts the defect rather than guarding it**
+LOC_LINK: `tests/unit/channels/telegram/invest_yalta/test_p0_evidence_characterization.py:272-285`
+
+`test_double_confirm_yes_fsm_emits_two_book_slot_effects` asserts `len(book_effects) == 2`, which encodes "FSM does not dedupe" as expected behavior. That is documented as intentional (handler/port must dedupe), but it locks in the duplicate effect. If F-1 is fixed by changing the key, this test stays green while the dedup contract is still unproven. Recommend pairing it with the missing handler/port double-confirm replay test the evidence already lists as a gap.
+
+---
+
+**Verification notes**
+- Read-only hunt. No product code changed, no tests run, no shell/git used beyond the preflight artifact and file reads.
+- The preflight diff is truncated at ~930 lines of 1,250+. Remaining `openspec/changes/**` docs were reviewed only through their evidence summaries, not line-by-line. Findings are limited to what I read.
+- Other files in the 102-file list (`tests/integration/...`, `tools/openspec/**`) were not deep-reviewed; `tools/**` is excluded by contract anyway.
+
+**Owner next action (local Cursor hop, single prompt):**
+
+```text
+/opsx-project-bug-hunt base=stage head=integrate/consultation-funnel-baseline change=consultation-funnel-baseline
+Workspace: /workspace
+Chat title: consultation-funnel-baseline bug-hunt
+Findings to act on: F-1 fsm.py:970 epoch-scoped idempotency fallback; F-2 test_p0_evidence_characterization.py:272-285 asserts duplicate BOOK_SLOT.
+Rules: hunt-only in this hop; do not fix product code; product lane = src/stroy, tests/unit, tests/integration, openspec/changes/**; exclude tools/**, .cursor/**, .opsx/**.
+Preflight artifact: .tmp/temporal/git-preflight-latest.md
+Next: open a fix task for F-1 with a failing handler-level double-confirm replay test first, then fix the key derivation.
+```

@@ -1,0 +1,16 @@
+feat(opsx_runtime): verify orchestration graphs and dispatch cycle (оркестрация verify workflow)
+
+What:
+- Add outer/green loops, dispatch cycle, check workflow, and impl graph wiring.
+
+Why:
+- Route verify work through specialized agents instead of results_analyst.
+
+How:
+- New and updated modules under .opsx/opsx_runtime/workflows/verify/.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- medium; depends on runner entrypoints in follow-up commit.

@@ -1,0 +1,20 @@
+{
+  "execution_id": "cursor-executor-v01-dogfood-readonly",
+  "correlation_id": "opsx-adapter-v0.1",
+  "workspace": "C:\\Users\\vkita\\my_code\\game",
+  "runtime": "LOCAL",
+  "model_route": {
+    "model_id": "gpt-5.6-sol",
+    "params": {
+      "context": "272k",
+      "reasoning": "high",
+      "fast": "false"
+    }
+  },
+  "prompt": "Return exactly this text and nothing else:\n\nCURSOR_EXECUTOR_V01_OK",
+  "write_policy": "READ_ONLY",
+  "timeout_seconds": 600,
+  "metadata": {
+    "slice": "cursor-executor-adapter-v0.1"
+  }
+}

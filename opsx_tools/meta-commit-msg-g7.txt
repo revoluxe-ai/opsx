@@ -1,0 +1,16 @@
+test(opsx_runtime): expand verify workflow test doubles (тесты verify workflow)
+
+What:
+- Expand stub adapters and green/outer loop workflow tests; update real runner test.
+
+Why:
+- Keep production graph commits reviewable with isolated test delta.
+
+How:
+- Patch tests under workflows/verify/tests and test_real_runner.py.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- low.

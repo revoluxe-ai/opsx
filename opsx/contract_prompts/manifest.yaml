@@ -1,0 +1,26 @@
+# Какие фрагменты монтируются в промпт группы. Порядок стабилен.
+groups:
+  common:
+    - no-silent-exit
+    - no-truncation
+    - read-scope
+  planning:
+    - no-silent-exit
+    - read-scope
+  implementation:
+    - no-silent-exit
+    - no-truncation
+    - read-scope
+    - test-tiers
+    - adoption-disabled-checks
+  verify:
+    - no-silent-exit
+    - no-truncation
+    - read-scope
+    - test-tiers
+    - infra-tests-stage
+    - adoption-disabled-checks
+  repair:
+    - no-silent-exit
+    - test-tiers
+    - adoption-disabled-checks

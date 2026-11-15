@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.super_implement_owner_authority_proof",
+  "title": "Super Implement Owner authority proof (content-bound)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "attestation_body_sha256",
+    "owner_attestation_ref",
+    "bound_change_root",
+    "bound_change_id",
+    "bound_planning_digest",
+    "permitted_write_scope",
+    "permitted_primitive_commands",
+    "issued_at"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.super_implement_owner_authority_proof" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "attestation_body_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "owner_attestation_ref": { "type": "string", "pattern": "^owner-message:" },
+    "bound_change_root": { "type": "string", "minLength": 1 },
+    "bound_change_id": { "type": "string", "minLength": 1 },
+    "bound_planning_digest": { "type": "string", "minLength": 1 },
+    "bound_repository_head": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "permitted_write_scope": { "const": "split_apply_native_stages" },
+    "permitted_primitive_commands": {
+      "type": "array",
+      "minItems": 6,
+      "items": { "type": "string", "pattern": "^/opsx-apply-" }
+    },
+    "issued_at": { "type": "string", "minLength": 10 }
+  }
+}

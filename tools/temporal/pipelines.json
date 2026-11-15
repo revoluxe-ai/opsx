@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "purpose": "Machine-readable pipeline specs for /tempo-* operator commands. One command = one pipeline.",
+  "pipelines": {
+    "bugbot": {
+      "command": "tempo-bugbot",
+      "lane": "bugbot",
+      "workflow_type": "BugbotRepairWorkflow",
+      "workflow_id_prefix": "bugbot-repair-poc",
+      "review_activity": "execute_bugbot_review",
+      "repair_activity": "execute_opsx_repair",
+      "session_activity": "ensure_cursor_session",
+      "clean_status": "BUGBOT_CLEAN",
+      "ok_statuses": [
+        "BUGBOT_CLEAN",
+        "NO_REPAIR_PROGRESS",
+        "MAX_ROUNDS_REACHED",
+        "STALLED"
+      ],
+      "process_fail_statuses": [
+        "REVIEW_FAILED",
+        "COMMIT_MATERIALIZE_BLOCKED",
+        "TEMPORAL_SERVER_UNAVAILABLE"
+      ],
+      "expected_cycle": [
+        "ensure_cursor_session",
+        "execute_bugbot_review",
+        "execute_opsx_repair",
+        "execute_commit_materialize"
+      ],
+      "what_it_does": "Review branch diff base..head via /review-bugbot, then /opsx-orch-bug-fix, then re-review until clean or no repair progress.",
+      "inner_review_command": "/review-bugbot",
+      "inner_repair_command": "/opsx-orch-bug-fix",
+      "singleton": true,
+      "git_preflight": true,
+      "requires": [],
+      "resolves": {
+        "base": { "default": "stage", "overridable": true },
+        "head": { "source": "git_current_branch", "overridable": false }
+      },
+      "defaults": {
+        "base": "stage"
+      }
+    },
+    "project-bug-hunt": {
+      "command": "tempo-project-bug-hunt",
+      "lane": "project-bug-hunt",
+      "workflow_type": "ProjectBugHuntWorkflow",
+      "workflow_id_prefix": "project-bug-hunt-poc",
+      "review_activity": "execute_project_bug_hunt",
+      "repair_activity": "execute_project_bug_hunt_orch",
+      "session_activity": "ensure_cursor_session",
+      "clean_status": "HUNT_CLEAN",
+      "ok_statuses": [
+        "HUNT_CLEAN",
+        "NO_REPAIR_PROGRESS",
+        "MAX_ROUNDS_REACHED",
+        "STALLED"
+      ],
+      "process_fail_statuses": [
+        "REVIEW_FAILED",
+        "COMMIT_MATERIALIZE_BLOCKED",
+        "TEMPORAL_SERVER_UNAVAILABLE"
+      ],
+      "expected_cycle": [
+        "ensure_cursor_session",
+        "execute_project_bug_hunt",
+        "execute_project_bug_hunt_orch",
+        "execute_commit_materialize"
+      ],
+      "what_it_does": "Hunt product bugs on base..head for an OpenSpec change, then orch-bug-fix the admitted batch, then re-hunt until clean or no repair progress.",
+      "inner_review_command": "/opsx-project-bug-hunt",
+      "inner_repair_command": "/opsx-orch-bug-fix",
+      "singleton": true,
+      "git_preflight": false,
+      "requires": ["change"],
+      "resolves": {
+        "base": { "default": "stage", "overridable": true },
+        "head": { "source": "git_current_branch", "overridable": false }
+      },
+      "defaults": {
+        "base": "stage"
+      }
+    },
+    "security": {
+      "command": "tempo-security",
+      "lane": "security",
+      "workflow_type": "SecurityReviewWorkflow",
+      "workflow_id_prefix": "security-review-poc",
+      "review_activity": "execute_security_review",
+      "repair_activity": "execute_security_repair",
+      "session_activity": "ensure_cursor_session",
+      "clean_status": "SECURITY_CLEAN",
+      "ok_statuses": [
+        "SECURITY_CLEAN",
+        "NO_REPAIR_PROGRESS",
+        "MAX_ROUNDS_REACHED",
+        "STALLED"
+      ],
+      "process_fail_statuses": [
+        "REVIEW_FAILED",
+        "COMMIT_MATERIALIZE_BLOCKED",
+        "TEMPORAL_SERVER_UNAVAILABLE"
+      ],
+      "expected_cycle": [
+        "ensure_cursor_session",
+        "execute_security_review",
+        "execute_security_repair",
+        "execute_commit_materialize"
+      ],
+      "what_it_does": "Review src/tests branch diff via /review-security, then /opsx-bug-team on src/tests findings, then re-review until clean or no repair progress.",
+      "inner_review_command": "/review-security",
+      "inner_repair_command": "/opsx-bug-team",
+      "git_preflight": true,
+      "singleton": true,
+      "requires": [],
+      "resolves": {
+        "base": { "default": "stage", "overridable": true },
+        "head": { "source": "git_current_branch", "overridable": false }
+      },
+      "defaults": {
+        "base": "stage"
+      }
+    },
+    "verification": {
+      "command": "tempo-verification",
+      "lane": "verification",
+      "workflow_type": "VerificationExecutionWorkflow",
+      "workflow_id_prefix": "verification-execution-poc",
+      "review_activity": "execute_next_check",
+      "repair_activity": "execute_assigned_check",
+      "session_activity": "ensure_verification_context",
+      "clean_status": "ALL_REQUIRED_CHECKS_PASS",
+      "ok_statuses": [
+        "ALL_REQUIRED_CHECKS_PASS",
+        "VERIFICATION_EXECUTION_COMPLETE"
+      ],
+      "process_fail_statuses": [
+        "VERIFICATION_CHECK_FAILED",
+        "VERIFICATION_CHECK_BLOCKED",
+        "BLOCKED_SNAPSHOT_DRIFT",
+        "CONTRACT_ERROR",
+        "EXECUTOR_COMPLETION_UNCERTAIN",
+        "TEMPORAL_SERVER_UNAVAILABLE"
+      ],
+      "expected_cycle": [
+        "ensure_verification_context",
+        "execute_next_check",
+        "execute_assigned_check"
+      ],
+      "what_it_does": "Drive frozen verification: /opsx-next-check → assigned bounded executor → /opsx-next-check until ALL_REQUIRED_CHECKS_PASS. FAIL/BLOCKED stop. No repair.",
+      "inner_review_command": "/opsx-next-check",
+      "inner_repair_command": "(dynamic from CHECK_ASSIGNMENT.executor)",
+      "git_preflight": false,
+      "singleton": true,
+      "requires": ["change"],
+      "resolves": {},
+      "defaults": {},
+      "session_dependency": "NONE",
+      "auto_repair": false,
+      "auto_plan_regenerate": false,
+      "pre_assignment_steps": [],
+      "post_browser_check_steps": [
+        {
+          "id": "owner-browser-check-release",
+          "when": "after_smoke_acceptance_executor",
+          "description": "Open release page in Owner Chrome after browser check ends (not full pipeline terminal)."
+        }
+      ],
+      "stop_statuses": [
+        "MAX_ROUNDS_REACHED",
+        "STALLED",
+        "NO_REPAIR_PROGRESS"
+      ],
+      "post_completion_steps": [
+        {
+          "id": "owner-done-signal",
+          "when": "terminal",
+          "description": "Open static owner takeover page in Owner Chrome after PASS/FAIL/BLOCKED/STOP."
+        }
+      ]
+    }
+  }
+}

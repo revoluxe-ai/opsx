@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.4",
+  "analysis_identity": {"change_id": "fixture-d", "identity_status": "PARTIAL"},
+  "input_integrity": {"status": "COMPLETE", "issues": []},
+  "finding_groups": [],
+  "ungrouped_finding_ids": ["F-0001", "F-0002"],
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "source_tool": "mypy",
+      "observation": "app/service.py:5: error: ServiceA has no attribute 'run'",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.mypy"]
+    },
+    {
+      "finding_id": "F-0002",
+      "source_tool": "mypy",
+      "observation": "tests/test_service.py:8: error: ServiceA has no attribute 'run'",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.mypy"]
+    }
+  ],
+  "triage_summary": {"findings_total": 2, "finding_groups_total": 0, "ungrouped_total": 2}
+}

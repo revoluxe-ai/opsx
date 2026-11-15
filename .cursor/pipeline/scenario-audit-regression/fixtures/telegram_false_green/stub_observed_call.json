@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "path_suffix": "/sendMessage",
+    "json_body": {
+      "chat_id": 42,
+      "message": "Спасибо! Мы получили заявку."
+    }
+  },
+  "response": {
+    "status": 200,
+    "json_body": {
+      "ok": false
+    }
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "opsx.apply_scaffold",
+  "title": "APPLY SCAFFOLD",
+  "oneOf": [
+    { "$ref": "#/definitions/ready" },
+    { "$ref": "#/definitions/blocked" }
+  ],
+  "definitions": {
+    "applyDesignIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_path",
+        "status",
+        "planning_digest",
+        "inspected_digest",
+        "protected_context_digest",
+        "artifact_sha256"
+      ],
+      "properties": {
+        "machine_path": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "planning_digest": { "type": "string", "minLength": 64 },
+        "inspected_digest": { "type": "string", "minLength": 64 },
+        "protected_context_digest": { "type": "string", "minLength": 64 },
+        "artifact_sha256": { "type": "string", "minLength": 64 }
+      }
+    },
+    "repositoryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "inspected_paths", "inspected_digest"],
+      "properties": {
+        "head": { "type": "string", "minLength": 1 },
+        "inspected_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "inspected_digest": { "type": "string", "minLength": 64 }
+      }
+    },
+    "requiredSurface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "action", "required_symbols"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "required_symbols": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "structuralChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "detail"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string" },
+        "unmet_dependencies": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "schema_version",
+        "change_id",
+        "slice_id",
+        "apply_design_identity",
+        "status",
+        "generated_at",
+        "chat_history_required",
+        "repository_identity_before",
+        "repository_identity_after",
+        "required_surfaces",
+        "created_paths",
+        "extended_paths",
+        "created_symbols",
+        "structural_changes",
+        "no_op",
+        "behavior_implemented",
+        "product_files_modified",
+        "tests_modified",
+        "tests_executed",
+        "authorized_write_paths",
+        "other_eligible_slice_ids",
+        "blockers",
+        "next_stage"
+      ],
+      "properties": {
+        "schema": { "const": "opsx.apply_scaffold" },
+        "schema_version": { "const": 1 },
+        "change_id": { "type": "string", "minLength": 1 },
+        "slice_id": { "type": "string", "minLength": 1 },
+        "apply_design_identity": { "$ref": "#/definitions/applyDesignIdentity" },
+        "status": { "const": "SCAFFOLD_READY" },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "chat_history_required": { "const": false },
+        "repository_identity_before": { "$ref": "#/definitions/repositoryIdentity" },
+        "repository_identity_after": { "$ref": "#/definitions/repositoryIdentity" },
+        "required_surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/requiredSurface" }
+        },
+        "created_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "extended_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "created_symbols": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "structural_changes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/structuralChange" }
+        },
+        "no_op": { "type": "boolean" },
+        "no_op_reason": { "type": "string", "minLength": 1 },
+        "behavior_implemented": { "const": false },
+        "product_files_modified": { "type": "boolean" },
+        "tests_modified": { "const": false },
+        "tests_executed": { "const": false },
+        "authorized_write_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "other_eligible_slice_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "blockers": { "type": "array", "items": { "$ref": "#/definitions/blocker" } },
+        "next_stage": { "const": "APPLY_RED" },
+        "work_scope_digest": { "type": "string", "minLength": 64, "maxLength": 64 }
+      }
+    },
+    "blocked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "schema_version",
+        "change_id",
+        "slice_id",
+        "status",
+        "generated_at",
+        "chat_history_required",
+        "behavior_implemented",
+        "tests_modified",
+        "tests_executed",
+        "blockers",
+        "next_stage"
+      ],
+      "properties": {
+        "schema": { "const": "opsx.apply_scaffold" },
+        "schema_version": { "const": 1 },
+        "change_id": { "type": "string", "minLength": 1 },
+        "slice_id": { "type": "string", "minLength": 1 },
+        "status": { "const": "BLOCKED" },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "chat_history_required": { "const": false },
+        "behavior_implemented": { "const": false },
+        "tests_modified": { "const": false },
+        "tests_executed": { "const": false },
+        "blockers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/blocker" }
+        },
+        "next_stage": { "const": "NONE" },
+        "work_scope_digest": { "type": "string", "minLength": 64, "maxLength": 64 }
+      }
+    }
+  }
+}

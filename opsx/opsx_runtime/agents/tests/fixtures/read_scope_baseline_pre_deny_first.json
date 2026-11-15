@@ -1,0 +1,20 @@
+{
+  "description": "Эталон allow-list гейта до deny-first (локальный корпус *.live.ndjson)",
+  "corpus_files": 698,
+  "local_tool_paths_scanned": 41290,
+  "false_positive_violations_total": 2265,
+  "false_positive_distinct_paths": 513,
+  "top_shell_false_positive_samples": [
+    "/stroy/consultation/invest_yalta/contracts.py",
+    "/dev/null",
+    "a/b from git commit -m",
+    "/unit/... pytest fragments"
+  ],
+  "top_struct_false_positive_buckets": [
+    "opsx/opsx_runtime",
+    "migrations/versions",
+    ".cursor/rules",
+    "edit tool paths"
+  ],
+  "recorded_at": "2026-11-11"
+}

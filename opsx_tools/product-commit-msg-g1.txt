@@ -1,0 +1,18 @@
+spec(invest-yalta-telegram-funnel): add impl verify receipt and report (артефакты verify impl)
+
+What:
+- IMPL-VERIFY-RECEIPT.json and IMPL-VERIFY-REPORT.md under invest-yalta-telegram-funnel/verify/
+
+Why:
+- Durable implementation-verify evidence for the telegram funnel change.
+
+How:
+- Staged verify receipt JSON and markdown report only (ephemeral live logs excluded).
+
+OpenSpec:
+- change-id: invest-yalta-telegram-funnel
+
+Risk:
+- Low; documentation and receipt artifacts only.
+
+Verification: not evaluated by /opsx-commit

@@ -1,0 +1,21 @@
+fix(commands): align commit redirects and commit-all ALL alias (согласовать commit-контракты)
+
+What:
+- opsx-commit-all: map Owner «Все перекомить» to forwarded ALL.
+- opsx-commit: redirect process surfaces to /opsx-meta-commit; exclude .opsx/** from product lane.
+- opsx-admin-command-commit: thin redirect stub to meta-commit.
+
+Why:
+- Dead-end /opsx-admin-command-commit redirect blocked branch-merge cleanup; product lane duplicated .opsx packaging.
+
+How:
+- Contract text only; grep self-check on redirect tokens.
+
+Verification:
+- FAST_CHECK grep: /opsx-meta-commit present in opsx-commit.md; Все перекомить alias in opsx-commit-all.md
+
+Risk:
+- low — command contract only
+
+PCP-ID: PCP-20261028-owner-agent-execution-boundary
+ECR: .opsx/process-changes/PCP-20261028-owner-agent-execution-boundary/ecr-lite.json

@@ -1,0 +1,72 @@
+{
+  "schema": "opsx.apply_green",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T10:00:00Z",
+  "chat_history_required": false,
+  "tests_modified": false,
+  "iteration_count": 5,
+  "iteration_limit": 5,
+  "whole_change_verified": false,
+  "green_fix_iterations": [
+    {
+      "iteration": 1,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "sig-1",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 1",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "a111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "iteration": 2,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "sig-2",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 2",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "a222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "iteration": 3,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "sig-3",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 3",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "a333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "iteration": 4,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "sig-4",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 4",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "a444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "iteration": 5,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "sig-5",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 5",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "a555555555555555555555555555555555555555555555555555555555555555"
+    }
+  ],
+  "blockers": [
+    {
+      "code": "GREEN_ITERATION_LIMIT",
+      "detail": "iteration_limit=5 exhausted without frozen RED PASS."
+    }
+  ],
+  "next_stage": "NONE"
+}

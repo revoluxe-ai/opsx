@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.s_ev1_report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "live_authority",
+    "platform_attestation",
+    "max_tier_reached",
+    "verified_at_tier_t2",
+    "completion_class",
+    "apply_complete",
+    "gating",
+    "head_oid",
+    "change_root",
+    "contour",
+    "findings",
+    "checks_run",
+    "checks_not_run",
+    "legacy_flags",
+    "writes"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.s_ev1_report" },
+    "schema_version": { "const": 1 },
+    "live_authority": { "const": "NO" },
+    "platform_attestation": { "const": "UNPROVEN" },
+    "max_tier_reached": { "enum": ["T0", "T1"] },
+    "verified_at_tier_t2": { "const": "NOT_EMITTED" },
+    "completion_class": { "const": "NOT_EMITTED" },
+    "apply_complete": { "const": "NOT_EMITTED" },
+    "gating": { "const": "DETECT_ONLY" },
+    "head_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "change_root": { "type": "string" },
+    "contour": { "enum": ["product", "control_plane"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "tier", "evidence"],
+        "properties": {
+          "code": {
+            "enum": [
+              "RECEIPT_MUTATED_AFTER_STAGE",
+              "STAGE_BOUNDARY_VIOLATION",
+              "CROSS_RECEIPT_STATUS_MISMATCH",
+              "STATUS_RESTAMP",
+              "FROZEN_RED_MUTATED",
+              "RED_IDENTITY_REWRITE",
+              "ATTESTATION_REF_NOT_OWNER_HELD",
+              "ATTESTATION_CONTENT_UNVERIFIED",
+              "LIVE_AUTHORITY_CLAIM_FORBIDDEN",
+              "OVERCLAIM_VERDICT",
+              "FORMAT_VALID_ONLY",
+              "RANGE_NARROWED",
+              "ALLOWLIST_UNBOUND",
+              "INPUT_HEAD_MISMATCH",
+              "LEGACY_UNBOUND_REVISION",
+              "LEGACY_UNBOUND_PRODUCTION"
+            ]
+          },
+          "severity": { "enum": ["HARD", "INFO"] },
+          "tier": { "enum": ["T0", "T1"] },
+          "slice_id": { "type": "string" },
+          "path": { "type": "string" },
+          "introducing_oid": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "checks_run": { "type": "array", "items": { "type": "string" } },
+    "checks_not_run": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "T2_REEXECUTION",
+          "ATTESTATION_CONTENT",
+          "DISPATCH_INDEPENDENCE",
+          "CAUSAL_DIFFERENTIAL",
+          "VACUOUS_ASSERTION",
+          "GREEN_INPUT_KEY",
+          "COMPLETION_CLASS",
+          "LATCH_LEDGER"
+        ]
+      }
+    },
+    "legacy_flags": { "type": "array", "items": { "type": "string" } },
+    "writes": { "const": [] }
+  }
+}

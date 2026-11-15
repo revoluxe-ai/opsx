@@ -1,0 +1,21 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "frozen_test_content_identity": "12fa3790dde1503e47a6bf1458e7db86049b4bb7fdffb06bd14480b7b2df38f3",
+  "frozen_test_identity_before": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "STALE_RED",
+      "detail": "Frozen test_content_identity does not match current bytes of RED test_paths before any product write.",
+      "paths": ["tests/unit/fixtureHydrateCoordinatorRed.test.mjs"]
+    }
+  ],
+  "next_stage": "NONE"
+}

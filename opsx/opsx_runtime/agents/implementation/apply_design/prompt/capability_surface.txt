@@ -1,0 +1,5 @@
+## Capability tools (only these three)
+- search_repository(query, domains) — domains: product, tests, migrations, docs, changes, specs, decisions, prior_designs
+- read_source(source_id, cursor?, expected_revision?) — lossless UTF-8 paging: source_revision, total_size, offset, fragment, next_cursor, eof. Use cursor=0 first; follow next_cursor until eof. On cursor>0 set expected_revision from the first page. Codes: UNKNOWN_SOURCE (invalid id), MISSING_FILE, FORBIDDEN_PATH, READ_FAILURE.
+- submit_apply_design(content, base_digest) — write APPLY-DESIGN JSON for this change only; base_digest={base_digest}. Prefer publishing the on-disk canon without inlining 66KB: content=`{{"$from_path":"openspec/changes/<change_id>/apply-design/APPLY-DESIGN.json"}}` (runtime recomputes protected/process digests and schema_version 4 before validation).
+No filesystem paths, shell, grep, glob, ls, read, or edit. Runtime writes receipts after machine validation.

@@ -1,0 +1,56 @@
+# Structural reproduction of project-bug-hunt-poc-real-external-client-notifications-pilot
+# REVIEW_CONTRACT_INVALID (2026-10-24): findings_total=4, pre-fix parser saw 8 blocks
+# (canonical PBH-001..004 + markdown duplicates). Verbatim Owner ledger raw_output
+# (raw_output_sha256=cafbc7b8…) was not available in this VM; titles/locs match the
+# f5dc64c failure receipt. Fixture SHA256=213c4541ef0d345b7a7461cb9ecd263622263b1460789bece65caaa24660b57a
+
+Narrative summary for owners (not machine-parseable finding headers below).
+
+---
+
+STATUS: HUNT_COMPLETE
+COMMAND: /opsx-project-bug-hunt
+
+PROJECT_BUG_HUNT_RECEIPT:
+- change: external-client-notifications-pilot
+- base: stage
+- head: cursor/opsx-apply-red-slice-001-c1d6
+- findings_total: 4
+
+FINDINGS
+
+### FINDING_ID: PBH-001
+- SEVERITY: Medium
+- TITLE: Opt-out confirm picks arbitrary pending kind when channel + global pending coexist
+- LOC_LINK: tests/integration/notifications/test_optout_race_pg.py:40
+
+### FINDING_ID: PBH-002
+- SEVERITY: High
+- TITLE: Customer merge hop for intents but identity/opt-out/promotion stay on pre-merge customer
+- LOC_LINK: tests/integration/notifications/test_binding_eligibility_pg.py:30
+
+### FINDING_ID: PBH-003
+- SEVERITY: Medium
+- TITLE: Notification worker in every API lifespan duplicates dedicated worker role
+- LOC_LINK: tests/integration/notifications/test_drain_skip_locked_pg.py:25
+
+### FINDING_ID: PBH-004
+- SEVERITY: Medium
+- TITLE: Fallback inbox id without transition timestamp suppresses lawful amo re-entry
+- LOC_LINK: tests/unit/notifications/test_external_event_id.py:15
+
+---
+
+Machine handoff (duplicate presentation of the same four findings):
+
+**PBH-001 [MEDIUM] Opt-out confirm picks arbitrary pending kind when channel + global pending coexist**
+LOC_LINK: tests/integration/notifications/test_optout_race_pg.py:40
+
+**PBH-002 [HIGH] Customer merge hop for intents but identity/opt-out/promotion stay on pre-merge customer**
+LOC_LINK: tests/integration/notifications/test_binding_eligibility_pg.py:30
+
+**PBH-003 [MEDIUM] Notification worker in every API lifespan duplicates dedicated worker role**
+LOC_LINK: tests/integration/notifications/test_drain_skip_locked_pg.py:25
+
+**PBH-004 [MEDIUM] Fallback inbox id without transition timestamp suppresses lawful amo re-entry**
+LOC_LINK: tests/unit/notifications/test_external_event_id.py:15

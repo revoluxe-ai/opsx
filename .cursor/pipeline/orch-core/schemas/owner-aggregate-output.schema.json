@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx-orch-core/owner-aggregate-output.schema.json",
+  "title": "OPSX Orch Owner Aggregate Output",
+  "description": "Compact Owner-facing summary block emitted by /opsx-orch-* scenarios.",
+  "type": "object",
+  "required": [
+    "FIX_NOW",
+    "BUG_BATCH_CLEAR",
+    "RUNNING_WORKER",
+    "NEXT_REAL_ACTION"
+  ],
+  "properties": {
+    "FIX_NOW": { "type": "array", "items": { "type": "string" } },
+    "DEFERRED_PRODUCT_BUGS": { "type": "array", "items": { "type": "string" } },
+    "FALSE_POSITIVES": { "type": "array", "items": { "type": "string" } },
+    "TECH_DEBT_ONLY": { "type": "array", "items": { "type": "string" } },
+    "DEBT_TAILS": { "type": "array", "items": { "type": "string" } },
+    "SECURITY": { "type": "array", "items": { "type": "string" } },
+    "GLOBAL_BLOCKERS": { "type": "array", "items": { "type": "string" } },
+    "UNRESOLVED": { "type": "array", "items": { "type": "string" } },
+    "CHANGE_CLEAR": { "type": "boolean" },
+    "RELEASE_CLEAR": { "type": "boolean" },
+    "BUG_BATCH_CLEAR": { "type": "boolean" },
+    "RUNNING_WORKER": { "type": ["string", "null"] },
+    "NEXT_REAL_ACTION": { "type": "string" }
+  },
+  "additionalProperties": false
+}

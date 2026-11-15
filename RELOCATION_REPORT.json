@@ -1,0 +1,778 @@
+{
+  "opsx/di/_paths.py": {
+    "path_expressions": 2,
+    "project_root_binding": true
+  },
+  "opsx/scripts/zip_opsx_conversations.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/run_verify_deterministic_smoke.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/run_implementation.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/run_verify_impl.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/run_one_node.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/runtime_bootstrap.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/run_refresh_plan_receipt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/run.py": {
+    "path_expressions": 0,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/check_workflow_receipt.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/run_dialogs.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/configs/model_config/render_models_catalog.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/adoption/disabled_checks.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/checkpoint_resume.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/repo_paths.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/scripts/run_named_bug_repair_ui.py": {
+    "path_expressions": 0,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/scripts/export_run_conversation.py": {
+    "path_expressions": 3,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/scripts/ok_probe_health_check.py": {
+    "path_expressions": 4,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/scripts/migrate_apply_design_family.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/scripts/monitor_cursor_run.py": {
+    "path_expressions": 3,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/scripts/migrate_openspec_runtime_artifacts.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/opsx_recording/inbox_capture.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/bug_log/query.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/bug_log/projector.py": {
+    "path_expressions": 12,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/bug_log/file_journal.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/check_receipts.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/config.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_runtime_logging.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/infra/profile.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/repair/red_operative_validation.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/repair/runner.py": {
+    "path_expressions": 3,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/workflows/repair/preflight.py": {
+    "path_expressions": 11,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/repair/red_requirement_applicability.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/repair/model_dispatch.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/workflows/verify/cycle_checks.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/red_operative_validation.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/implementation_dispatch_ledger.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/hop_worktree.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/adapter_store_context.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/workflows/implementation/slice_stage_contract.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/apply_hop_workflow_receipts.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/design_machine_validation.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/adapter_run_reconcile.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/workflows/implementation/stage_receipt_writer.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/slice_stage_operative_validation.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/slice_check_workflow_receipt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/stage_red_receipt_shaper.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/implementation/stage_dispatch.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/verify/gate_repair/runner.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/verify/infra_tests/infra_tests_receipt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/verify/dispatch_cycle/commit_revision.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/verify/dispatch_cycle/single_repro_probe_key.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/workflows/verify/pytest_execute/invoke.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/capabilities/path_policy.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/common/planning_artifacts.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/common/scenario_evidence_migrate.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/common/commit_agent.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/common/scenario_migrate.py": {
+    "path_expressions": 14,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/classifier_discoverability.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/adapters/hop_model_selection.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/agents/verify/pytest_run_health.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/check_reuse.py": {
+    "path_expressions": 9,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/quality_gates_receipt.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/product_file_edit_guard.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/slice_stage_receipt_edit_guard.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/technical_gate.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/acceptance.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/pipeline.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/repair_budget.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/visual_review.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/agent_tools/image/ports/compose_generation.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/mapped_surface.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/live_gate.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/workflow_pytest_defer.py": {
+    "path_expressions": 8,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/live_checks.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/trace_quality.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/repair/scenario_test_repair/prompt/get_prompt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/adapters/cursor_sdk/cursor_sdk_adapter.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/agents/adapters/cursor_sdk/reconcile_billing.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/agents/adapters/cursor_sdk/repair_cursor_sdk_adapter.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/agents/adapters/cursor_sdk/wheel_bootstrap.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/coverage_activation/run_checks.py": {
+    "path_expressions": 8,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/coverage_activation/git_inventory.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/coverage_activation/static_coverage.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/coverage_activation/mypy_static.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/impl_verify/preflight.py": {
+    "path_expressions": 7,
+    "project_root_binding": true
+  },
+  "opsx/opsx_runtime/agents/verify/test_duration/stall_function_analysis.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/test_duration/timeout_policy.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/delta_rows.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/legacy_reuse.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/input_pack.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/mapped_test_view.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/row_cycle_green_commit.py": {
+    "path_expressions": 7,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/review_semantics.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/repair_lease.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/replay_saved.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/evidence_contract.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/row_status.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/row_cycle.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/agent.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/scenario_coverage_verify/row_recovery.py": {
+    "path_expressions": 10,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/archive_verify/preflight.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/test_interaction/input_pack.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/test_harness_repair/input_pack.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/environment_prep/collect_proof.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/verify/dispatch_unit/repro_cohort.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/planning/scenario_coverage_plan/plan_receipt_writer.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/planning/scenario_coverage_plan/prompt/get_prompt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/scenario_trace_materializer/agent.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/scenario_test_author/helpers.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply/visual_cover_asset_tool.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply_scaffold/scaffold_receipt_write.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply_scaffold/tool_surface.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply_design/submit_content_resolver.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply_design/capability.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply_design/knowledge_index.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/scenario_test_author/prompt/get_prompt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/agents/implementation/apply/prompt/get_prompt.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx/opsx_runtime/ui/named_bug_repair/server.py": {
+    "path_expressions": 0,
+    "project_root_binding": true
+  },
+  "tools/temporal/run_workflow_self_verification.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/ci_contract_guard.py": {
+    "path_expressions": 2,
+    "project_root_binding": true
+  },
+  "tools/temporal/incremental_quality_policy.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "tools/temporal/activities.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/write_ownership.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/owner_monitoring.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "tools/temporal/git_preflight.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/repair_progress_evidence.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/tempo_operator.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "tools/temporal/verification_mock.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "tools/temporal/runtime.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/temporal/target_capabilities.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "tools/pyright/strict_on_touch.py": {
+    "path_expressions": 2,
+    "project_root_binding": true
+  },
+  "tools/pyright/baseline.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/opsx/run_impl_verify_smoke.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "tools/opsx/capabilities_export.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "tools/opsx/verify_channel_impact_gate.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_mutation_preflight.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_engineering_adoption_gate.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "tools/openspec/openspec_guard.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "tools/openspec/process_change_gate.py": {
+    "path_expressions": 4,
+    "project_root_binding": false
+  },
+  "tools/openspec/openspec_cli_provider.py": {
+    "path_expressions": 6,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_change_context.py": {
+    "path_expressions": 9,
+    "project_root_binding": false
+  },
+  "tools/openspec/incremental_quality_coverage_gate.py": {
+    "path_expressions": 1,
+    "project_root_binding": true
+  },
+  "tools/openspec/run_opsx_native_verification_gate.py": {
+    "path_expressions": 3,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_continue_skill_contract.py": {
+    "path_expressions": 7,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_mutation_authority.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/openspec/opsx_engineering_adoption.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/langgraph_runtime/backend.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/langgraph_runtime/cli.py": {
+    "path_expressions": 5,
+    "project_root_binding": false
+  },
+  "tools/cursor_executor/cursor_executor/bridge_local.py": {
+    "path_expressions": 2,
+    "project_root_binding": false
+  },
+  "tools/cursor_executor/cursor_executor/ledger.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "tools/cursor_executor/cursor_executor/process_client.py": {
+    "path_expressions": 1,
+    "project_root_binding": false
+  },
+  "opsx_tools/opsx-process-repair-authority.mjs": {
+    "resource_calls": 8
+  },
+  "opsx_tools/opsx-super-implement-hop-transaction.mjs": {
+    "resource_calls": 7
+  },
+  "opsx_tools/opsx-apply-red.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-apply-design-review.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-break-glass-native-implement.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-super-implement-owner-schema-validate.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-break-glass-execution-identity.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-impl-verify-refresh-stale-green.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-apply-change-writer.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-apply-scaffold.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-apply-verify-completion.mjs": {
+    "resource_calls": 5
+  },
+  "opsx_tools/opsx-shape-slice-red-receipt-cli.mjs": {
+    "resource_calls": 3
+  },
+  "opsx_tools/opsx-process-tech-debt.mjs": {
+    "resource_calls": 3
+  },
+  "opsx_tools/opsx-super-implement-agent-hop-fixture.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-break-glass-exception-closeout.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-super-implement-agent-hop-boundary.mjs": {
+    "resource_calls": 7
+  },
+  "opsx_tools/opsx-apply-design-writer-record.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-super-implement-native-invoke.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-artifact-paths.mjs": {
+    "resource_calls": 8
+  },
+  "opsx_tools/opsx-apply-red-transition-gate.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-apply-design.mjs": {
+    "resource_calls": 3
+  },
+  "opsx_tools/opsx-central-catalog.mjs": {
+    "resource_calls": 6
+  },
+  "opsx_tools/opsx-super-implement-agent-hop-integration.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/write-slice-apply-receipts.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-post-implement-test-contract-recovery.mjs": {
+    "resource_calls": 7
+  },
+  "opsx_tools/opsx-super-implement-live-v1.mjs": {
+    "resource_calls": 8
+  },
+  "opsx_tools/opsx-super-implement-loop.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-break-glass-debt-journal.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-record-slice-receipt-decision-cli.mjs": {
+    "resource_calls": 31
+  },
+  "opsx_tools/invest-yalta-closeout-green-refresh.mjs": {
+    "resource_calls": 15
+  },
+  "opsx_tools/opsx-break-glass-revalidation.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-post-implement-recovery-cohort.mjs": {
+    "resource_calls": 6
+  },
+  "opsx_tools/opsx-break-glass-ledger.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-super-implement-isolated-workspace.mjs": {
+    "resource_calls": 13
+  },
+  "opsx_tools/opsx-post-implement-test-contract-recovery-cli.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/invest-yalta-adoption-authorize.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-apply-green.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-super-implement-hop-promotion.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-super-implement.mjs": {
+    "resource_calls": 5
+  },
+  "opsx_tools/opsx-green-refresh-slice.mjs": {
+    "resource_calls": 6
+  },
+  "opsx_tools/opsx-super-implement-executor.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-apply-pipeline-identity.mjs": {
+    "resource_calls": 7
+  },
+  "opsx_tools/opsx-apply-implement.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-break-glass-capability-backlog.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-adoption-transition-gate.mjs": {
+    "resource_calls": 4
+  },
+  "opsx_tools/opsx-break-glass-process-gate-deferral.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-bug-learning-apply.mjs": {
+    "resource_calls": 6
+  },
+  "opsx_tools/opsx-frozen-test-content-identity.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-apply-design-writer-transition.mjs": {
+    "resource_calls": 5
+  },
+  "opsx_tools/opsx-apply-red-oracle-authority.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/bounded-verify-list-stale-green.mjs": {
+    "resource_calls": 1
+  },
+  "opsx_tools/opsx-super-implement-primitive-router.mjs": {
+    "resource_calls": 3
+  },
+  "opsx_tools/opsx-adoption-evidence-materialize.mjs": {
+    "resource_calls": 8
+  },
+  "opsx_tools/opsx-break-glass-trusted-grant.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/opsx-break-glass-exception-completion.mjs": {
+    "resource_calls": 2
+  },
+  "opsx_tools/invest-yalta-adoption-evidence-bind.mjs": {
+    "resource_calls": 15
+  }
+}

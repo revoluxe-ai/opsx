@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArchitectureEvidenceIndependentReviewAttestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trust_schema_version",
+    "receipt_kind",
+    "change_id",
+    "design_digest",
+    "inputs_digest",
+    "bound_receipt_sha256",
+    "review_execution",
+    "claim_attestations",
+    "execution_proof_fixture"
+  ],
+  "properties": {
+    "trust_schema_version": { "type": "integer", "const": 1 },
+    "receipt_kind": { "type": "string", "const": "INDEPENDENT_COMPATIBILITY_REVIEW" },
+    "change_id": { "type": "string", "minLength": 1 },
+    "design_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "inputs_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bound_receipt_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "review_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority_profile", "reviewer_agent_id"],
+      "properties": {
+        "authority_profile": { "type": "string" },
+        "reviewer_agent_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "claim_attestations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "compatibility", "verified_facts"],
+        "properties": {
+          "claim_id": { "type": "string" },
+          "compatibility": { "type": "string", "enum": ["PASS", "FAIL", "BLOCKED"] },
+          "verified_facts": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "execution_proof_fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "content_sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

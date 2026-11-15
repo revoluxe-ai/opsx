@@ -1,0 +1,18 @@
+feat(langgraph): add runtime verification backend and CLI (runtime verify langgraph)
+
+What:
+- tools/langgraph_runtime package: backend, verification, journal, cli, tests
+
+Why:
+- Runnable LangGraph verification runtime separate from study sandbox.
+
+How:
+- Added CLI and verification modules with README and requirements (no venv committed).
+
+OpenSpec:
+- product tooling
+
+Risk:
+- Low; new tooling tree without embedded virtualenv.
+
+Verification: not evaluated by /opsx-commit

@@ -1,0 +1,19 @@
+chore(opsx): extend process allowlist for configs and hq report (расширить allowlist process-путей)
+
+What:
+- Add .opsx/configs/** and .cursor/hq-dev-sync-report.txt to sources.yaml allowlist.
+
+Why:
+- Close ALLOWLIST_GAP after commit-all partial run; meta-commit owns configs; hq report is durable ops note.
+
+How:
+- Edit .opsx/sources.yaml allowlist entries only.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- low — allowlist expansion only
+
+PCP-ID: PCP-20261028-owner-agent-execution-boundary
+ECR: .opsx/process-changes/PCP-20261028-owner-agent-execution-boundary/ecr-lite.json

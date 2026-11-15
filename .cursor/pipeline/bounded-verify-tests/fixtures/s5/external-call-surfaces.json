@@ -1,0 +1,9 @@
+{
+  "surfaces": [
+    {
+      "path": "hermetic_client.py",
+      "token": "httpx.Client",
+      "test_path": "tests/unit/test_hermetic_client.py"
+    }
+  ]
+}

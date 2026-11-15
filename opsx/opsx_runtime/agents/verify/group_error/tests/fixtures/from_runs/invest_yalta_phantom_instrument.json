@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.4",
+  "agent": "group_error",
+  "analysis_identity": {"change_id": "invest-yalta-max-funnel", "identity_status": "PARTIAL"},
+  "input_integrity": {"status": "COMPLETE", "issues": []},
+  "finding_groups": [
+    {
+      "group_id": "G-0001",
+      "matched_problem": "CRM typing issue",
+      "match_basis": "claimed cross-tool",
+      "finding_ids": ["F-0002"],
+      "diagnostic_sources": ["pyright", "mypy"],
+      "evidence_refs": [],
+      "linked_evidence": [],
+      "match_evidence": []
+    }
+  ],
+  "ungrouped_finding_ids": [],
+  "additional_finding_links": [],
+  "findings": [
+    {
+      "finding_id": "F-0002",
+      "source_tool": "mypy",
+      "observation": "crm/models.py:1: error: Incompatible types"
+    }
+  ],
+  "triage_summary": {"findings_total": 1, "finding_groups_total": 1, "ungrouped_total": 0}
+}

@@ -1,0 +1,7 @@
+{
+  "invariant": {
+    "required": true,
+    "statement": "canonical write authority is single-owner"
+  },
+  "violation_expected": true
+}

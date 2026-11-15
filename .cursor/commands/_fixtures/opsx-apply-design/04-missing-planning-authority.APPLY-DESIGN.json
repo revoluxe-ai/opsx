@@ -1,0 +1,43 @@
+{
+  "schema": "opsx.apply_design",
+  "schema_version": 3,
+  "change_id": "fixture-missing",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T07:00:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-missing/apply-design/APPLY-DESIGN.md",
+      "openspec/changes/fixture-missing/apply-design/APPLY-DESIGN.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-missing",
+    "inputs": [
+      {
+        "path": "openspec/changes/fixture-missing/owner-contract.md",
+        "role": "owner_contract",
+        "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    ],
+    "planning_digest": "5301e40102b067638988ed7c5459e3dda65cd95e5d48b60bada9d05efa8b2db1"
+  },
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-missing/apply-design/APPLY-DESIGN.md",
+    "machine_path": "openspec/changes/fixture-missing/apply-design/APPLY-DESIGN.json"
+  },
+  "unresolved_items": [],
+  "blockers": [
+    {
+      "code": "MISSING_PLANNING_AUTHORITY",
+      "detail": "Required tasks.md is missing; WHAT package (design.md or proposal.md or specs/**/spec.md) is also missing. Do not invent tasks or architecture.",
+      "paths": [
+        "openspec/changes/fixture-missing/tasks.md",
+        "openspec/changes/fixture-missing/design.md"
+      ]
+    }
+  ],
+  "next_stage": "NONE"
+}

@@ -1,0 +1,41 @@
+# Structural reproduction: project-bug-hunt-poc-real-invest-yalta-max-funnel @ 66222d37
+# Operator REVIEW_CONTRACT_INVALID (2026-10-27): findings_total=2, pre-fix parser saw 4
+# canonical blocks (duplicate FINDINGS tail; duplicate PBH-001/PBH-002). Verbatim
+# raw_output (raw_output_sha256=57897019f696d5c4e134ff912745f7875fd3b729307712c0f1bbf64c1c90909d)
+# not on cloud VM; titles/locs are incident-shaped placeholders in product lane paths.
+
+STATUS: HUNT_COMPLETE
+MODE: READ_ONLY
+COMMAND: /opsx-project-bug-hunt
+
+PROJECT_BUG_HUNT_RECEIPT:
+- base: stage
+- head: feature/invest-yalta-max-funnel (66222d37760b38cbcb26c71568f83a31f61349ad)
+- change: invest-yalta-max-funnel
+- findings_total: 2
+
+FINDINGS:
+
+### FINDING_ID: PBH-001
+- SEVERITY: High
+- TITLE: Drain path drops callback_id before POST /answers enqueue
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:40
+
+### FINDING_ID: PBH-002
+- SEVERITY: Medium
+- TITLE: humanChoice resume uses stale session_epoch guard
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_routing.py:22
+
+BUG_TEAM_HANDOFF (PRIMARY — RUNTIME_STATUS ACTIVE):
+
+FINDINGS:
+
+### FINDING_ID: PBH-001
+- SEVERITY: High
+- TITLE: Drain path drops callback_id before POST /answers enqueue
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:40
+
+### FINDING_ID: PBH-002
+- SEVERITY: Medium
+- TITLE: humanChoice resume uses stale session_epoch guard
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_routing.py:22

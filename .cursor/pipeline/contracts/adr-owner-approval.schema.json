@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adr-owner-approval-v1",
+  "title": "AdrOwnerApproval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "change_id",
+    "decision_id",
+    "decision_path",
+    "adr_content_hash",
+    "content_hash_algorithm",
+    "worktree_fingerprint",
+    "owner_signature",
+    "signed_canonical"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "adr-owner-approval-v1"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved"]
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adr_content_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "content_hash_algorithm": {
+      "type": "string",
+      "const": "sha256-lf-normalized"
+    },
+    "worktree_fingerprint": {
+      "type": "string",
+      "pattern": "^HEAD=[0-9a-f]{40}$"
+    },
+    "owner_signature": {
+      "type": ["string", "null"]
+    },
+    "signed_canonical": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

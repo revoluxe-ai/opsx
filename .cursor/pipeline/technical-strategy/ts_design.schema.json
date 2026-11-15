@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": ".cursor/pipeline/technical-strategy/ts_design.schema.json",
+  "title": "TS-DESIGN",
+  "description": "Target Technical Strategy artifact. Binds the current owner-contract, proposal, and specs. A scrutiny receipt is not a provenance key. This artifact does not authorize design.md or TS-REVIEW.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "change_id",
+    "problem_model",
+    "owner_outcome_to_preserve",
+    "constraints",
+    "assumptions",
+    "existing_architecture_context",
+    "strategy_class",
+    "new_architectural_boundary",
+    "candidates",
+    "recommended_strategy_id",
+    "rejected_strategies_with_reason",
+    "core_decisions",
+    "state_ownership",
+    "data_flow",
+    "control_flow",
+    "concurrency_model",
+    "failure_model",
+    "consistency_model",
+    "persistence_model",
+    "security_boundaries",
+    "observability_requirements",
+    "testability_implications",
+    "assessments",
+    "open_technical_risks",
+    "ts_status",
+    "upstream_provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "strategy_class": {
+      "type": "string",
+      "enum": [
+        "NEW_ARCHITECTURE",
+        "EXTEND_EXISTING_ARCHITECTURE",
+        "EXISTING_ARCHITECTURE_REUSED",
+        "NO_MATERIAL_ARCHITECTURAL_CHANGE"
+      ]
+    },
+    "new_architectural_boundary": {
+      "type": "boolean"
+    },
+    "ts_status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "READY_FOR_REVIEW",
+        "BLOCKED"
+      ]
+    },
+    "block_reason": {
+      "type": "string",
+      "enum": [
+        "UPSTREAM_SEMANTIC_REALIGNMENT_REQUIRED",
+        "EVIDENCE_GAP"
+      ]
+    },
+    "upstream_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_id",
+        "owner_contract_sha256",
+        "proposal_sha256",
+        "specs_sha256",
+        "input_revision_sha256"
+      ],
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_contract_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "proposal_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "specs_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "input_revision_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      }
+    }
+  }
+}

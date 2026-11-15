@@ -1,0 +1,42 @@
+{
+  "schema": "opsx.apply_green",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T10:00:00Z",
+  "chat_history_required": false,
+  "tests_modified": false,
+  "iteration_count": 2,
+  "iteration_limit": 5,
+  "whole_change_verified": false,
+  "green_fix_iterations": [
+    {
+      "iteration": 1,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "same-miss",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 1 no state change",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "same000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "iteration": 2,
+      "failure_classification": "IMPLEMENTATION_BUG",
+      "failure_signature": "same-miss",
+      "paths_modified": ["src/services/hydrateCoordinator.js"],
+      "repair_summary": "attempt 2 identical production digest",
+      "rerun_command": "node --test tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "rerun_exit_code": 1,
+      "production_digest": "same000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "blockers": [
+    {
+      "code": "GREEN_NO_PROGRESS",
+      "detail": "Same frozen RED failure_signature and production_digest across consecutive failed repairs."
+    }
+  ],
+  "next_stage": "NONE"
+}

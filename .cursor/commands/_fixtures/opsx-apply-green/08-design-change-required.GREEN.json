@@ -1,0 +1,34 @@
+{
+  "schema": "opsx.apply_green",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T10:00:00Z",
+  "chat_history_required": false,
+  "red_executions": [
+    {
+      "phase": "initial",
+      "iteration": 0,
+      "command": "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "exit_code": 1,
+      "relevant_output": "second hydrate bus started",
+      "executed_at": "2026-08-31T10:00:01Z",
+      "failure_classification": "DESIGN_REALITY_CONFLICT"
+    }
+  ],
+  "green_fix_iterations": [],
+  "tests_modified": false,
+  "iteration_count": 0,
+  "iteration_limit": 5,
+  "whole_change_verified": false,
+  "blockers": [
+    {
+      "code": "DESIGN_CHANGE_REQUIRED",
+      "detail": "Making RED pass would require a second hydrate SoT, contradicting frozen architectural_intent.",
+      "planning_claim": "Reuse hydrateCoordinator; do not add a parallel orchestrator.",
+      "repository_fact": "Repair would introduce hydrateBus as a second starter."
+    }
+  ],
+  "next_stage": "NONE"
+}

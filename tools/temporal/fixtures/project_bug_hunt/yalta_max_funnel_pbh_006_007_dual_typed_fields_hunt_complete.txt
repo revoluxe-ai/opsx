@@ -1,0 +1,38 @@
+# SYNTHETIC — structural reproduction PBH-006/PBH-007 @ candidate a0c81e0d
+# Incident: duplicate canonical blocks mixed PRODUCTION_CLASSIFICATION vs SEVERITY.
+# Provenance: SYNTHETIC (verbatim raw_output_sha256=ba195631… not replayed on VM).
+
+STATUS: HUNT_COMPLETE
+COMMAND: /opsx-project-bug-hunt
+
+PROJECT_BUG_HUNT_RECEIPT:
+- change: invest-yalta-max-funnel
+- base: stage
+- head: a0c81e0d3fc5fdfde25c5bfa8d9e9176218b5b2f
+- findings_total: 2
+
+FINDINGS:
+
+### FINDING_ID: PBH-006
+- PRODUCTION_CLASSIFICATION: High
+- TITLE: Callback ack parity drops max_update_id on drain retry
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:88
+
+### FINDING_ID: PBH-007
+- PRODUCTION_CLASSIFICATION: Medium
+- TITLE: humanChoice resume ignores refreshed session_epoch
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_routing.py:41
+
+BUG_TEAM_HANDOFF:
+
+FINDINGS:
+
+### FINDING_ID: PBH-006
+- SEVERITY: High
+- TITLE: Callback ack parity drops max_update_id on drain retry
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_callback_codec.py:88
+
+### FINDING_ID: PBH-007
+- SEVERITY: Medium
+- TITLE: humanChoice resume ignores refreshed session_epoch
+- LOC_LINK: tests/unit/channels/max/invest_yalta/test_routing.py:41

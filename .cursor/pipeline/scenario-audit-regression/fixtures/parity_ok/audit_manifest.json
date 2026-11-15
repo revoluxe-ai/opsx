@@ -1,0 +1,9 @@
+{
+  "scenario_id": "regression::telegram-post-commit-parity-ok",
+  "stub_symbol": "tests.integration.fake::patched_httpx_post",
+  "boundary_symbol": "tests.integration.fake::real_telegram_send_message",
+  "shared_contract_source": "shared_contract.json",
+  "stub_observed_call": "stub_observed_call.json",
+  "boundary_observed_call": "boundary_observed_call.json",
+  "scenario_test_pytest_status": "passed"
+}

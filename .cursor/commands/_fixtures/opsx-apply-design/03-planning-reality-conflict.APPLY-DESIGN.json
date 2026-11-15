@@ -1,0 +1,66 @@
+{
+  "schema": "opsx.apply_design",
+  "schema_version": 3,
+  "change_id": "fixture-conflict",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T07:00:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-conflict/apply-design/APPLY-DESIGN.md",
+      "openspec/changes/fixture-conflict/apply-design/APPLY-DESIGN.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-conflict",
+    "inputs": [
+      {
+        "path": "openspec/changes/fixture-conflict/design.md",
+        "role": "design",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "path": "openspec/changes/fixture-conflict/tasks.md",
+        "role": "tasks",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "planning_digest": "442591571b34cc550406540d197f477726aa31e619fec5963f3a934e1220706b"
+  },
+  "repository_identity": {
+    "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "inspected_paths": ["src/services/existingLedger.js"],
+    "inspected_digest": "206f8d866eedb75dbdfb27377520636ebb506b599d77178031295904f3a0a905"
+  },
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-conflict/apply-design/APPLY-DESIGN.md",
+    "machine_path": "openspec/changes/fixture-conflict/apply-design/APPLY-DESIGN.json"
+  },
+  "architecture_summary": "Not frozen. Frozen planning demands a new client ledger SoT; repository and accepted cloud-progress-sot-api keep API as SoT.",
+  "reuse_decisions": [],
+  "architectural_constraints": [
+    {
+      "id": "AC-SOT",
+      "constraint": "Cloud progress / balance SoT is the API, not a new client ledger",
+      "source": "decision"
+    }
+  ],
+  "slices": [],
+  "unresolved_items": [],
+  "blockers": [
+    {
+      "code": "PLANNING_REALITY_CONFLICT",
+      "detail": "Frozen design introduces a second client ledger as balance SoT; repository already has API-backed SoT via existingLedger and cloud-progress-sot-api.",
+      "planning_claim": "new client-side ledger is the balance SoT",
+      "repository_fact": "src/services/existingLedger.js + openspec/decisions/cloud-progress-sot-api/decision.md keep API as SoT",
+      "paths": [
+        "openspec/changes/fixture-conflict/design.md",
+        "src/services/existingLedger.js",
+        "openspec/decisions/cloud-progress-sot-api/decision.md"
+      ]
+    }
+  ],
+  "next_stage": "NONE"
+}

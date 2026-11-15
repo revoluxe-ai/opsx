@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OPSX — управление проектом</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#11141b;color:#e6e9ef}
+body{max-width:1040px;margin:60px auto;padding:0 24px}header{display:flex;align-items:baseline;gap:20px}
+h1{font-size:42px;letter-spacing:-2px;margin:0}.muted{color:#9da8bb}section{background:#1b2130;border:1px solid #30394c;border-radius:16px;padding:24px;margin:24px 0}
+input,button,a.button{font:inherit;border-radius:8px;padding:11px 16px;border:1px solid #45526c}
+input{background:#111722;color:#fff;min-width:240px}button,a.button{background:#a8edbf;color:#10291a;cursor:pointer;text-decoration:none;display:inline-block}
+table{border-collapse:collapse;width:100%;text-align:left}td,th{padding:12px 6px;border-bottom:1px solid #30394c}pre{white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#ffb7b7}
+</style>
+<header><h1>OPSX</h1><span class="muted">Панель текущего проекта</span></header>
+<p id="project" class="muted">Подключение…</p>
+<section><h2>Работа</h2><p>Запустить полный workflow по существующему change.</p>
+<form id="launch"><input id="change" placeholder="change-id" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*"> <button>Запустить</button> <a class="button" href="/repair">Ремонт конкретного бага</a></form>
+<p id="error"></p></section>
+<section><h2>Запуски</h2><table><thead><tr><th>Change</th><th>Режим</th><th>Состояние</th><th>Начало</th></tr></thead><tbody id="runs"></tbody></table></section>
+<section><h2>Настройки проекта</h2><p class="muted">opsx/project/project.json</p><pre id="settings"></pre></section>
+<script>
+const text=(tag,value)=>{const el=document.createElement(tag);el.textContent=value??'';return el;};
+async function load(){
+ try{
+  const profile=await fetch('/api/project').then(r=>r.json());
+  document.querySelector('#project').textContent=profile.name||'Проект';
+  document.querySelector('#settings').textContent=JSON.stringify(profile,null,2);
+  const data=await fetch('/api/runs').then(r=>r.json()), rows=document.querySelector('#runs');rows.replaceChildren();
+  for(const run of data.runs){const row=document.createElement('tr');for(const v of [run.change_id,run.mode,run.status,run.started_at])row.append(text('td',v));rows.append(row);}
+ }catch(e){document.querySelector('#error').textContent=String(e);}
+}
+document.querySelector('#launch').onsubmit=async e=>{e.preventDefault();const response=await fetch('/api/workflows',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({change_id:document.querySelector('#change').value})});document.querySelector('#error').textContent=response.ok?'Запуск принят':JSON.stringify(await response.json());await load();};
+load();setInterval(load,5000);
+</script>
+</html>

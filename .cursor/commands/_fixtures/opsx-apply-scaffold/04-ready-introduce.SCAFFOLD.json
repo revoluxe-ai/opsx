@@ -1,0 +1,61 @@
+{
+  "schema": "opsx.apply_scaffold",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-003",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "protected_context_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "status": "SCAFFOLD_READY",
+  "generated_at": "2026-08-31T07:31:00Z",
+  "chat_history_required": false,
+  "repository_identity_before": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": ["src/auth/sessionResume.js"],
+    "inspected_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "repository_identity_after": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": ["src/auth/sessionResume.js"],
+    "inspected_digest": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "required_surfaces": [
+    {
+      "path": "src/auth/sessionResume.js",
+      "action": "INTRODUCE",
+      "required_symbols": ["installSessionResumeHydrate"]
+    }
+  ],
+  "created_paths": ["src/auth/sessionResume.js"],
+  "extended_paths": [],
+  "created_symbols": ["installSessionResumeHydrate"],
+  "structural_changes": [
+    {
+      "path": "src/auth/sessionResume.js",
+      "kind": "create_file",
+      "detail": "Introduced resume module with installSessionResumeHydrate signature and OPSX_SCAFFOLD_NOT_IMPLEMENTED sentinel."
+    },
+    {
+      "path": "src/auth/sessionResume.js",
+      "kind": "add_export",
+      "detail": "Exported installSessionResumeHydrate."
+    }
+  ],
+  "no_op": false,
+  "behavior_implemented": false,
+  "product_files_modified": true,
+  "tests_modified": false,
+  "tests_executed": false,
+  "authorized_write_paths": [
+    "src/auth/sessionResume.js",
+    "src/services/hydrateCoordinator.js"
+  ],
+  "other_eligible_slice_ids": [],
+  "blockers": [],
+  "next_stage": "APPLY_RED"
+}

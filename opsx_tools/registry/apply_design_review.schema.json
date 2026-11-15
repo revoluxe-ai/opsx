@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "opsx-apply-design-review receipt (minimal TARGET placeholder)",
+  "type": "object",
+  "additionalProperties": true
+}

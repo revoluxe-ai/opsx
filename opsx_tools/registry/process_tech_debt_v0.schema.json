@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.process_tech_debt_event.v0",
+  "title": "OPSX Process Tech Debt Registry Event V0",
+  "description": "Append-only event line in .opsx/runs/process-tech-debt/registry.jsonl (RUNS_LOCAL_DURABLE).",
+  "type": "object",
+  "required": ["schema", "event_type", "ts", "seq", "payload"],
+  "properties": {
+    "schema": { "const": "opsx.process_tech_debt_event.v0" },
+    "event_type": {
+      "enum": [
+        "debt_opened",
+        "occurrence",
+        "handoff_emitted",
+        "close_attempted",
+        "close_verified",
+        "close_rejected",
+        "registry_recovery"
+      ]
+    },
+    "ts": { "type": "string", "format": "date-time" },
+    "seq": { "type": "integer", "minimum": 0 },
+    "dedupe_key": { "type": "string" },
+    "debt_id": { "type": "string", "pattern": "^ptd-[a-f0-9]{16}$" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": true
+}

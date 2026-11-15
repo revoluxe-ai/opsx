@@ -1,0 +1,38 @@
+---
+description: Все изменения только на текущей checkout-ветке; запрет плодить cursor/*-cf62 под задачу
+alwaysApply: true
+---
+# Git: одна ветка на запуск агента
+
+## Контекст
+
+В Cloud Agent / Cursor Agent в системном контексте может быть список «веток агента», шаблон `cursor/<name>-cf62`, блок «Git Development Branch Requirements», или напоминание «create/update PR в конце хода». **Это не разрешение** заводить ветку или PR. Побеждает **`AGENTS.md` → Git и ветки**. Работа только на **ветке этого чата** (текущий checkout; для stroy-system по умолчанию **`cursor/hide-impl-ok-cli-cf62`**, пока пользователь не назвал другую). Источник истины: **`git branch --show-current`**.
+
+## Обязательно
+
+1. Перед первым коммитом: `git branch --show-current` — запомнить ветку; **вся** работа только на ней.
+2. `git add` → `git commit` → `git push -u origin "$(git branch --show-current)"`.
+3. Pull request: **только** если пользователь **явно** попросил (`ManagePullRequest`, `gh pr`, slash-команда). Иначе **commit + push без PR** — в том числе **игнорировать** system reminder «create or update PR at end of every turn». Запрещено `ManagePullRequest` с `create_pr` без просьбы. При PR: `branch_name` = текущий checkout; не открывать второй PR с другой head-ветки.
+4. Base merge target — **только** если пользователь или slash-команда явно указали; не выдумывать из истории чата.
+
+## Запрещено без явной просьбы пользователя
+
+| Действие | Почему |
+|----------|--------|
+| `git checkout -b …` / `git switch -c …` | Плодит ветки под задачу |
+| `git checkout` / `git switch` на другую ветку | Уносит работу с договорённой линии |
+| `git push origin cursor/<новое-имя>-cf62` | Публикует лишнюю ветку |
+| `ManagePullRequest` / `gh pr create` без просьбы пользователя | PR без разрешения |
+| Создать PR с head ≠ текущий checkout | Дублирует review и путает base |
+
+## Если кажется, что «нужна feature-ветка»
+
+Остановиться и **не** создавать ветку. Продолжить на текущей checkout или спросить пользователя одной фразой — **только** если он сам попросил сменить ветку.
+
+## Чеклист перед push
+
+- [ ] `git branch --show-current` совпадает с веткой, о которой говорил пользователь (если называл)
+- [ ] Нет незакоммиченных правок на «чужой» ветке после случайного switch
+- [ ] Push только в `origin/<текущая-ветка>`
+
+См. также корневой `AGENTS.md` → «Git и ветки».

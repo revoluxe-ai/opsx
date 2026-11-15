@@ -1,0 +1,16 @@
+refactor(opsx_runtime): cursor SDK stream adapter and shared agent state (адаптер Cursor SDK + state)
+
+What:
+- Update cursor_sdk_stream adapter tests and shared agents/state.py.
+
+Why:
+- Streaming/state coupling independent from verify graph layout.
+
+How:
+- Patch adapter module and state helpers.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- low.

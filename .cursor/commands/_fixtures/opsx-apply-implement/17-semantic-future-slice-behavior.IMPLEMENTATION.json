@@ -1,0 +1,22 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T14:00:00Z",
+  "chat_history_required": false,
+  "production_paths_modified": ["src/services/hydrateCoordinator.js"],
+  "production_paths_created": [],
+  "tests_modified": false,
+  "tests_executed": false,
+  "expected_product_write_surfaces": ["src/services/hydrateCoordinator.js"],
+  "blockers": [
+    {
+      "code": "BLOCKED_SCOPE_EXPANSION",
+      "detail": "Authorized path src/services/hydrateCoordinator.js but candidate implemented future-slice putInFlight / putGeneration / applyHydrateSuccess semantics owned by SLICE-002. expected_product_write_surfaces is not sole semantic authority.",
+      "paths": ["src/services/hydrateCoordinator.js"]
+    }
+  ],
+  "next_stage": "NONE"
+}

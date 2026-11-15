@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stroy-system.local/opsx/architecture_evidence_capture.schema.json",
+  "title": "ArchitectureEvidenceCapturedDoc",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capture_schema_version",
+    "capture_id",
+    "change_id",
+    "inputs_digest",
+    "source_uri",
+    "publisher",
+    "documented_version",
+    "acquisition_tool",
+    "acquisition_occurred",
+    "content_sha256",
+    "content_path",
+    "claim_ids"
+  ],
+  "properties": {
+    "capture_schema_version": { "type": "integer", "const": 1 },
+    "capture_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "change_id": { "type": "string", "minLength": 1 },
+    "inputs_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_uri": { "type": "string", "minLength": 1 },
+    "publisher": { "type": "string", "minLength": 1 },
+    "documented_version": { "type": "string", "minLength": 1 },
+    "acquisition_tool": {
+      "type": "string",
+      "enum": [
+        "context7-mcp",
+        "official-provider-export",
+        "agent-readonly-fetch",
+        "manual_unattested"
+      ]
+    },
+    "acquisition_occurred": { "type": "boolean" },
+    "captured_at": { "type": "string" },
+    "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "content_path": { "type": "string" },
+    "claim_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "integrity_status": { "type": "string", "enum": ["verified"] },
+    "provenance_trust": {
+      "type": "string",
+      "enum": ["unverified_s2", "agent_attested_s2"]
+    }
+  }
+}

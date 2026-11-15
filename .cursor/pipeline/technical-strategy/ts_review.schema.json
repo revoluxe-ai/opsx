@@ -1,0 +1,38 @@
+{
+  "title": "TS-REVIEW",
+  "description": "Independent Technical Strategy review. PASS binds the current TS-DESIGN hash and live source input identities, requires zero blocking findings, and does not unlock design.md.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "contract_id",
+    "change_id",
+    "review_state",
+    "reviewer_id",
+    "independence",
+    "bound_ts_design_sha256",
+    "bound_input_revision_sha256",
+    "design_input_revision_sha256",
+    "source_input_identities",
+    "blocking_finding_count",
+    "design_md_write",
+    "verified_state",
+    "design_unlock",
+    "consumer_integration",
+    "source_parity",
+    "findings",
+    "ts_design_writer",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": {"const": "target-technical-strategy-review-v1"},
+    "contract_id": {"const": "OPSX-WB-TS-REVIEW-01"},
+    "review_state": {"enum": ["PASS", "DEFECTS_FOUND", "BLOCKED"]},
+    "independence": {"const": "INDEPENDENT_OF_TS_DESIGN_WRITER"},
+    "design_unlock": {"const": "NOT_WIRED"},
+    "verified_state": {"const": "NOT_GRANTED"},
+    "consumer_integration": {"const": "MISSING"},
+    "source_parity": {"const": "PARTIAL"},
+    "ts_design_writer": {"const": "NO"}
+  }
+}

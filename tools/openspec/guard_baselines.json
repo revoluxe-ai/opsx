@@ -1,0 +1,12 @@
+{
+  "schema_version": "openspec-guard-baselines-v0.2.0",
+  "captured_at_revision": "dbdabe94cb0b409e70523a3cda21aa3fc5a5a273",
+  "note": "Platform-only bytes (scenario context_includes, no change contour). Used by baseline_growth on platform context only.",
+  "scenarios": {
+    "opsx_continue": 28276,
+    "opsx_ff": 44968,
+    "opsx_sync": 19473,
+    "opsx_update": 44968,
+    "opsx_verify_archive": 17259
+  }
+}

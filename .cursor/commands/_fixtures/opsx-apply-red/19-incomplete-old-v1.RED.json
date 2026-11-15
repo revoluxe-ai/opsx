@@ -1,0 +1,79 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "apply_design_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json",
+    "status": "APPLY_DESIGN_READY",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "74ca57bac6959119b4bf8c450fc6dd3dc1207eb102be4f639358c8c3ad7f5bf4"
+  },
+  "scaffold_identity": {
+    "machine_path": "openspec/changes/fixture-hydrate/apply-scaffold/SLICE-001/SCAFFOLD.json",
+    "status": "SCAFFOLD_READY",
+    "slice_id": "SLICE-001",
+    "candidate_digest_after": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "no_op": true
+  },
+  "slice_id": "SLICE-001",
+  "slice_identity": {
+    "slice_id": "SLICE-001",
+    "slice_digest": "182e387ed0d0789b055ac97be919d1f670554c817dd22f1a2463bf4beacbc4ff"
+  },
+  "status": "RED_PROVEN",
+  "generated_at": "2026-08-31T11:46:27Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": [
+    "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "tests/unit/fixtureNoSessionRed.test.mjs",
+    "tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "node --test --test-name-pattern ^no session skips hydrate$ tests/unit/fixtureNoSessionRed.test.mjs",
+    "node --test --test-name-pattern ^novel and wardrobe hydrates stay separate$ tests/unit/fixtureWardrobeFlightRed.test.mjs",
+    "node --test --test-name-pattern ^resume reuses current JWT$ tests/unit/fixtureResumeJwtRed.test.mjs"
+  ],
+  "test_content_identity": "cd3f279967b99ac0979f4b022c962d9e8415caa6ac17dae6b3f0c9c32a256431",
+  "repository_identity_before_red": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "command": "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "exit_code": 1,
+      "failure_classification": "INTENDED_BEHAVIOR_MISSING",
+      "notes": "Sibling tests would hit the same sentinel (INCOMPLETE — do not reuse)"
+    }
+  ],
+  "final_execution": {
+    "command": "node --test --test-name-pattern ^hydrate coordinator coalesces in-flight hydrates$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+    "exit_code": 1,
+    "relevant_output": "Error: OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+    "failure_signature": "OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+    "failure_classification": "INTENDED_BEHAVIOR_MISSING"
+  },
+  "expected_behavior": "four behaviors",
+  "observed_behavior": "only first command executed",
+  "red_reason": "inferred siblings",
+  "product_files_modified": false,
+  "tests_frozen": true,
+  "other_eligible_slice_ids": [],
+  "blockers": [],
+  "next_stage": "APPLY_IMPLEMENT",
+  "behavior_obligation_identity": {
+    "slice_id": "SLICE-001",
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9",
+    "obligation_digest": "9834af39297d1cac92d23e2a760962c47b5750d1d135e172af8f1b66d7091c3e"
+  }
+}

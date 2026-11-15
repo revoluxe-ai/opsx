@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stroy-system.local/opsx/architecture_evidence_custodian_acquisition.schema.json",
+  "title": "ArchitectureEvidenceCustodianAcquisition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "custodian_schema_version",
+    "kind",
+    "issuer",
+    "execution_identity",
+    "change_id",
+    "inputs_digest",
+    "design_digest",
+    "capture_id",
+    "content_sha256",
+    "source_uri",
+    "publisher",
+    "documented_version",
+    "claim_ids",
+    "issued_at"
+  ],
+  "properties": {
+    "custodian_schema_version": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "CUSTODIAN_ACQUISITION" },
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repository", "workflow_path", "workflow_ref", "run_id", "actor"],
+      "properties": {
+        "kind": { "type": "string", "const": "github_actions_workflow" },
+        "repository": { "type": "string", "minLength": 1 },
+        "workflow_path": { "type": "string", "minLength": 1 },
+        "workflow_ref": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "run_attempt": { "type": "integer", "minimum": 1 },
+        "actor": { "type": "string", "minLength": 1 }
+      }
+    },
+    "execution_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trust_policy_implementation_id"],
+      "properties": {
+        "trust_policy_implementation_id": { "type": "string" },
+        "cursor_bc_id": { "type": "string", "description": "metadata only; not independence proof" },
+        "runner_os": { "type": "string" }
+      }
+    },
+    "change_id": { "type": "string" },
+    "inputs_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "design_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bound_receipt_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "capture_id": { "type": "string" },
+    "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_uri": { "type": "string" },
+    "publisher": { "type": "string" },
+    "documented_version": { "type": "string" },
+    "claim_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "issued_at": { "type": "string" },
+    "acquisition_findings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "integrity/authenticity notes; must not assert compatibility PASS"
+    }
+  }
+}

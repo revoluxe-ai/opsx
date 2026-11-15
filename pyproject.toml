@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsx-cli"
+version = "0.1.0"
+description = "OPSX project installer, workflow CLI and local control panel"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+runtime = ["langgraph>=1.1,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2,<3", "PyYAML>=6,<7", "httpx>=0.27,<1", "filelock>=3.13,<4", "dependency-injector>=4.43,<5", "Pillow>=10,<13", "pytest>=8,<10"]
+cursor = ["cursor-sdk==1.2.0; python_version >= '3.12'"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "pytest-timeout>=2.3,<3"]
+
+[project.scripts]
+opsx = "opsx_cli.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["opsx_cli*"]
+
+[tool.setuptools.package-data]
+opsx_cli = ["static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["unit: deterministic unit contract", "live_agent: requires an explicitly authorized real model run"]

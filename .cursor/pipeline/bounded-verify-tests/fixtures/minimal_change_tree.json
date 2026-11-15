@@ -1,0 +1,10 @@
+{
+  "schema_version": "bounded-verify-fixture-v1",
+  "change_id": "bv-test-change-001",
+  "tasks_md": "# Tasks\n\n- [x] 1.1 Implement bounded verify plan module\n- [x] 1.2 Add freeze command interface\n",
+  "required_checks": [
+    {"check_id": "pyright-strict", "order": 1},
+    {"check_id": "mypy", "order": 2}
+  ],
+  "unknown_check_id": "not-a-real-check-id"
+}

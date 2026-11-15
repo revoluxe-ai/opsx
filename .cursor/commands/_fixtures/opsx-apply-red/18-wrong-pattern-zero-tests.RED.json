@@ -1,0 +1,49 @@
+{
+  "schema": "opsx.apply_red",
+  "schema_version": 2,
+  "evidence_contract": "per_command_v1",
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T12:03:00Z",
+  "chat_history_required": false,
+  "attempt_limit": 3,
+  "test_paths": [
+    "tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "fixture_paths": [],
+  "test_commands": [
+    "node --test --test-name-pattern ^does not match any test$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs"
+  ],
+  "command_executions": [
+    {
+      "test_path": "tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "test_title": "does not match any test",
+      "command": "node --test --test-name-pattern ^does not match any test$ tests/unit/fixtureHydrateCoordinatorRed.test.mjs",
+      "attempts": [
+        {
+          "attempt": 1,
+          "exit_code": 0,
+          "failure_classification": "TEST_SETUP_FAILURE",
+          "failure_signature": "# tests 0",
+          "intended_seam": "hydrateCoordinator",
+          "relevant_output": "# tests 0\n# pass 0\n# fail 0"
+        }
+      ],
+      "final_exit_code": 0,
+      "final_classification": "TEST_SETUP_FAILURE",
+      "final_failure_signature": "# tests 0",
+      "intended_seam_reached": false,
+      "red_qualified": false
+    }
+  ],
+  "product_files_modified": false,
+  "tests_frozen": false,
+  "blockers": [
+    {
+      "code": "TEST_SETUP_FAILURE",
+      "detail": "Incorrect --test-name-pattern executed zero intended tests. Not qualified RED."
+    }
+  ],
+  "next_stage": "NONE"
+}

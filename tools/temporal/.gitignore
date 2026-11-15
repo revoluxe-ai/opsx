@@ -1,0 +1,9 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.tmp/
+.dogfood-evidence/
+fixtures/sdk_mutating_runs/*
+!fixtures/sdk_mutating_runs/.gitkeep
+opsx/

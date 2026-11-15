@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.4",
+  "analysis_identity": {"change_id": "fixture-c", "identity_status": "PARTIAL"},
+  "input_integrity": {"status": "COMPLETE", "issues": []},
+  "finding_groups": [],
+  "ungrouped_finding_ids": ["F-0001", "F-0002"],
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "source_tool": "pyright",
+      "observation": "pkg/foo.py:10: error: type mismatch helper_a",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pyright"]
+    },
+    {
+      "finding_id": "F-0002",
+      "source_tool": "pytest",
+      "observation": "FAILED tests/test_foo.py::test_bar - AssertionError",
+      "classification": "FACT",
+      "evidence_refs": ["quality_gate_diagnostics.pytest"]
+    }
+  ],
+  "triage_summary": {"findings_total": 2, "finding_groups_total": 0, "ungrouped_total": 2}
+}

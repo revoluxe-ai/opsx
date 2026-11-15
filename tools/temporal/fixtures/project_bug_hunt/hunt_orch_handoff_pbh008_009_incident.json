@@ -1,0 +1,25 @@
+{
+  "incident": {
+    "temporal_run_id": "01a17ebd-d364-76c8-b34e-64a744657045",
+    "candidate_head": "9e20974da8b98d8e09288b1d6a3879d371504fa1",
+    "change": "invest-yalta-max-funnel",
+    "prior_terminal_mission": "ORCH-invest-yalta-pbh-006-007",
+    "current_finding_ids": ["PBH-008", "PBH-009"]
+  },
+  "current_hunt_repairable_findings": [
+    {
+      "severity": "Medium",
+      "location": "src/stroy/consultation/invest_yalta/fsm.py:970",
+      "finding": "PBH-008: epoch-scoped idempotency bypass on step change",
+      "finding_id": "PBH-008"
+    },
+    {
+      "severity": "Low",
+      "location": "src/stroy/channels/max/invest_yalta/handler.py:412",
+      "finding": "PBH-009: stale callback not suppressed after funnel transition",
+      "finding_id": "PBH-009"
+    }
+  ],
+  "expected_mission_id": "ORCH-invest-yalta-max-funnel-pbh-008-009",
+  "forbidden_mission_id": "ORCH-invest-yalta-pbh-006-007"
+}

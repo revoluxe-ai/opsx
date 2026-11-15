@@ -1,0 +1,16 @@
+# Hermetic registry snapshot for bounded-verify SLICE-001 tests.
+# Mirrors check ids used by minimal_change_tree.json; not the live registry authority.
+version: 1
+default_launch: SERIAL_ORCHESTRATOR
+modes:
+  FAST:
+    waves:
+      - id: A
+        checks: [pyright-strict, mypy]
+checks:
+  pyright-strict:
+    task_type: shell
+    pack: .cursor/static-check/checks/pyright-strict
+  mypy:
+    task_type: shell
+    pack: .cursor/static-check/checks/mypy

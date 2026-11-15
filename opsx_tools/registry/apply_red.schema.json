@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "opsx.apply_red",
+  "title": "APPLY RED",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "opsx.apply_red" },
+    "schema_version": { "const": 2 },
+    "evidence_contract": { "const": "per_command_v1" },
+    "chat_history_required": { "const": false },
+    "product_files_modified": { "const": false }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path_suffix": "/sendMessage",
+    "json_body": {
+      "chat_id": 7,
+      "text": "ok",
+      "parse_mode": "MarkdownV2"
+    }
+  },
+  "response": {
+    "status": 200,
+    "json_body": {
+      "ok": true,
+      "result": {"message_id": 9}
+    }
+  }
+}

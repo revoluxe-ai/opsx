@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.post_implement_test_contract_recovery_owner_decision",
+  "title": "Post-IMPLEMENT test-contract recovery Owner decision (HMAC, hermetic)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "decision_id",
+    "owner_attestation_ref",
+    "bound_change_id",
+    "bound_slice_id",
+    "bound_recovery_code",
+    "bound_generation_lineage_id",
+    "recovery_path",
+    "semantic_equivalence_outcome",
+    "expires_at",
+    "signature_hmac_sha256"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.post_implement_test_contract_recovery_owner_decision" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "decision_id": { "type": "string", "minLength": 8 },
+    "owner_attestation_ref": { "type": "string", "pattern": "^owner-message:" },
+    "bound_change_id": { "type": "string", "minLength": 1 },
+    "bound_slice_id": { "type": "string", "minLength": 1 },
+    "bound_recovery_code": { "type": "string", "minLength": 1 },
+    "bound_generation_lineage_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "recovery_path": { "enum": ["PATH_A", "PATH_B"] },
+    "semantic_equivalence_outcome": {
+      "enum": [
+        "AUTO_PROVEN",
+        "OWNER_ACCEPTED_SEMANTIC_EQUIVALENCE",
+        "OWNER_CONTRACT_REALIGN_REQUIRED"
+      ]
+    },
+    "adoption_not_operative_red": { "type": "boolean", "const": true },
+    "expires_at": { "type": "string", "minLength": 10 },
+    "signature_hmac_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

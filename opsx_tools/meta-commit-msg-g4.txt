@@ -1,0 +1,16 @@
+feat(opsx_runtime): static repair and bugbot check-repair subgraphs (static/bugbot repair graphs)
+
+What:
+- Extend static_repair subgraph and add bugbot check_repair_graph pipeline.
+
+Why:
+- Separate repair topology from dispatch routing graphs.
+
+How:
+- Updates under static_repair/** and bugbot_pipeline/check_repair_graph.py.
+
+Verification:
+- not run - process contract change (FAST_CHECK)
+
+Risk:
+- low.

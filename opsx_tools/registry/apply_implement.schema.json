@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "opsx.apply_implement",
+  "title": "APPLY IMPLEMENT",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "opsx.apply_implement" },
+    "schema_version": { "const": 1 },
+    "chat_history_required": { "const": false },
+    "tests_executed": { "const": false }
+  }
+}

@@ -1,0 +1,17 @@
+native_mission=YES
+NATIVE_MISSION: YES
+TERMINAL_GATE: PASS
+
+**STATUS:** BUG_BATCH_CLEAR
+**MISSION_STATUS:** BUG_BATCH_CLEAR
+**BUG_BATCH_CLEAR:** YES
+**REPAIRED_THIS_BATCH:** YES
+
+OWNER_AGGREGATE:
+  FIX_NOW:
+    - PBH-008: FIXED (normalize/handler.py)
+    - PBH-009: FIXED (outbound_delivery.py)
+    - tests: GREEN
+RUNNING_WORKER: none
+UNRESOLVED:
+  none

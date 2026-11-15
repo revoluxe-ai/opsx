@@ -1,0 +1,19 @@
+chore(opsx): add model_config resolver and presets (конфиг моделей OPSX)
+
+What:
+- .opsx/configs/model_config Python package, tests, and MODELS.md
+- Root conftest.py for config test discovery
+
+Why:
+- Central model preset resolution for OPSX runtime and agents.
+
+How:
+- Added resolve_model, compile_pp, agent_roles, bug_bot_model, and model stubs.
+
+OpenSpec:
+- product tooling (no single change-id)
+
+Risk:
+- Low; configuration module with unit tests.
+
+Verification: not evaluated by /opsx-commit

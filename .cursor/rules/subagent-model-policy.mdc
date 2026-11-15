@@ -1,0 +1,61 @@
+---
+description: Allowlist моделей для CreateAgent/SendToAgent и subagents (Owner 2026-10-23)
+globs:
+alwaysApply: true
+---
+# Allowlist моделей воркеров и subagents
+
+## Контекст применения
+
+Любой агент в репозитории, вызывающий **CreateAgent**, **SendToAgent**,
+typed subagent (`subagent_type`) или legacy Task/worker hop.
+
+Список slug'ов в описании инструмента CreateAgent **не является разрешением**.
+Действует только этот allowlist и **дословный** slug от Owner в том же запросе.
+
+## Allowlist (единственные slug без отдельного GO Owner)
+
+| Назначение | Модель | slug `model` |
+|------------|--------|----------------|
+| Обычная работа (default) | **Composer 2.5 Standard** | `composer-2.5` |
+| Супер-сложный независимый hop (архитектура, тяжёлый RCA, независимый audit) | **Grok 4.7 Medium** | `grok-4.7-medium` |
+
+## Обязательное поведение
+
+1. **Default:** если параметр `model` опущен или задан как **`model: inherit`**, это
+   **не** доказывает Composer Standard — проверяй фактический slug исполнителя и
+   неоднозначный tier не считай разрешением.
+2. Если `model` передаётся явно — **только** slug из таблицы выше, полным именем.
+3. **Запрещено** выбирать Claude, Opus, Sonnet, Gemini, GPT, `*-high`,
+   `*-max`, `*-xhigh` и любой slug вне allowlist «для качества review» или
+   потому что slug есть в каталоге API.
+4. Typed subagents: **не** задавать `model`, кроме allowlist; никогда Claude
+   для read-only review без явного slug от Owner.
+5. Нарушение: **stop** воркер, перезапуск на allowlist или работа в текущем чате.
+
+Это правило **не является исполняемым enforcement temporal sdk** — только
+политика для агентов; исполнение через pipeline/registry отдельно.
+
+## Явная модель в command / config / Owner
+
+Если command, `tools/temporal/agent-models.json`, pipeline registry или Owner
+**дословно** задают slug в запросе на эту задачу — следуй им **только если**
+slug не содержит `fast` и либо в allowlist, либо Owner назвал его явно в
+текущем user-сообщении.
+
+## Жёсткий запрет `*-fast`
+
+Любой slug с суффиксом `*-fast` запрещён без отдельного снятия запрета Owner.
+
+## Нарушение
+
+- Любой slug вне allowlist без дословного Owner в том же запросе.
+- `claude-*`, `opus-*`, `sonnet-*` и аналоги по инициативе агента.
+- `*-fast` без явного снятия Owner.
+- Передача `model` из «удобного» каталога вместо allowlist.
+
+## Связанные артефакты
+
+- `.cursor/pipeline/shared/MODEL_DISPATCH.md`
+- `.cursor/pipeline/shared/MODEL_REGISTRY.json`
+- Project store: `preferences.md`, `principles/allowed-worker-models.md`

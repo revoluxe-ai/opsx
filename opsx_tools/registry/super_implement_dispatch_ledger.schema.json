@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.super_implement_dispatch_ledger",
+  "title": "Super Implement durable in-flight dispatch ledger",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema", "schema_version", "change_id", "entries"],
+  "properties": {
+    "schema": { "const": "opsx.super_implement_dispatch_ledger" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "change_id": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dispatch_id", "execution_id", "stage", "status", "recorded_at"],
+        "properties": {
+          "dispatch_id": { "type": "string" },
+          "execution_id": { "type": "string" },
+          "stage": { "type": "string" },
+          "slice_id": { "type": ["string", "null"] },
+          "status": {
+            "enum": ["DISPATCHED", "TERMINAL", "RECONCILED", "ABORTED"]
+          },
+          "transport": { "type": "string" },
+          "native_dispatch_proof": { "type": "object" },
+          "recorded_at": { "type": "string" }
+        }
+      }
+    }
+  }
+}

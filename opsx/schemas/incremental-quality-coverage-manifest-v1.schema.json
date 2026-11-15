@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incremental-quality-coverage-manifest-v1",
+  "title": "Incremental Quality Coverage Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "activation",
+    "language",
+    "checker",
+    "configured_scope",
+    "verified_scope",
+    "required_change_scope",
+    "monotonic_expansion",
+    "revision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "incremental-quality-coverage-manifest-v1"
+    },
+    "policy_id": { "type": "string", "minLength": 1 },
+    "activation": { "enum": ["PROPOSED", "ACTIVE"] },
+    "language": { "const": "python" },
+    "checker": { "const": "pyright" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "configured_scope": {
+      "type": "object",
+      "required": ["config_path", "mode"],
+      "properties": {
+        "config_path": { "type": "string" },
+        "mode": { "enum": ["include_with_ignore"] }
+      }
+    },
+    "verified_scope": {
+      "type": "object",
+      "required": ["config_path", "mode"],
+      "properties": {
+        "config_path": { "type": "string" },
+        "mode": { "enum": ["explicit_include"] }
+      }
+    },
+    "required_change_scope": {
+      "type": "object",
+      "required": ["derivation"],
+      "properties": {
+        "derivation": {
+          "enum": ["in_policy_diff_subset_configured"]
+        }
+      }
+    },
+    "monotonic_expansion": {
+      "type": "object",
+      "required": ["allowed", "forbid"],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "forbid": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

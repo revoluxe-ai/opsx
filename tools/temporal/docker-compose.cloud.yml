@@ -1,0 +1,30 @@
+# Override для Cursor Cloud Agent: Temporal не достигает PostgreSQL по внутренней
+# docker-сети на default bridge. Postgres публикуется на хосте; auto-setup идёт
+# через host.docker.internal (extra_hosts: host-gateway).
+#
+# temporal-ui не достигает сервиса temporal:7233 по той же сети (i/o timeout).
+# gRPC на хосте доступен через gateway bridge (172.19.0.1) / host.docker.internal.
+services:
+  postgresql:
+    ports: !override
+      - "5435:5432"
+
+  temporal:
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5435
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=host.docker.internal
+
+  temporal-ui:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - TEMPORAL_ADDRESS=${STROY_TEMPORAL_UI_GRPC_HOST:-host.docker.internal:7233}
+      - TEMPORAL_CORS_ORIGINS=http://localhost:8233

@@ -1,0 +1,16 @@
+[project]
+name = "cursor-executor"
+version = "0.1.0"
+description = "Minimal OPSX Cursor Python SDK executor adapter boundary."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "cursor-sdk==1.2.0",
+]
+
+[project.scripts]
+cursor-executor = "cursor_executor.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cursor_executor*"]

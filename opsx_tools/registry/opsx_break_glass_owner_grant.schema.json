@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.break_glass_owner_grant",
+  "title": "OPSX Break Glass Owner grant (HMAC, execution-scoped)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "grant_id",
+    "idempotency_key",
+    "owner_authorization_identity",
+    "owner_attestation_ref",
+    "change_id",
+    "execution_id",
+    "repository_identity",
+    "blocked_gate",
+    "original_failure_code",
+    "eligible_category",
+    "allowed_transitions",
+    "forbidden_transitions",
+    "bounded_write_set",
+    "expires_at",
+    "revalidation_obligations",
+    "signature_hmac_sha256"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.break_glass_owner_grant" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "grant_id": { "type": "string", "minLength": 8 },
+    "idempotency_key": { "type": "string", "minLength": 8 },
+    "owner_authorization_identity": { "type": "string", "minLength": 3 },
+    "owner_attestation_ref": { "type": "string", "pattern": "^owner-message:" },
+    "change_id": { "type": "string", "minLength": 1 },
+    "execution_id": { "type": "string", "minLength": 8 },
+    "repository_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "branch", "revision"],
+      "properties": {
+        "repo": { "type": "string" },
+        "branch": { "type": "string" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" }
+      }
+    },
+    "blocked_gate": { "type": "string", "minLength": 1 },
+    "original_failure_code": { "type": "string", "minLength": 1 },
+    "eligible_category": { "type": "string", "minLength": 1 },
+    "allowed_transitions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "forbidden_transitions": { "type": "array", "items": { "type": "string" } },
+    "bounded_write_set": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "expires_at": { "type": "string", "minLength": 10 },
+    "revalidation_obligations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "revoked_at": { "type": "string" },
+    "signature_hmac_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

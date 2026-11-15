@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "opsx.adoption_audit",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "schema_version",
+    "change_id",
+    "slice_id",
+    "slice_class",
+    "candidate_digest",
+    "auditor",
+    "writer_ids",
+    "checks",
+    "causal_witness",
+    "status",
+    "red_status"
+  ],
+  "properties": {
+    "schema": { "const": "opsx.adoption_audit" },
+    "schema_version": { "const": 1 },
+    "change_id": { "type": "string" },
+    "slice_id": { "type": "string" },
+    "slice_class": { "enum": ["behavioral", "structural_or_config"] },
+    "candidate_digest": { "type": "string", "minLength": 64 },
+    "manifest_sha256": { "type": "string" },
+    "auditor": {
+      "type": "object",
+      "required": ["agent_id", "scope"],
+      "properties": {
+        "agent_id": { "type": "string", "minLength": 1 },
+        "model": { "type": "string" },
+        "scope": { "const": "READ_ONLY" }
+      }
+    },
+    "writer_ids": {
+      "type": "object",
+      "required": ["red", "implement", "green"],
+      "properties": {
+        "red": { "type": "string", "minLength": 1 },
+        "implement": { "type": "string", "minLength": 1 },
+        "green": { "type": "string", "minLength": 1 }
+      }
+    },
+    "red_status": { "const": "ALREADY_SATISFIED" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["PASS", "FAIL"] },
+          "evidence_ref": { "type": "string" }
+        }
+      }
+    },
+    "behavior_assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_id", "assertion"],
+        "properties": {
+          "scenario_id": { "type": "string" },
+          "assertion": { "type": "string" }
+        }
+      }
+    },
+    "causal_witness": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["PRE_IMPL_REPLAY", "MUTATION_REVERT", "NONE"] },
+        "evidence_ref": { "type": "string" }
+      }
+    },
+    "status": { "enum": ["AUDIT_PASS", "AUDIT_FAIL", "AUDIT_INCONCLUSIVE"] }
+  }
+}

@@ -1,0 +1,99 @@
+# Portable OpenSpec pre-write guard policy (stroy-system TARGET).
+# v0.2.0: split platform / change_contour / total budgets; baseline_growth on platform only.
+# Byte sums are on-disk artifact size — not model token counts (see policy note in guard module).
+
+schema_version: openspec-guard-target-v0.2.0
+implementation_id: stroy-openspec-guard-v0.2.0
+
+artifact_limits:
+  warn_bytes: 32768
+  fail_bytes: 65536
+
+planning_artifact_limits:
+  path_names:
+    - design.md
+    - proposal.md
+    - plan.md
+  warn_bytes: 56000
+  fail_bytes: 96000
+
+tasks_artifact_limits:
+  path_names:
+    - tasks.md
+  warn_bytes: 80000
+  fail_bytes: 160000
+
+config_sections:
+  context:
+    warn_bytes: 4096
+    fail_bytes: 16384
+  rules:
+    warn_bytes: 8192
+    fail_bytes: 32768
+
+context_budget_defaults:
+  platform:
+    warn_bytes: 55000
+    fail_bytes: 95000
+  change_contour:
+    warn_bytes: 400000
+    fail_bytes: 550000
+  total:
+    warn_bytes: 550000
+    fail_bytes: 650000
+
+baseline_growth:
+  enabled: true
+  applies_to: platform_context_only
+  warn_ratio: 1.25
+  fail_ratio: 1.75
+  baselines_path: guard_baselines.json
+
+scenarios:
+  opsx_continue:
+    command_surface: .cursor/commands/opsx-continue.md
+    context_includes:
+      - openspec/config.yaml
+      - openspec/schemas/**/*
+      - .cursor/skills/openspec-continue-change/SKILL.md
+
+  opsx_ff:
+    command_surface: .cursor/commands/opsx-ff.md
+    context_includes:
+      - openspec/config.yaml
+      - openspec/schemas/**/*
+      - .cursor/pipeline/contracts/DESIGN_GENERATION.md
+      - .cursor/pipeline/contracts/TASK_GENERATION.md
+
+  opsx_sync:
+    command_surface: .cursor/commands/opsx-sync.md
+    context_includes:
+      - openspec/config.yaml
+      - openspec/schemas/**/*
+      - openspec/specs/**/*
+    context_budget:
+      platform:
+        warn_bytes: 28000
+        fail_bytes: 56000
+
+  opsx_update:
+    command_surface: .cursor/commands/opsx-update.md
+    context_includes:
+      - openspec/config.yaml
+      - openspec/schemas/**/*
+      - .cursor/pipeline/contracts/DESIGN_GENERATION.md
+      - .cursor/pipeline/contracts/TASK_GENERATION.md
+
+  opsx_verify_archive:
+    command_surface: .cursor/commands/opsx-verify.md
+    context_includes:
+      - openspec/policies/VERIFY_POLICY.md
+      - .cursor/pipeline/contracts/VERIFY_PHASES.md
+      - .cursor/pipeline/contracts/CHANNEL_IMPACT_GUARD_V0.md
+    context_budget:
+      platform:
+        warn_bytes: 120000
+        fail_bytes: 240000
+      total:
+        warn_bytes: 700000
+        fail_bytes: 900000

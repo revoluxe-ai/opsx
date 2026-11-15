@@ -1,0 +1,24 @@
+{
+  "schema": "opsx.apply_implement",
+  "schema_version": 1,
+  "change_id": "fixture-hydrate",
+  "slice_id": "SLICE-001",
+  "status": "BLOCKED",
+  "generated_at": "2026-08-31T09:00:00Z",
+  "chat_history_required": false,
+  "tests_modified": false,
+  "tests_executed": false,
+  "blockers": [
+    {
+      "code": "DESIGN_REALITY_DRIFT",
+      "detail": "Frozen design names hydrateCoordinator as sole SoT; repository now has a second hydrate starter.",
+      "planning_claim": "Reuse hydrateCoordinator; do not add a parallel orchestrator.",
+      "repository_fact": "src/services/hydrateBus.js now starts hydrate independently of hydrateCoordinator.",
+      "paths": [
+        "src/services/hydrateCoordinator.js",
+        "src/services/hydrateBus.js"
+      ]
+    }
+  ],
+  "next_stage": "NONE"
+}

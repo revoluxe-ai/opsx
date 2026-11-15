@@ -1,0 +1,417 @@
+{
+  "schema": "opsx.apply_design",
+  "schema_version": 3,
+  "change_id": "fixture-hydrate",
+  "status": "APPLY_DESIGN_READY",
+  "generated_at": "2026-08-31T07:00:00Z",
+  "chat_history_required": false,
+  "write_boundary": {
+    "product_code": false,
+    "tests": false,
+    "allowed_paths": [
+      "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.md",
+      "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json"
+    ]
+  },
+  "planning_identity": {
+    "change_root": "openspec/changes/fixture-hydrate",
+    "inputs": [
+      {
+        "path": "openspec/changes/fixture-hydrate/design.md",
+        "role": "design",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "path": "openspec/changes/fixture-hydrate/specs/hydrate-coord/spec.md",
+        "role": "spec",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "path": "openspec/changes/fixture-hydrate/tasks.md",
+        "role": "tasks",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "planning_digest": "2445f8919f3a58c2b5a374073e54acfff232f5c23a441c49344d855e293607f9"
+  },
+  "repository_identity": {
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inspected_paths": [
+      "src/services/hydrateCoordinator.js",
+      "src/store/progress.js"
+    ],
+    "inspected_digest": "54779b401e58ee920ef8b45e804132cbb03b93922d3111e25712af61cceb3b64",
+    "candidate_note": "fixture HEAD placeholder"
+  },
+  "protected_context_identity": {
+    "paths": ["src/store/progress.js"],
+    "content_digest": "421e7351452a785e0335f94e1ac2d39a0cba396cb2531ac808b8a91d4518554e"
+  },
+  "pipeline_mutable_paths": [
+    "src/services/hydrateCoordinator.js",
+    "src/components/views/HomeView.vue",
+    "src/auth/sessionResume.js",
+    "tests/unit/cloudProgressHydrateCoordinatorEntryPoint.test.mjs",
+    "tests/unit/crossDeviceVisibilityResumeHydrate.test.mjs"
+  ],
+  "artifact_identity": {
+    "human_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.md",
+    "machine_path": "openspec/changes/fixture-hydrate/apply-design/APPLY-DESIGN.json"
+  },
+  "architecture_summary": "Reuse existing hydrateCoordinator as the sole hydrate orchestration entry. Extend it for resume triggers. Keep src/store/progress.js as the client mirror. Do not introduce a second coordinator. UI progress branches are a separate slice that reads coordinator state only.",
+  "reuse_decisions": [
+    {
+      "id": "RD-001",
+      "kind": "reuse",
+      "surface": "src/services/hydrateCoordinator.js",
+      "rationale": "Existing coordinator already owns hydrate sequencing; introducing another mechanism would split SoT."
+    },
+    {
+      "id": "RD-002",
+      "kind": "extend",
+      "surface": "src/services/hydrateCoordinator.js",
+      "rationale": "Resume triggers attach to the same coordinator rather than a new bus."
+    },
+    {
+      "id": "RD-003",
+      "kind": "do_not_reuse",
+      "surface": "ad-hoc per-view hydrate",
+      "rationale": "Per-view hydrate would duplicate ownership forbidden by the freeze."
+    }
+  ],
+  "architectural_constraints": [
+    {
+      "id": "AC-001",
+      "constraint": "Single hydrate orchestration SoT in hydrateCoordinator",
+      "source": "code"
+    }
+  ],
+  "slices": [
+    {
+      "slice_id": "SLICE-001",
+      "title": "Hydrate coordination core",
+      "responsibility": "Keep a single coordinator as the hydrate SoT and extend it for the approved coordination invariant.",
+      "source_task_ids": ["T1", "T2"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#coordination"],
+      "architectural_intent": "Reuse hydrateCoordinator; do not add a parallel orchestrator.",
+      "reuse_decisions": ["RD-001", "RD-003"],
+      "expected_product_write_surfaces": [
+        "src/services/hydrateCoordinator.js"
+      ],
+      "relevant_existing_surfaces": [
+        "src/services/hydrateCoordinator.js",
+        "src/store/progress.js"
+      ],
+      "red_test_targets_or_seams": [
+        "src/services/hydrateCoordinator.js",
+        "tests/unit/cloudProgressHydrateCoordinatorEntryPoint.test.mjs"
+      ],
+      "required_behavior": "All hydrate starts go through the coordinator; duplicate in-flight hydrates are coalesced.",
+      "invariants": [
+        "Exactly one hydrate orchestration SoT"
+      ],
+      "must_not_change": [
+        "backend hydrate API contract"
+      ],
+      "dependencies_on_prior_slices": [],
+      "implementation_notes": "Group T1+T2: same invariant, same module.",
+      "completion_contract": "Coordinator exposes a single entry used by bootstrap and resume; no second mechanism.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/services/hydrateCoordinator.js",
+            "action": "EXISTING",
+            "required_symbols": ["requestHydrate"],
+            "structural_contract": "Existing coordinator export remains the test-addressable hydrate seam.",
+            "allowed_scaffold_writes": [],
+            "behavior_deferred": [
+              "in-flight GET dedupe",
+              "session gating",
+              "visibility debounce",
+              "hydrate application"
+            ]
+          }
+        ],
+        "no_op_allowed": true,
+        "forbidden_behavior": [
+          "dedupe",
+          "retry",
+          "authorization",
+          "persistence",
+          "debounce",
+          "cross_device_semantics"
+        ]
+      }
+    },
+    {
+      "slice_id": "SLICE-002",
+      "title": "Cloud progress UI branches",
+      "responsibility": "Independent UI branches that display coordinator progress without owning hydrate.",
+      "source_task_ids": ["T3"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#progress-ui"],
+      "architectural_intent": "UI reads coordinator state; does not start a second hydrate path.",
+      "reuse_decisions": ["RD-001"],
+      "expected_product_write_surfaces": [
+        "src/components/views/HomeView.vue"
+      ],
+      "relevant_existing_surfaces": [
+        "src/services/hydrateCoordinator.js"
+      ],
+      "red_test_targets_or_seams": [
+        "src/components/views/HomeView.vue"
+      ],
+      "required_behavior": "Progress UI reflects coordinator phases; failure stays honest.",
+      "invariants": [
+        "UI is not a hydrate SoT"
+      ],
+      "must_not_change": [
+        "hydrateCoordinator public sequencing contract from SLICE-001"
+      ],
+      "dependencies_on_prior_slices": [],
+      "implementation_notes": "Independent of SLICE-001 writes except read-only consumption of coordinator state shape already present.",
+      "completion_contract": "Progress branches covered without calling a second hydrate helper.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/components/views/HomeView.vue",
+            "action": "EXTEND",
+            "required_symbols": ["displayCoordinatorProgress"],
+            "structural_contract": "Host adapter registration / callable interface for coordinator progress; no hydrate ownership.",
+            "allowed_scaffold_writes": ["src/components/views/HomeView.vue"],
+            "behavior_deferred": [
+              "progress phase mapping",
+              "honest failure display"
+            ]
+          }
+        ],
+        "no_op_allowed": false,
+        "forbidden_behavior": [
+          "dedupe",
+          "api_orchestration",
+          "user_visible_behavior"
+        ]
+      }
+    },
+    {
+      "slice_id": "SLICE-003",
+      "title": "Resume hydrate triggers",
+      "responsibility": "Wire resume triggers into the existing coordinator after core + UI seams exist.",
+      "source_task_ids": ["T4"],
+      "requirement_refs": ["specs/hydrate-coord/spec.md#resume"],
+      "architectural_intent": "Extend coordinator; do not add a resume-only orchestrator.",
+      "reuse_decisions": ["RD-002"],
+      "expected_product_write_surfaces": [
+        "src/services/hydrateCoordinator.js",
+        "src/auth/sessionResume.js"
+      ],
+      "relevant_existing_surfaces": [
+        "src/services/hydrateCoordinator.js"
+      ],
+      "red_test_targets_or_seams": [
+        "src/auth/sessionResume.js",
+        "tests/unit/crossDeviceVisibilityResumeHydrate.test.mjs"
+      ],
+      "required_behavior": "Resume calls the same coordinator entry as bootstrap.",
+      "invariants": [
+        "Resume must not bypass coordinator"
+      ],
+      "must_not_change": [
+        "SLICE-002 display-only mapping"
+      ],
+      "dependencies_on_prior_slices": ["SLICE-001", "SLICE-002"],
+      "implementation_notes": "Depends on coordinator entry (001) and progress UI contract (002).",
+      "completion_contract": "Resume trigger tests fail closed if a second hydrate starter is introduced.",
+      "scaffold_contract": {
+        "required_surfaces": [
+          {
+            "path": "src/auth/sessionResume.js",
+            "action": "INTRODUCE",
+            "required_symbols": ["installSessionResumeHydrate"],
+            "structural_contract": "New resume module exports a callable that will later invoke the existing coordinator entry.",
+            "allowed_scaffold_writes": ["src/auth/sessionResume.js"],
+            "behavior_deferred": [
+              "session gating",
+              "resume hydrate application"
+            ]
+          },
+          {
+            "path": "src/services/hydrateCoordinator.js",
+            "action": "EXTEND",
+            "required_symbols": ["requestHydrate"],
+            "structural_contract": "Resume uses the same coordinator entry; scaffold may add a registration seam only.",
+            "allowed_scaffold_writes": ["src/services/hydrateCoordinator.js"],
+            "behavior_deferred": ["resume trigger semantics"]
+          }
+        ],
+        "no_op_allowed": false,
+        "forbidden_behavior": [
+          "dedupe",
+          "retry",
+          "authorization",
+          "cross_device_semantics"
+        ]
+      }
+    }
+  ],
+  "slice_order": {
+    "kind": "dependency_graph",
+    "nodes": ["SLICE-001", "SLICE-002", "SLICE-003"],
+    "edges": [
+      { "from": "SLICE-001", "to": "SLICE-003" },
+      { "from": "SLICE-002", "to": "SLICE-003" }
+    ],
+    "independent_groups": [["SLICE-001", "SLICE-002"]]
+  },
+  "cross_slice_contracts": [
+    {
+      "id": "CSC-003",
+      "upstream_slice_ids": ["SLICE-001", "SLICE-002"],
+      "dependent_slice_id": "SLICE-003",
+      "consumed_semantics": [
+        "requestHydrate is the sole hydrate entry for bootstrap and resume",
+        "coordinator in-flight join returns a control result, not an API failure",
+        "progress UI contract from SLICE-002 is display-only and must not own hydrate starts"
+      ],
+      "incoming_states": [
+        "idle",
+        "in_flight",
+        "completed",
+        "control_result_stale_generation"
+      ],
+      "incoming_failure_modes": [
+        "IN_FLIGHT_JOIN_BY_BOOTSTRAP: resume/bootstrap joins an already in-flight coordinator hydrate and must still complete startup",
+        "CONTROL_RESULT_AS_FAILURE: put_in_flight / race control results must not be fail-closed as API errors by resume consumers",
+        "coordinator entry missing or second hydrate starter introduced"
+      ],
+      "shared_state": [
+        {
+          "name": "hydrateCoordinator.inFlight",
+          "owner_slice_id": "SLICE-001",
+          "consumer_slice_ids": ["SLICE-003"]
+        }
+      ],
+      "interaction_invariants": [
+        "Resume bootstrap must join in-flight coordinator work rather than starting a parallel hydrate",
+        "Control / race results from the coordinator are not API fail-closed failures for SLICE-003",
+        "SLICE-002 progress mapping remains read-only under resume triggers"
+      ],
+      "race_boundaries": [
+        {
+          "kind": "concurrent_invocation",
+          "detail": "Bootstrap and visibility-resume may call requestHydrate while a hydrate is already in-flight; join the existing promise.",
+          "applicability": "applicable"
+        },
+        {
+          "kind": "stale_result",
+          "detail": "Stale generation control results must be ignored for fail-closed paths; they are race control, not transport failure.",
+          "applicability": "applicable"
+        }
+      ],
+      "lifecycle_boundaries": [
+        {
+          "kind": "bootstrap",
+          "detail": "Cold start may observe an already-running coordinator hydrate from a prior trigger.",
+          "applicability": "applicable"
+        },
+        {
+          "kind": "visibility_resume",
+          "detail": "Visibility resume must re-enter via the same coordinator entry without duplicating in-flight work.",
+          "applicability": "applicable"
+        }
+      ],
+      "required_composition_behavior": [
+        "When resume bootstrap finds coordinator in-flight, join that promise and still complete startup readiness",
+        "Do not treat coordinator control results (in-flight join, stale generation) as fail-closed API failures",
+        "Resume must not bypass requestHydrate or invent a second hydrate starter beside SLICE-001"
+      ],
+      "proof_placement": [
+        {
+          "obligation": "Resume calls the same coordinator entry; duplicate starter fails closed",
+          "placement": "B_RED"
+        },
+        {
+          "obligation": "Visibility resume joins in-flight hydrate and does not fail-closed on control results",
+          "placement": "B_GREEN_ADJACENT"
+        }
+      ],
+      "green_adjacent_seams": [
+        "tests/unit/crossDeviceVisibilityResumeHydrate.test.mjs"
+      ],
+      "failure_classes": [
+        "IN_FLIGHT_JOIN_BY_BOOTSTRAP",
+        "CONTROL_RESULT_AS_FAILURE"
+      ]
+    }
+  ],
+  "composition_completeness": {
+    "task_coverage": [
+      { "task_id": "T1", "slice_ids": ["SLICE-001"] },
+      { "task_id": "T2", "slice_ids": ["SLICE-001"] },
+      { "task_id": "T3", "slice_ids": ["SLICE-002"] },
+      { "task_id": "T4", "slice_ids": ["SLICE-003"] }
+    ],
+    "invariant_classifications": [
+      {
+        "invariant": "Exactly one hydrate orchestration SoT",
+        "class": "slice_local",
+        "proof_owner": "SLICE-001"
+      },
+      {
+        "invariant": "Resume must join in-flight coordinator work and not invent a second starter",
+        "class": "cross_slice",
+        "proof_owner": "CSC-003"
+      },
+      {
+        "invariant": "Coordinator control results are not API fail-closed failures for resume consumers",
+        "class": "cross_slice",
+        "proof_owner": "CSC-003"
+      }
+    ],
+    "shared_mutable_state": [
+      {
+        "name": "hydrateCoordinator.inFlight",
+        "owner_slice_id": "SLICE-001",
+        "consumer_slice_ids": ["SLICE-003"]
+      }
+    ],
+    "special_result_interpretations": [
+      {
+        "result": "put_in_flight_or_join",
+        "producer_slice_id": "SLICE-001",
+        "consumer_slice_ids": ["SLICE-003"],
+        "interpretation": "Control result meaning join/wait; must not be mapped to fail-closed API failure by resume bootstrap"
+      },
+      {
+        "result": "stale_generation",
+        "producer_slice_id": "SLICE-001",
+        "consumer_slice_ids": ["SLICE-003"],
+        "interpretation": "Race control token; discard for fail-closed paths"
+      }
+    ],
+    "race_applicability": {
+      "applicable": true,
+      "concurrent_invocation": "Bootstrap and visibility-resume may overlap on requestHydrate; join in-flight work.",
+      "stale_result": "Stale generation control results must not fail-close resume startup.",
+      "cancellation_skip": "Cancelled or superseded hydrate must not leave resume hung without a follow-up entry.",
+      "retry_reentry": "Retry after control result must re-enter the same coordinator entry, not a parallel path."
+    },
+    "lifecycle_applicability": {
+      "applicable": true,
+      "bootstrap": "Cold start may join already-running coordinator hydrate.",
+      "already_running": "Second entry while in-flight joins; does not start a second GET.",
+      "route_enter_leave": "Route leave does not authorize a second hydrate SoT; resume still uses requestHydrate.",
+      "visibility_resume": "Visibility resume re-enters via coordinator; joins in-flight when present.",
+      "teardown_remount": "Remount after teardown must not leave orphan in-flight flags that block bootstrap join."
+    },
+    "failure_class_applicability": {
+      "IN_FLIGHT_JOIN_BY_BOOTSTRAP": "applicable",
+      "CONTROL_RESULT_AS_FAILURE": "applicable",
+      "OVERLAPPING_WRITE_INVALIDATES_BOOLEAN_IN_FLIGHT": "not_applicable",
+      "DEBOUNCED_WORK_AFTER_LIFECYCLE_CHANGE": "not_applicable",
+      "SEMANTIC_EQ_VS_BYTE_EQ": "not_applicable"
+    }
+  },
+  "unresolved_items": [],
+  "blockers": [],
+  "next_stage": "APPLY_DESIGN_REVIEW"
+}

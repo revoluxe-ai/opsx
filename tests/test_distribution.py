@@ -262,10 +262,13 @@ class PathTests(unittest.TestCase):
         core = project / "opsx/core"
         token = bind_project_context(project, core)
         try:
-            self.assertEqual(resource_path(project, "opsx_tools", "one.mjs"), core / "opsx_tools/one.mjs")
-            self.assertEqual(resource_path(project, "opsx", "project", "capabilities.yaml"), project / "opsx/project/capabilities.yaml")
-            self.assertEqual(resource_path(project, "opsx", "receipts", "a.json"), project / "opsx/receipts/a.json")
-            self.assertEqual(resource_path(project, "openspec", "changes", "a"), project / "openspec/changes/a")
+            self.assertEqual(resource_path(project, "opsx_tools", "one.mjs"), (core / "opsx_tools/one.mjs").resolve())
+            self.assertEqual(resource_path(project, "opsx", "project", "capabilities.yaml"),
+                             (project / "opsx/project/capabilities.yaml").resolve())
+            self.assertEqual(resource_path(project, "opsx", "receipts", "a.json"),
+                             (project / "opsx/receipts/a.json").resolve())
+            self.assertEqual(resource_path(project, "openspec", "changes", "a"),
+                             (project / "openspec/changes/a").resolve())
         finally:
             reset_project_context(token)
 

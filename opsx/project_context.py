@@ -81,5 +81,5 @@ def resource_path(repo: Path, *parts: str | Path) -> Path:
     same_project = _same_path(Path(repo), execution)
     if same_project and not relative.is_absolute() and relative_text.startswith(_CORE_PREFIXES):
         base = context.core_root if context else Path(os.environ.get("OPSX_CORE_ROOT", _SOURCE_ROOT))
-        return base / relative
-    return Path(repo) / relative
+        return (base / relative).resolve()
+    return (Path(repo) / relative).resolve()

@@ -11,6 +11,7 @@ import shutil
 import sys
 import uuid
 
+from .authority import assert_portable_managed_content, neutralize_command_authority
 from .context import CORE_RELATIVE, DEFAULT_REPOSITORY, OpsxError, Project
 from .process import git, run
 from .storage import read_json, write_bytes, write_json
@@ -46,7 +47,8 @@ def _managed_payloads(core: Path) -> dict[str, bytes]:
         if not source.is_file():
             raise OpsxError("DISTRIBUTION_INCOMPLETE", f"Missing required asset: {source}")
         relative = source.relative_to(core).as_posix()
-        body = _render(source.read_text(encoding="utf-8"))
+        body = neutralize_command_authority(_render(source.read_text(encoding="utf-8")))
+        assert_portable_managed_content(relative, body)
         result[relative] = body.encode("utf-8")
     if ".cursor/rules/opsx.mdc" not in result:
         raise OpsxError("OPSX_CONTEXT_MISSING", "The required @opsx context is missing.")
@@ -188,9 +190,11 @@ async def install(
             if migration_dry_run or (migrate_legacy and not migration_apply):
                 return {"status": "MIGRATION_PLAN", **migration_report}
             if migration_apply:
-                plan = build_plan(project)
+                plan = build_plan(project, core=project.core if await asyncio.to_thread(project.core.is_dir) else None)
                 if plan.get("status") == "BLOCKED":
                     raise OpsxError("MIGRATION_BLOCKED", "Resolve migration manifest before install.")
+                from .migration import stage_proven_command_replacements
+                await stage_proven_command_replacements(project, plan)
         result = await _install_locked(project, repository=repository, ref=ref,
                                        no_runtime=no_runtime, python=python)
         if migration_apply and result.get("managed_files"):

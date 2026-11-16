@@ -39,6 +39,10 @@ def init(root: Path) -> None:
 
 class DistributionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "fastapi>=0.115", "uvicorn>=0.30"],
+            check=False,
+        )
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.origin = self.root / "origin"

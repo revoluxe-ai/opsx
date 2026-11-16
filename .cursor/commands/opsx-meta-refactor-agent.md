@@ -11,115 +11,22 @@ description: "Owner describes agent refactor in plain language; command classifi
 argument-hint: "<что не так / к чему привести — свободным текстом>; опционально AGENT=, PEER=, SYMPTOM="
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-This command was transferred from a project-specific OPSX realization.
-For stroy-system, product-specific realization MUST resolve through:
+Product-specific execution authority resolves only through:
 
   opsx/project/capabilities.yaml
-  opsx/shared/target-capability-resolution.md
 
-Any inherited donor literal is historical text only and is NOT execution authority.
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-# TARGET OVERRIDE — HIGHEST PRIORITY
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
-**Contract:** `OPSX-WB-META-REFACTOR-AGENT-01`
-**Runtime class:** `ACTIVE_WITH_LIMITS`
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
 
-```text
-IMPLEMENTATION_STATUS: IMPLEMENTED_UNVERIFIED
-SCOPE: OPSX_RUNTIME_AGENTS_AND_WIRING
-DEFAULT_MODE: READ_ONLY
-NOT_COMMITTED_THIS_RUN: true
-```
-
-### Scope (mandatory)
-
-**In scope:**
-
-- `opsx/opsx_runtime/agents/verify/**`, `agents/repair/**`, `agents/implementation/**`
-- Colocated LangGraph factories touched by that agent
-  (`opsx/opsx_runtime/workflows/**` — only paths cited in plan)
-- Shared agent helpers: `agents/adapters/`, `agents/common/`, `agents/abc_agent.py`
-- `agent_roles.py`, `role_contracts.py`, prompts/schemas next to the agent
-- Tests under `agents/**/tests/`, `workflows/**/tests/` for that hop
-
-**Out of scope** (redirect):
-
-| Request | Route |
-|---------|--------|
-| Broken tests / traceback / wrong route | `/opsx-meta-repair-langgraph` |
-| New agent from scratch | `/opsx-meta-add-agent` |
-| Only graph wiring, agent OK | `/opsx-meta-wire-workflow-agent` |
-| Slash `/opsx-*` command body | `/opsx-meta-fix-command-defects` |
-| bug-team worker markdown only | `/opsx-meta-fix-command-defects` + REGISTRY |
-| Product `src/stroy/**` | product commands — not this meta lane |
-
-### Reads / writes (this invocation)
-
-- **Reads:** bounded agent module, peer agent, optional transcript symptom.
-- **Writes:** none — emit `REFACTOR_PLAN` only.
-
-### Hard bans
-
-- No refactor_apply in this turn.
-- No commit, push, verify live run, archive.
-- No behavior change without Owner **GO** on downstream owner.
-- Do not delete agent roles without `REMOVAL_RISK` section in plan.
-
-### Guard: ABCAdapter layer boundary
-
-При `REFACTOR_KIND: ADAPTER_WIRING` и любых правках `agents/adapters/`:
-
-- **`ABCAdapter` / `abc_adapter.py`** — **без** `sdk_transport_state` и прочего
-  Cursor/provider transport в generic-слое.
-- Cursor-only transport / stream reconcile — **только** в `cursor_sdk/*`;
-  не протаскивать в shared `abc_adapter.py` «для удобства».
-- Рефактор «упростить адаптер» ≠ схлопывать product hop mapping в provider RCA.
-
-### Cursor adapter — двусторонняя инкапсуляция
-
-Workflow вызывает **только** публичный API адаптера. OPSX hop/product
-семантика и Cursor SDK transport **не** смешиваются при рефакторе.
-
-| Guard | Направление | Запрет |
-|-------|-------------|--------|
-| **L-006** | **In** (в `cursor_sdk/*`) | Не тащить в адаптер: `implementation_slice_id`, `apply_*`,
-  verify **graph state**, hop orchestration, machine gates — это слой
-  `workflows/**` / `agents/implementation/**`. |
-| **L-007** | **Out** (из `cursor_sdk/*`) | Не выносить в `workflows/**` / `implementation/**` «для удобства»:
-  `stream_observe`, `GetRun`, политику `run.wait`, terminal envelope /
-  reconcile transport — остаётся в адаптере; workflow **не** дублирует **Cursor SDK**
-  stream/reconcile/GetRun semantics. |
-
-**Логирование (рефактор не меняет границу):**
-
-- Workflow — domain context на **orchestration** (execute hop) только.
-- Adapter — **transport-only** (Cursor SDK labels, stream phases); не подменять
-  orchestration INFO лейблами адаптера.
-
-`REFACTOR_PLAN` при `ADAPTER_WIRING` / `cursor_sdk` MUST cite **L-006** / **L-007**
-и `KEEP_BEHAVIOR` по границе adapter API, если затронуты оба слоя.
-
-### Lexicon: SDK (Subagent/Task — mandatory)
-
-**`SDK` = Cursor SDK only** in `REFACTOR_PLAN` and Task briefs — не **SDK hop**
-для plan / execute / stagnation / `hop_lane_status`; **implementation hop**,
-**execute hop**, **mutating hop**, **OPSX implementation lane**; live Cursor —
-**mutating hop via Cursor SDK** / **agent.run (Cursor SDK transport)**.
-SoT: `.cursor/commands/opsx-meta-fix-command-defects.md` § Lexicon: SDK.
-
-### Projectization gate
-
-If `opsx/projectization.yaml` incomplete → `FAIL_CLOSED` → `/opsx-projectize`
-
-### Peer chain commands
-
-- `.cursor/commands/opsx-meta-add-agent.md`
-- `.cursor/commands/opsx-meta-wire-workflow-agent.md`
-- `opsx/opsx_runtime/agents/repair/README.md`
-
----
 
 # /opsx-meta-refactor-agent
 

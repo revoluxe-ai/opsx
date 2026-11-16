@@ -11,23 +11,22 @@ description: "After work in this chat: mine transcript for architecture failures
 argument-hint: "[свободный итог / что болело] [CHAT=<uuid>] [FOCUS=langgraph|meta|all] [GO]"
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-Product authority: `opsx/project/capabilities.yaml`. Donor literals are not
-execution authority.
+Product-specific execution authority resolves only through:
 
-# TARGET OVERRIDE — HIGHEST PRIORITY
+  opsx/project/capabilities.yaml
 
-**Contract:** `OPSX-WB-META-DEBRIEF-CHAT-01`
-**Runtime class:** `ACTIVE_WITH_LIMITS`
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-```text
-PRIMARY_GOAL: architecture_first — meta commands must prevent repeats
-DEFAULT_MODE: READ_ONLY
-APPLY_OWNER: /opsx-meta-fix-command-defects (exact GO only)
-```
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
----
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
 
 # /opsx-meta-debrief-chat
 

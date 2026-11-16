@@ -11,21 +11,22 @@ description: "Owner describes what is broken in OPSX LangGraph runtime; command 
 argument-hint: "<что сломано — свободный текст>; опционально TEST=, AGENT=, WORKFLOW=, LOG=, RUN_TESTS:"
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-# TARGET OVERRIDE — HIGHEST PRIORITY
+Product-specific execution authority resolves only through:
 
-**Contract:** `OPSX-WB-META-REPAIR-LANGGRAPH-01`
-**Runtime class:** `ACTIVE_WITH_LIMITS`
+  opsx/project/capabilities.yaml
 
-```text
-SCOPE: opsx/opsx_runtime/ (workflows + agents + their tests)
-DEFAULT_MODE: READ_ONLY
-UNIVERSAL: workflow | agent | tests | cross-layer
-NOT_COMMITTED_THIS_RUN: true
-```
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
----
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
+
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
 
 # /opsx-meta-repair-langgraph
 

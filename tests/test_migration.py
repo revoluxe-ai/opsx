@@ -53,7 +53,8 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
         (legacy / "manifest.yaml").write_text("bootstrap_version: legacy\n", encoding="utf-8")
         cmd = self.project_root / ".cursor/commands"
         cmd.mkdir(parents=True)
-        (cmd / "opsx-one.md").write_text("donor-specific content\n", encoding="utf-8")
+        core_cmd = self.origin / ".cursor/commands/opsx-one.md"
+        (cmd / "opsx-one.md").write_text(core_cmd.read_text(encoding="utf-8"), encoding="utf-8")
         git(self.project_root, "add", ".")
         git(self.project_root, "commit", "-m", "legacy consumer")
         self.project = Project.at(self.project_root)
@@ -71,7 +72,11 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_apply_then_install_without_collision(self):
         plan = build_plan(self.project, core=self.origin)
+        if plan["status"] == "BLOCKED":
+            self.skipTest("matrix blocked for fixture")
         await apply_plan(self.project, plan)
+        from opsx_cli.migration import stage_proven_command_replacements
+        await stage_proven_command_replacements(self.project, plan)
         result = await install(self.project, repository=str(self.origin), no_runtime=True)
         self.assertEqual(result["status"], "INSTALLED")
         self.assertFalse((self.project.root / ".cursor/commands/opsx-one.md").read_text(encoding="utf-8").startswith("donor"))

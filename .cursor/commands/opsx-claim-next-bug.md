@@ -3,17 +3,32 @@ description: "Claim exactly one available bug-case finding for a chat, record ow
 argument-hint: "case=<CASE_ID> chat_label=<label>"
 ---
 
-# STROY-SYSTEM PROJECTIZATION GATE
+# PROJECT PROJECTIZATION GATE
 
-Before any command-specific action, read `opsx/projectization.yaml`.
-If `status` is not `COMPLETE` or `normal_commands_enabled` is not `true`,
-stop without command-specific writes and emit:
+Before any command-specific action, resolve adoption through:
 
-STATUS: FAIL_CLOSED
-REASON: OPSX_PROJECTIZATION_REQUIRED
-NEXT_ACTION: /opsx-projectize
+  opsx/project/capabilities.yaml
 
-This target-local gate has higher precedence than later command steps.
+If adoption is incomplete (`NEEDS_ADOPTION` or projectization incomplete), stop without
+command-specific writes and emit OPSX_PROJECTIZATION_REQUIRED with NEXT_ACTION from the
+project profile (`/opsx-adopt` or documented projectize flow).
+
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves only through:
+
+  opsx/project/capabilities.yaml
+
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
+
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
+
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
 
 # /opsx-claim-next-bug
 

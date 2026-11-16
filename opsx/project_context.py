@@ -75,7 +75,10 @@ def resource_path(repo: Path, *parts: str | Path) -> Path:
     relative_text = relative.as_posix().rstrip("/") + "/"
     context = _context.get()
     execution = context.project_root if context else Path(os.environ.get("OPSX_PROJECT_ROOT", Path.cwd()))
-    same_project = os.path.normcase(os.path.abspath(repo)) == os.path.normcase(os.path.abspath(execution))
+    def _same_path(left: Path, right: Path) -> bool:
+        return os.path.normcase(str(left.resolve())) == os.path.normcase(str(right.resolve()))
+
+    same_project = _same_path(Path(repo), execution)
     if same_project and not relative.is_absolute() and relative_text.startswith(_CORE_PREFIXES):
         base = context.core_root if context else Path(os.environ.get("OPSX_CORE_ROOT", _SOURCE_ROOT))
         return base / relative

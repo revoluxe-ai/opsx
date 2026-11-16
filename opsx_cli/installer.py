@@ -174,11 +174,31 @@ async def _prepare_runtime(project: Project, sha: str, python: str | None) -> st
 async def install(
     project: Project, *, repository: str = DEFAULT_REPOSITORY, ref: str | None = None,
     no_runtime: bool = False, python: str | None = None,
+    migrate_legacy: bool = False, migration_dry_run: bool = False, migration_apply: bool = False,
 ) -> dict:
     from .lease import execution_lease
+    from .migration import build_plan, legacy_present, migrate_legacy as run_legacy, retire_legacy_tree
     async with execution_lease(project):
-        return await _install_locked(project, repository=repository, ref=ref,
-                                     no_runtime=no_runtime, python=python)
+        migration_report = None
+        if migrate_legacy or migration_dry_run or migration_apply:
+            migration_report = await run_legacy(
+                project, core=project.core if await asyncio.to_thread(project.core.is_dir) else None,
+                dry_run=migration_dry_run or (migrate_legacy and not migration_apply), apply=migration_apply,
+            )
+            if migration_dry_run or (migrate_legacy and not migration_apply):
+                return {"status": "MIGRATION_PLAN", **migration_report}
+            if migration_apply:
+                plan = build_plan(project)
+                if plan.get("status") == "BLOCKED":
+                    raise OpsxError("MIGRATION_BLOCKED", "Resolve migration manifest before install.")
+        result = await _install_locked(project, repository=repository, ref=ref,
+                                       no_runtime=no_runtime, python=python)
+        if migration_apply and result.get("managed_files"):
+            retired = await retire_legacy_tree(project, installation_managed=result["managed_files"])
+            result["legacy_retirement"] = retired
+        if migration_report:
+            result["migration"] = migration_report
+        return result
 
 
 async def _install_locked(

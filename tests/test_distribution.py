@@ -95,8 +95,8 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         project = self.projects[0]
         self.assertEqual(result["status"], "INSTALLED")
         self.assertTrue((project.core / ".git").is_file())
-        self.assertIn("opsx/core/opsx_tools/", (project.root / ".cursor/commands/opsx-one.md").read_text())
-        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text())
+        self.assertIn("opsx/core/opsx_tools/", (project.root / ".cursor/commands/opsx-one.md").read_text(encoding="utf-8"))
+        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text(encoding="utf-8"))
         self.assertFalse((project.root / "AGENTS.md").exists())
         self.assertFalse((project.root / "src").exists())
         self.assertFalse((project.core / "opsx/project").exists())
@@ -107,13 +107,13 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         project.settings.write_text('{"custom": true}')
         result = await self.installed()
         self.assertEqual(result["status"], "ALREADY_INSTALLED")
-        self.assertEqual(json.loads(project.settings.read_text()), {"custom": True})
+        self.assertEqual(json.loads(project.settings.read_text(encoding="utf-8")), {"custom": True})
 
     async def test_two_projects_are_independent(self):
         await self.installed(self.projects[0])
         await self.installed(self.projects[1])
-        first = json.loads(self.projects[0].settings.read_text())
-        second = json.loads(self.projects[1].settings.read_text())
+        first = json.loads(self.projects[0].settings.read_text(encoding="utf-8"))
+        second = json.loads(self.projects[1].settings.read_text(encoding="utf-8"))
         self.assertNotEqual(first["project_id"], second["project_id"])
         self.assertNotEqual(self.projects[0].core, self.projects[1].core)
 
@@ -140,9 +140,9 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.version_two()
         result = await upgrade(project, ref="v2", no_runtime=True)
         self.assertEqual(result["status"], "UPGRADED")
-        self.assertEqual(project.settings.read_text(), '{"custom": "preserved"}')
-        self.assertEqual(receipt.read_text(), '{"accepted":true}')
-        self.assertEqual(unrelated.read_text(), "local")
+        self.assertEqual(project.settings.read_text(encoding="utf-8"), '{"custom": "preserved"}')
+        self.assertEqual(receipt.read_text(encoding="utf-8"), '{"accepted":true}')
+        self.assertEqual(unrelated.read_text(encoding="utf-8"), "local")
         self.assertTrue((project.root / ".cursor/commands/opsx-two.md").exists())
 
     async def test_manual_command_conflict_prevents_upgrade(self):

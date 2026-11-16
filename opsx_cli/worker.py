@@ -44,7 +44,7 @@ async def execute_request(request: dict) -> int:
             raise_if_implementation_lane_terminal(outcome, change_id=request["change_id"])
             raise_unless_security_pass(outcome, change_id=request["change_id"])
             print("SECURITY_COMPLETE: PASS", flush=True)
-            return 0
+            return 0, {"workflow_status": "WORKFLOW_TERMINAL", "verification_status": "PASS"}
         if request["mode"] != "repair":
             raise ValueError("REQUEST_MODE_UNSUPPORTED")
         ui = core / "opsx/opsx_runtime/ui/named_bug_repair"
@@ -64,7 +64,9 @@ async def execute_request(request: dict) -> int:
         summary = outcome.get("owner_named_check_repair_summary") or {}
         status = str(summary.get("status") or outcome.get("owner_named_check_repair_status") or "").upper()
         print(json.dumps({"repair_result": summary}, ensure_ascii=False), flush=True)
-        return 0 if status in {"PASS", "FIXED", "COMPLETED", "REPAIR_COMPLETE", "COMPLETE_NO_CLASS_LESSON", "COMPLETE_CLASS_LESSON"} else 1
+        ok = status in {"PASS", "FIXED", "COMPLETED", "REPAIR_COMPLETE", "COMPLETE_NO_CLASS_LESSON", "COMPLETE_CLASS_LESSON"}
+        verify = "PASS" if status in {"PASS", "FIXED"} else ("NOT_READY" if ok else "FAIL")
+        return (0 if ok else 1), {"workflow_status": status or "REPAIR_UNKNOWN", "verification_status": verify}
     finally:
         reset_project_context(token)
 
@@ -79,15 +81,38 @@ def main() -> int:
         from .storage import read_json, write_json
         status_file = Path(sys.argv[1]).parent / "status.json"
         async with execution_lease(Project.at(request["project_root"])):
+            workflow_status = "UNKNOWN"
+            verification_status = "NOT_EVALUATED"
             try:
-                code = await execute_request(request)
+                result = await execute_request(request)
+                if isinstance(result, tuple):
+                    code, meta = result
+                    workflow_status = meta.get("workflow_status", workflow_status)
+                    verification_status = meta.get("verification_status", verification_status)
+                else:
+                    code = int(result)
+                    verification_status = "PASS" if code == 0 else "FAIL"
+                    workflow_status = "LEGACY_RETURN"
             except BaseException as exc:
                 record = await read_json(status_file, {})
-                await write_json(status_file, {**record, "status": "FAILED",
-                                               "error": f"{type(exc).__name__}: {exc}", "exit_code": 1})
+                await write_json(status_file, {**record,
+                    "process_status": "FAILED",
+                    "workflow_status": workflow_status,
+                    "verification_status": "FAIL",
+                    "status": "FAIL",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "exit_code": 1,
+                })
                 raise
             record = await read_json(status_file, {})
-            await write_json(status_file, {**record, "status": "PASS" if code == 0 else "FAILED", "exit_code": code})
+            await write_json(status_file, {**record,
+                "process_exit_code": code,
+                "process_status": "COMPLETED" if code == 0 else "FAILED",
+                "workflow_status": workflow_status,
+                "verification_status": verification_status,
+                "status": verification_status,
+                "exit_code": code,
+            })
             return code
     return asyncio.run(owned())
 

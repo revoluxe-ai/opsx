@@ -151,8 +151,22 @@ class RunService:
                     await asyncio.to_thread(sys.stdout.write, data.decode("utf-8", "replace"))
                     await asyncio.to_thread(sys.stdout.flush)
             code = await self.process.wait()
-            record.update(status="PASS" if code == 0 else "FAILED", exit_code=code,
-                          finished_at=datetime.now(timezone.utc).isoformat())
+            worker_record = await read_json(directory / "status.json", record)
+            process_status = "COMPLETED" if code == 0 else "FAILED"
+            verification = worker_record.get("verification_status") or "NOT_EVALUATED"
+            workflow = worker_record.get("workflow_status") or "UNKNOWN"
+            aggregate = verification if verification in {
+                "PASS", "FAIL", "NOT_READY", "NOT_EVALUATED",
+            } else ("PROCESS_COMPLETED" if code == 0 else "PROCESS_FAILED")
+            record.update(
+                process_exit_code=code,
+                process_status=process_status,
+                workflow_status=workflow,
+                verification_status=verification,
+                status=aggregate,
+                exit_code=code if verification not in {"PASS", "FAIL", "NOT_READY"} else (0 if verification == "PASS" else 1),
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
             await write_json(directory / "status.json", record)
             return record
         except BaseException as exc:

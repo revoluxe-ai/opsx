@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any
 
 from .context import Project
+from .settings import instance_layer
 from .storage import read_json
 
 
 async def project_show(project: Project) -> dict[str, Any]:
-    settings = await read_json(project.settings, {})
-    cap_rel = settings.get("capabilities", "opsx/project/capabilities.yaml")
+    raw = await read_json(project.settings, {})
+    settings = instance_layer(raw)
+    cap_rel = settings.get("capabilities", raw.get("product_profile", "opsx/project/capabilities.yaml"))
     cap_path = project.root / cap_rel
     body = cap_path.read_text(encoding="utf-8") if cap_path.is_file() else ""
     return {
@@ -24,8 +26,9 @@ async def project_show(project: Project) -> dict[str, Any]:
 
 
 async def project_validate(project: Project) -> dict[str, Any]:
-    settings = await read_json(project.settings, {})
-    cap_rel = settings.get("capabilities", "opsx/project/capabilities.yaml")
+    raw = await read_json(project.settings, {})
+    settings = instance_layer(raw)
+    cap_rel = settings.get("capabilities", raw.get("product_profile", "opsx/project/capabilities.yaml"))
     cap_path = project.root / cap_rel
     checks = []
     checks.append(("capabilities_file", cap_path.is_file()))

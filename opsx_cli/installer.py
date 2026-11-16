@@ -158,7 +158,8 @@ async def _prepare_runtime(project: Project, sha: str, python: str | None) -> st
     ready_file = directory / ".opsx-runtime.json"
     if not await asyncio.to_thread(executable.exists):
         await run([python or sys.executable, "-m", "venv", directory], cwd=project.root, timeout=120)
-    settings = await read_json(project.settings, {})
+    from .settings import instance_layer
+    settings = instance_layer(await read_json(project.settings, {}))
     if "cursor" in (settings.get("adapter") or {}).get("extras", []):
         await run([executable, "-c", "import sys; sys.exit('The selected Cursor adapter requires Python 3.12 or later.' if sys.version_info < (3,12) else 0)"],
                   cwd=project.root, timeout=30)

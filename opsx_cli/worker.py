@@ -15,7 +15,8 @@ async def execute_request(request: dict) -> int:
     os.environ["OPSX_CORE_ROOT"] = str(core)
     settings_file = project / "opsx/project/project.json"
     settings_text = await asyncio.to_thread(settings_file.read_text, encoding="utf-8")
-    settings = json.loads(settings_text)
+    from .settings import instance_layer
+    settings = instance_layer(json.loads(settings_text))
     adapter_module = (settings.get("adapter") or {}).get("module")
     if adapter_module:
         os.environ["OPSX_ADAPTER_MODULE"] = str(adapter_module)

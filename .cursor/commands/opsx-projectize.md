@@ -1,9 +1,9 @@
 ---
 component_id: opsx.commands.projectize
-component_version: 1.0.0-greenfield
+component_version: 1.1.0-portable
 runtime_class: ACTIVE
 ownership: TARGET_ONLY
-contract_id: OPSX-STROY-PROJECTIZE-01
+contract_id: OPSX-PORTABLE-PROJECTIZE-01
 canonical_source_body: none
 required_adapters: ["opsx-lite"]
 local_override_policy: TARGET_OVERRIDE_HIGHEST_PRIORITY
@@ -11,78 +11,69 @@ local_override_policy: TARGET_OVERRIDE_HIGHEST_PRIORITY
 
 # /opsx-projectize
 
-Projectize OPSX for `stroy-system`.
+Projectize the installed OPSX control plane for the **current consumer repository**, using only verified project facts and explicit Owner decisions.
 
-## Canonical inputs
+**Scope:** OPSX bootstrap/projectization only. This command does not create a product change, draft or edit an Owner Contract, choose tariffs, write product code, or authorize APPLY. It must never be proposed merely because a user answered a clarification, completed `/opsx-explore`, or wants to update an existing change.
 
-Read in this order:
-1. `.project/PROJECT_INTENT.md` — Owner intent.
-2. `.project/PROJECT_PROFILE.yaml` — machine-readable project profile.
-3. `.project/AI_PROJECT_CONTEXT.md` — bounded AI context.
-4. Actual repository facts.
-5. Existing `opsx/**` bootstrap state.
+## Routing: when to use this command
 
-`.project/**` is project truth. `opsx/**` may adapt to it but must not silently rewrite it.
+- Use `/opsx-projectize` only on an **explicit request to set up/projectize OPSX**, or when a verified current projectization gate reports that setup is required.
+- For an existing product change or `owner-contract.md`, continue the existing authorized change workflow (normally `/opsx-continue`). Do **not** rerun projectization.
+- To begin a new product change, use `/opsx-new`, not projectization. Implementation needs its own approved apply authority.
+- For installation health use `opsx doctor`; for quality-gate/toolchain adoption use `/opsx-adopt`. Do not conflate these with projectization.
+- Merely missing a conventional setup file is **not** proof that projectization is required; first determine the applicable current contract and machine-readable gate.
 
-## Greenfield dynamic projectization
+## Canonical inputs (read-only until explicit GO)
 
-This repository is greenfield and its product stack may remain intentionally unresolved.
+1. Current Git root and observed repository structure.
+2. OPSX installation state (`opsx/install.json`, `opsx/core`) when present.
+3. Project-owned OPSX capabilities (`opsx/project/capabilities.yaml`) and projectization state, **if present**.
+4. Project declarations (`.project/PROJECT_INTENT.md`, `.project/PROJECT_PROFILE.yaml`, `.project/AI_PROJECT_CONTEXT.md`) **only when present** and established as project-owned truth; their absence is not permission to create substitutes or assume a greenfield project.
+5. Applicable TARGET contracts and observed runtime/adapter configuration.
 
-Projectization MAY be `COMPLETE` with `normal_commands_enabled: true` when the `project-generic` adapter is installed and machine-checked capability gates are active.
+Do not infer product framework, technology stack, database, CI, deployment system, product requirements or authority from the OPSX donor or from this command. Treat missing/unresolved capabilities as unresolved, not as defaults. Existing product declarations must not be overwritten by OPSX setup.
 
-In that state:
+## Default READ_ONLY mode
 
-- unresolved product capabilities remain explicit in `opsx/project/capabilities.yaml`;
-- they are not guessed from the donor;
-- only commands requiring an unresolved capability fail closed with `TARGET_CAPABILITY_UNRESOLVED`;
-- generic OPSX capabilities and isolated control-plane runtime remain available.
+1. Determine whether projectization is actually required; if not, report `NOT_REQUIRED` and the appropriate normal workflow. STOP without writing.
+2. If required, inspect inputs and separate FACT, OWNER_INPUT, INFERENCE, PROPOSAL and DECISION.
+3. Identify the smallest missing capabilities/adapters and any real conflicts with installed OPSX contracts.
+4. Propose a bounded plan and affected OPSX/process files. Do not write, initialize a change, install dependencies or change product code.
+5. Where authority or project semantics cannot be resolved, stop with `OWNER_DECISION_REQUIRED` or `FAIL_CLOSED`; never report `COMPLETE` by inference.
 
-`COMPLETE` means the OPSX realization is coherent for the current project state. It does not mean the product architecture is fully decided.
+## Explicit GO mode
 
-Do not infer Python, Node, Poetry, npm, framework, product roots, test roots, database, queue, or deployment platform from the OPSX donor.
+Only an explicit `/opsx-projectize:GO` for the named projectization scope authorizes changes **to OPSX/projectization/process realization surfaces**. It does not authorize source/test changes, OpenSpec product artifacts, infrastructure deployment, product migrations, Git commit/push/PR, or changes to Owner Contract.
 
-## READ_ONLY mode
+Set `COMPLETE` / enable normal mutation-capable commands only when the **applicable verified projectization contract** requires it and machine-checkable checks show:
+- inputs and revision identity are current;
+- selected adapter/capability configuration matches the actual consumer project;
+- command contracts contain no foreign product assumptions;
+- installed command activation identity matches the bytes and target paths;
+- authority/write boundaries and projectization acceptance checks pass.
 
-1. Read canonical `.project/**`.
-2. Inspect actual repo facts.
-3. Separate FACT, OWNER_INPUT, INFERENCE, PROPOSAL and DECISION.
-4. Determine unresolved fields that block a safe local OPSX realization.
-5. Propose the smallest adapter/capability set required for the current product slice.
-6. No writes.
-
-## GO mode
-
-Exact `/opsx-projectize:GO` authorizes writes only to OPSX/process realization surfaces.
-It must not write product implementation merely to make OPSX fit.
-
-Set COMPLETE only when required project facts are resolved, selected adapters match actual facts, installed command contracts contain no foreign project assumptions, activation identity matches command bytes, and projectization checks pass.
+A `project-generic` adapter may leave product capabilities explicitly unresolved while generic operations remain usable, but unresolved product-specific operations must fail closed with `TARGET_CAPABILITY_UNRESOLVED`. Do not extrapolate this into blanket authority to execute all commands.
 
 ## Hard invariants
 
-- Never copy donor project realization as project truth.
-- Never silently convert an unresolved project field into a decision.
-- Never enable normal mutation commands before projectization COMPLETE.
-- Never overwrite `.project/**` as a projectization side effect.
-- Never install dependencies, commit, push, PR, or deploy.
-- Preserve existing product files if/when they appear.
-
-## Current Owner constraints
-
-- Initial product: Telegram + Avito + MAX lead funnel -> AmoCRM.
-- P0: accepted leads must not be silently lost.
-- P0: fast initial delivery.
-- P1: high throughput / low unnecessary latency.
-- Redis is an intended technology candidate, not automatically the durable source of truth.
-- AI and Temporal are future/deferred capabilities, not initial requirements.
+- Project-specific truth is owned by the **consumer**, never transplanted from the donor.
+- No silent conversion of an unresolved field into an Owner decision.
+- No writes in READ_ONLY; no product code, tests, product change artifacts, secrets, deployments or unrelated settings in GO.
+- No claim of `COMPLETE` without identity/freshness-bound machine evidence.
+- No dependency installation, commit, push, pull request, merge or deploy.
+- Do not trigger this command as a prerequisite for ordinary `/opsx-new` / `/opsx-continue` work without an actual projectization gate.
 
 ## Output contract
 
-STATUS: PROJECTIZATION_PLAN | COMPLETE | FAIL_CLOSED | OWNER_DECISION_REQUIRED
-PROJECT_PROFILE:
+STATUS: NOT_REQUIRED | PROJECTIZATION_PLAN | COMPLETE | FAIL_CLOSED | OWNER_DECISION_REQUIRED
+PROJECT_ROOT:
+PROJECTIZATION_GATE_EVIDENCE:
 FACTS:
 UNRESOLVED:
 PROPOSED_ADAPTERS:
 PROPOSED_CAPABILITIES:
 FOREIGN_ASSUMPTIONS_FOUND:
+CHANGES_MADE:
+EVIDENCE:
 OWNER_DECISION_REQUIRED:
 NEXT_ACTION:

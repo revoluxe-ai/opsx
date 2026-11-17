@@ -20,7 +20,15 @@ async def execute_request(request: dict) -> int | tuple[int, dict]:
 
     settings = instance_layer(json.loads(settings_text))
     adapter_module = (settings.get("adapter") or {}).get("module")
+    from .provider_settings import PROVIDER_MODULES, validate_provider
+    pinned_provider = request.get("execution_provider")
+    if pinned_provider is not None:
+        # Execution-pinned provider takes priority over changes made to project.json
+        # after the run started; no silent provider/model authority swap.
+        adapter_module = PROVIDER_MODULES[validate_provider(str(pinned_provider))]
     if adapter_module:
+        if adapter_module not in PROVIDER_MODULES.values():
+            raise ValueError("EXECUTION_PROVIDER_UNSUPPORTED")
         os.environ["OPSX_ADAPTER_MODULE"] = str(adapter_module)
     capability_file = project / "opsx/project/capabilities.yaml"
     if capability_file.is_file():

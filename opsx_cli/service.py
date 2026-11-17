@@ -16,6 +16,7 @@ import uuid
 import webbrowser
 
 from .context import OpsxError, Project, safe_change_id
+from .provider_settings import load_provider, validate_provider, PROVIDER_MODULES
 from .storage import read_json, write_bytes, write_json
 from .supervisor import WorkflowSupervisor
 from .supervisor_meta import format_opsx_pytest_arg, resolve_opsx_pytest_target
@@ -297,10 +298,14 @@ class RunService:
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         echo: bool = False,
         run_id: str | None = None,
+        provider: str | None = None,
     ) -> dict:
         change = safe_change_id(change)
         run_id = run_id or uuid.uuid4().hex
         if mode == "workflow":
+            provider = validate_provider(
+                provider if provider is not None else (await asyncio.to_thread(load_provider, self.project))["provider"]
+            )
             timeouts = SupervisorTimeouts.from_minutes(
                 workflow_timeout_minutes=workflow_timeout_minutes,
                 supervisor_timeout_minutes=supervisor_timeout_minutes,
@@ -312,6 +317,7 @@ class RunService:
                 change_id=change,
                 run_id=run_id,
                 echo=echo,
+                provider=provider,
             )
             return await supervisor.run()
         timeout_seconds = float(timeout if timeout is not None else 2700)

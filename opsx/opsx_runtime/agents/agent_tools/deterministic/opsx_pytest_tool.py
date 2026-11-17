@@ -55,9 +55,17 @@ def build_run_opsx_pytest_custom_tool(*, core_root: Path) -> Mapping[str, AgentC
         elif normalized.startswith("tests/"):
             rel = normalized
         else:
-            return {"ok": False, "error": "node_id must start with opsx/opsx_runtime/ or tests/"}
-        runtime_root = resolve_opsx_runtime_root(core_root)
-        target = runtime_root / rel
+            return {"ok": False, "error": "PYTEST_NODE_OUTSIDE_SCOPE"}
+        runtime_root = resolve_opsx_runtime_root(core_root).resolve()
+        # No traversal, absolute path, or single-node escape from the registered tool.
+        source, separator, suffix = rel.partition("::")
+        if (not source.endswith(".py") or ".." in Path(source).parts
+                or Path(source).is_absolute() or "\x00" in source):
+            return {"ok": False, "error": "PYTEST_NODE_OUTSIDE_SCOPE"}
+        source_path = (runtime_root / source).resolve()
+        if not source_path.is_relative_to(runtime_root) or not source_path.is_file():
+            return {"ok": False, "error": "PYTEST_NODE_OUTSIDE_SCOPE"}
+        target = str(source_path) + (separator + suffix if separator else "")
         from agents.agent_tools.deterministic.pytest_tool import (
             product_pytest_subprocess_env,
             resolve_product_pytest_python,
@@ -83,6 +91,7 @@ def build_run_opsx_pytest_custom_tool(*, core_root: Path) -> Mapping[str, AgentC
             text=True,
             check=False,
             env=env,
+            timeout=120,
         )
         return {
             "ok": completed.returncode == 0,

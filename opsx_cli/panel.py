@@ -5,6 +5,7 @@ import argparse
 import asyncio
 from datetime import datetime, timezone
 import json
+from typing import Literal
 from pathlib import Path
 import re
 import secrets
@@ -18,6 +19,7 @@ import uvicorn
 
 from .changes_catalog import list_openspec_changes
 from .context import OpsxError, Project
+from .provider_settings import load_provider, save_provider
 from .display_time import format_run_record_times
 from .service import RunService
 from .site_status import site_shows_error
@@ -36,6 +38,12 @@ class WorkflowRequest(BaseModel):
         if self.supervisor_timeout_minutes < self.workflow_timeout_minutes:
             raise ValueError("supervisor_timeout_minutes must be >= workflow_timeout_minutes")
         return self
+
+
+class ProviderRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: Literal["cursor", "codex"]
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 def create_app(project: Project, state: dict, *, shutdown=None) -> FastAPI:
@@ -204,6 +212,19 @@ def create_app(project: Project, state: dict, *, shutdown=None) -> FastAPI:
     async def settings():
         return await read_json(project.settings, {})
 
+    @app.get("/api/provider")
+    async def provider_info():
+        return await asyncio.to_thread(load_provider, project)
+
+    @app.post("/api/provider")
+    async def provider_change(body: ProviderRequest):
+        if tasks:
+            raise HTTPException(409, "Cannot change provider while an execution is active")
+        return await asyncio.to_thread(
+            save_provider, project, provider=body.provider,
+            expected_revision=body.expected_revision,
+        )
+
     @app.get("/api/runs")
     async def history():
         records = await service.history()
@@ -266,6 +287,7 @@ def create_app(project: Project, state: dict, *, shutdown=None) -> FastAPI:
     async def workflow(body: WorkflowRequest):
         if tasks:
             raise HTTPException(409, "A workflow is already active.")
+        chosen_provider = (await asyncio.to_thread(load_provider, project))["provider"]
         run_id = uuid.uuid4().hex
         directory = project.runs / "controller" / run_id
         await asyncio.to_thread(directory.mkdir, parents=True, exist_ok=True)
@@ -274,6 +296,7 @@ def create_app(project: Project, state: dict, *, shutdown=None) -> FastAPI:
             "status": "RUNNING",
             "mode": "workflow",
             "change_id": body.change_id,
+            "provider": chosen_provider,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "log": str(directory / "output.log"),
         })
@@ -286,6 +309,7 @@ def create_app(project: Project, state: dict, *, shutdown=None) -> FastAPI:
                 supervisor_timeout_minutes=body.supervisor_timeout_minutes,
                 max_attempts=body.max_attempts,
                 run_id=run_id,
+                provider=chosen_provider,
             )
         )
         tasks.add(task)

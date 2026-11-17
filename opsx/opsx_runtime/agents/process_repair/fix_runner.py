@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -88,24 +89,38 @@ async def run_process_supervisor_fix(request: dict[str, Any]) -> dict[str, Any]:
     (attempt_dir / "fix_prompt.txt").write_text(user_prompt, encoding="utf-8")
     try:
         from agents.adapters.bridge_runtime_port import open_bridge_runtime
-        from agents.adapters.hop_model_selection import supervisor_fix_model_selection
         from workflows.repair.repair_adapter_port import RepairAdapter
 
         timeout = int(float(request.get("timeout_seconds") or 600))
-        async with open_bridge_runtime(project_root, store_backend="sqlite", store_scope="supervisor_fix") as bridge:
-            adapter = RepairAdapter(bridge_runtime=bridge, timeout_seconds=timeout)
-            result = await adapter.run(
-                {
-                    "repository_path": str(project_root),
-                    "change_id": str(request.get("change_id") or "supervisor"),
-                    "model": supervisor_fix_model_selection(),
-                    "stream_label": "supervisor",
-                },
-                prompt=user_prompt,
-                tools=list(SUPERVISOR_FIX_TOOLS),
-                payload_model=ProcessFixReport,
-                agent_key="PROCESS_SUPERVISOR_FIX",
-            )
+        selected_provider = os.environ.get("OPSX_ADAPTER_MODULE", "").strip()
+        use_codex = selected_provider == "agents.adapters.codex_app_server"
+        # Switching model/tool tier is only possible via explicit selected provider.
+        if use_codex:
+            from opsx_cli.codex_provider import DEFAULT_CODEX_MODEL
+            selected_model = {"id": DEFAULT_CODEX_MODEL}
+        else:
+            from agents.adapters.hop_model_selection import supervisor_fix_model_selection
+            selected_model = supervisor_fix_model_selection()
+        state = {
+            "repository_path": str(project_root),
+            "change_id": str(request.get("change_id") or "supervisor"),
+            "model": selected_model,
+            "stream_label": "supervisor",
+        }
+        call = {
+            "prompt": user_prompt,
+            "tools": list(SUPERVISOR_FIX_TOOLS),
+            "payload_model": ProcessFixReport,
+            "agent_key": "PROCESS_SUPERVISOR_FIX",
+        }
+        if use_codex:
+            # Codex app-server uses host-side guarded tools, not Cursor bridge.
+            adapter = RepairAdapter(timeout_seconds=timeout)
+            result = await adapter.run(state, **call)
+        else:
+            async with open_bridge_runtime(project_root, store_backend="sqlite", store_scope="supervisor_fix") as bridge:
+                adapter = RepairAdapter(bridge_runtime=bridge, timeout_seconds=timeout)
+                result = await adapter.run(state, **call)
         if result.parsed is not None:
             report = result.parsed
             if isinstance(report, ProcessFixReport):

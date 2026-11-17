@@ -34,8 +34,15 @@ def _require_linked_worktree(workspace: Path) -> None:
     lines = proc.stdout.splitlines()
     if len(lines) != 3:
         raise CodexProviderError("CODEX_WRITE_WORKTREE_UNVERIFIED")
-    git_dir, common, top = (Path(line).resolve() for line in lines)
-    if top != workspace or git_dir == common or not git_dir.is_dir() or not common.is_dir():
+    git_dir = Path(lines[0]).resolve()
+    # Git returns --git-common-dir relative to its -C worktree on Linux.
+    common_value = Path(lines[1])
+    common = (common_value if common_value.is_absolute()
+              else workspace / common_value).resolve()
+    top = Path(lines[2]).resolve()
+    if (top != workspace or git_dir == common
+            or not (workspace / ".git").is_file()
+            or not git_dir.is_dir() or not common.is_dir()):
         raise CodexProviderError("CODEX_WRITE_REQUIRES_LINKED_WORKTREE")
 
 
@@ -64,6 +71,17 @@ class CodexAppServerAdapter(ABCAdapter):
             raise CodexProviderError("CODEX_RESUME_NOT_PROVEN")
         if len(set(tools)) != len(tools) or set(tools) - SUPPORTED_TOOLS:
             raise CodexProviderError("CODEX_TOOL_AUTHORITY_UNPROVEN")
+        registered_tools: dict[str, Any] = {}
+        if "run_pytest" in tools:
+            if agent_key != "PROCESS_SUPERVISOR_FIX":
+                raise CodexProviderError("CODEX_PYTEST_AGENT_AUTHORITY_MISMATCH")
+            from agents.agent_tools.deterministic.registry import build_deterministic_custom_tools
+            specs = build_deterministic_custom_tools(agent_key, repo_root=Path(
+                str(state.get("repository_path") or state.get("workspace") or "")
+            ).resolve())
+            if set(specs) != {"run_opsx_pytest"}:
+                raise CodexProviderError("CODEX_PYTEST_TOOL_UNBOUND")
+            registered_tools["run_pytest"] = specs["run_opsx_pytest"]
         writable = "edit" in tools
         # Never silently substitute a hard-selected Cursor model/tool tier.
         declared = state.get("model")
@@ -90,6 +108,7 @@ class CodexAppServerAdapter(ABCAdapter):
                     gateway = CodexToolGateway(
                         workspace, tools, guard=tool_call_guard,
                         read_scope=read_scope, journal=journal,
+                        registered_tools=registered_tools,
                     )
                 except CodexToolDenied as exc:
                     raise CodexProviderError(exc.code) from exc
@@ -101,6 +120,7 @@ class CodexAppServerAdapter(ABCAdapter):
             try:
                 gateway = CodexToolGateway(
                     workspace, tools, guard=tool_call_guard, read_scope=read_scope,
+                    registered_tools=registered_tools,
                 )
             except CodexToolDenied as exc:
                 raise CodexProviderError(exc.code) from exc

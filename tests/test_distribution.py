@@ -290,6 +290,15 @@ class PanelWorkflowRouteTests(unittest.IsolatedAsyncioTestCase):
         project_root = tempfile.mkdtemp()
         project = Project.at(project_root)
         await asyncio.to_thread(project.runs.mkdir, parents=True, exist_ok=True)
+        # Provider selection is part of the installed project contract.
+        project.settings.parent.mkdir(parents=True, exist_ok=True)
+        project.settings.write_text(json.dumps({
+            "schema_version": 2,
+            "instance": {
+                "provider": "cursor",
+                "adapter": {"module": "agents.adapters.cursor_sdk", "extras": ["cursor"]},
+            },
+        }), encoding="utf-8")
         state = {
             "instance_id": "test",
             "token": "panel-test-token",
@@ -325,6 +334,7 @@ class PanelWorkflowRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(body.get("run_id"))
             self.assertEqual(len(body["run_id"]), 32)
             self.assertEqual(captured.get("mode"), "workflow")
+            self.assertEqual(captured.get("provider"), "cursor")
             self.assertEqual(captured.get("change"), "visual")
             self.assertEqual(captured.get("run_id"), body["run_id"])
 

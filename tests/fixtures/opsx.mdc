@@ -1,3 +1,8 @@
+---
+description: "Synthetic OPSX context for isolated distribution tests"
+alwaysApply: false
+---
+
 # PROJECT TARGET PROFILE — REQUIRED
 
 Product-specific execution authority resolves only through:

@@ -113,7 +113,11 @@ def validate_red_operative(
         red_arg = rel.as_posix()
     except ValueError:
         red_arg = str(red_json)
-    cmd = ["node", str(script), red_arg]
+    hook = Path(__file__).resolve().with_name("receipt_cli_identity_hook.mjs")
+    if hook.is_file():
+        cmd = ["node", "--import", hook.as_uri(), str(script), red_arg]
+    else:
+        cmd = ["node", str(script), red_arg]
     proc = run_subprocess_utf8(cmd, cwd=repo_root, timeout=timeout_sec)
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""

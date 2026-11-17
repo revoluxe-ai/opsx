@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -185,6 +186,45 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.version_two()
         with self.assertRaisesRegex(OpsxError, "Local edits"):
             await upgrade(project, ref="v2", no_runtime=True)
+        self.assertEqual(git(project.core, "rev-parse", "HEAD"), before["core_sha"])
+
+    async def test_revision_bound_local_command_override_survives_upgrade(self):
+        await self.installed()
+        project = self.projects[0]
+        relative = ".cursor/commands/opsx-one.md"
+        command = project.root / relative
+        command.write_text(command.read_text(encoding="utf-8") + "\n# Owner-local behavior\n", encoding="utf-8")
+        original = command.read_bytes()
+        settings = json.loads(project.settings.read_text(encoding="utf-8"))
+        settings["managed_command_overrides"] = {
+            "project_id": settings["project_id"],
+            "files": {relative: hashlib.sha256(original).hexdigest()},
+        }
+        project.settings.write_text(json.dumps(settings), encoding="utf-8")
+        self.version_two()
+        result = await upgrade(project, ref="v2", no_runtime=True)
+        self.assertEqual(result["status"], "UPGRADED")
+        self.assertEqual(command.read_bytes(), original)
+        self.assertNotIn(relative, result["managed_files"])
+        self.assertTrue((project.root / ".cursor/commands/opsx-two.md").exists())
+
+    async def test_local_command_override_rejects_stale_revision(self):
+        before = await self.installed()
+        project = self.projects[0]
+        relative = ".cursor/commands/opsx-one.md"
+        command = project.root / relative
+        original = command.read_bytes()
+        settings = json.loads(project.settings.read_text(encoding="utf-8"))
+        settings["managed_command_overrides"] = {
+            "project_id": settings["project_id"],
+            "files": {relative: hashlib.sha256(original).hexdigest()},
+        }
+        project.settings.write_text(json.dumps(settings), encoding="utf-8")
+        command.write_bytes(original + b"tampered\n")
+        self.version_two()
+        with self.assertRaises(OpsxError) as caught:
+            await upgrade(project, ref="v2", no_runtime=True)
+        self.assertEqual(caught.exception.code, "COMMAND_OVERRIDE_REVISION_STALE")
         self.assertEqual(git(project.core, "rev-parse", "HEAD"), before["core_sha"])
 
     async def test_upgrade_refuses_active_worker_without_web_panel(self):

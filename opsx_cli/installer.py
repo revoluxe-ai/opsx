@@ -46,6 +46,40 @@ def _render(text: str) -> str:
 
 
 OPSX_CONTEXT_RELATIVE = "opsx/opsx.mdc"
+_OVERRIDE_PATH_RE = re.compile(r"^\.cursor/commands/opsx-[a-z0-9-]+\.md$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _owner_command_overrides(project: Project) -> set[str]:
+    """Identity- and revision-bound preservation of explicitly local commands."""
+    if not project.settings.is_file():
+        return set()
+    try:
+        document = json.loads(project.settings.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise OpsxError("COMMAND_OVERRIDE_CONFIG_INVALID", "Project settings are unreadable") from exc
+    layer = document.get("instance") if document.get("schema_version", 1) >= 2 else document
+    if not isinstance(layer, dict):
+        raise OpsxError("COMMAND_OVERRIDE_CONFIG_INVALID", "Invalid instance layer")
+    override = layer.get("managed_command_overrides")
+    if override is None:
+        return set()
+    if (not isinstance(override, dict)
+            or not isinstance(document.get("project_id"), str)
+            or not document["project_id"]
+            or override.get("project_id") != document["project_id"]
+            or not isinstance(override.get("files"), dict)):
+        raise OpsxError("COMMAND_OVERRIDE_AUTHORITY_INVALID", "Override must bind project_id and files")
+    for relative, digest in override["files"].items():
+        if (not isinstance(relative, str) or not _OVERRIDE_PATH_RE.fullmatch(relative)
+                or not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest)):
+            raise OpsxError("COMMAND_OVERRIDE_PATH_INVALID", str(relative))
+        path = project.root / relative
+        if not path.resolve().is_relative_to(project.root):
+            raise OpsxError("COMMAND_OVERRIDE_PATH_ESCAPE", relative)
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise OpsxError("COMMAND_OVERRIDE_REVISION_STALE", relative)
+    return set(override["files"])
 
 
 def _opsx_context_source(core: Path) -> Path:
@@ -129,9 +163,10 @@ async def _check_git_project(project: Project) -> None:
 async def _assert_managed_clean(project: Project, previous: dict) -> None:
     def check() -> None:
         conflicts = []
+        overrides = _owner_command_overrides(project)
         for relative, digest in previous.get("managed_files", {}).items():
-            if relative == OPSX_CONTEXT_RELATIVE:
-                continue  # Legacy managed metadata is migrated to Owner-owned context.
+            if relative == OPSX_CONTEXT_RELATIVE or relative in overrides:
+                continue  # Explicitly owned project surfaces; content is checked separately.
             path = project.root / relative
             if not path.resolve().is_relative_to(project.root):
                 raise OpsxError("MANAGED_PATH_OUTSIDE_PROJECT", f"Managed path escapes project: {relative}")
@@ -144,6 +179,11 @@ async def _assert_managed_clean(project: Project, previous: dict) -> None:
 
 async def _sync_assets(project: Project, previous: dict) -> dict[str, str]:
     payloads = await asyncio.to_thread(_managed_payloads, project.core)
+    overrides = await asyncio.to_thread(_owner_command_overrides, project)
+    unknown = overrides - set(payloads)
+    if unknown:
+        raise OpsxError("COMMAND_OVERRIDE_CORE_MISSING", ", ".join(sorted(unknown)))
+    payloads = {name: body for name, body in payloads.items() if name not in overrides}
     def preflight() -> dict[str, bytes | None]:
         before: dict[str, bytes | None] = {}
         for relative, content in payloads.items():
@@ -156,7 +196,7 @@ async def _sync_assets(project: Project, previous: dict) -> dict[str, str]:
                 raise OpsxError("FILE_COLLISION", f"Existing unmanaged file: {relative}")
         return before
     before = await asyncio.to_thread(preflight)
-    removed = (set(previous.get("managed_files", {})) - set(payloads)) - {OPSX_CONTEXT_RELATIVE}
+    removed = (set(previous.get("managed_files", {})) - set(payloads)) - {OPSX_CONTEXT_RELATIVE} - overrides
     for relative in removed:
         path = project.root / relative
         before[relative] = await asyncio.to_thread(path.read_bytes) if await asyncio.to_thread(path.is_file) else None
@@ -409,8 +449,9 @@ async def _uninstall_locked(project: Project) -> dict:
     await _assert_managed_clean(project, metadata)
     if (await git(project.core, "status", "--porcelain")).stdout:
         raise OpsxError("CORE_DIRTY", "Preserve core edits before uninstalling.")
+    overrides = await asyncio.to_thread(_owner_command_overrides, project)
     for relative in metadata.get("managed_files", {}):
-        if relative == OPSX_CONTEXT_RELATIVE:
+        if relative == OPSX_CONTEXT_RELATIVE or relative in overrides:
             continue  # A pre-existing Owner-owned input must survive uninstall.
         await asyncio.to_thread((project.root / relative).unlink, missing_ok=True)
     await git(project.root, "submodule", "deinit", "--", CORE_RELATIVE)
@@ -435,6 +476,12 @@ async def doctor(project: Project) -> dict:
             add("cursor_integration", not missing, ", ".join(missing))
         except OpsxError as exc:
             add("cursor_integration", False, str(exc))
+        try:
+            overrides = await asyncio.to_thread(_owner_command_overrides, project)
+            add("local_command_override_integrity", True,
+                "preserved project-local, not proven core-equivalent: " + ", ".join(sorted(overrides)))
+        except OpsxError as exc:
+            add("local_command_override_integrity", False, str(exc))
         interpreter = metadata.get("runtime_python")
         pinned = (
             await asyncio.to_thread(

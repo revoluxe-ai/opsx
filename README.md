@@ -78,6 +78,13 @@ instance identified by that project's random token and identity.
 
 Generated Cursor files have one canonical source in the core. Local edits are
 reported as conflicts during upgrade. Unrelated Cursor files are preserved.
+When a project explicitly retains a customized OPSX command, its
+`opsx/project/project.json` instance may declare
+`managed_command_overrides: {"project_id": "<exact project id>",
+"files": {".cursor/commands/opsx-example.md": "<raw sha256>"}}`.
+Each override is identity- and byte-revision-bound, preserved during upgrade and
+uninstall, and excluded from the core-managed digest map. An override is not
+proof of behavioral equivalence to the core command. Stale files fail closed.
 Receipts and change artifacts are not reset by installation or upgrade.
 
 Global CLI installation and the project's pinned core are separate. Workflow

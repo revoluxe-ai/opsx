@@ -137,6 +137,113 @@ def test_binding_test_path_without_command_yields_pytest_node(tmp_path: Path) ->
     assert run.returncode == 0, run.stdout + run.stderr
 
 
+_BEHAVIOR_CHECKER = r"""
+const cliUrl = process.argv[2];
+const repo = process.argv[3];
+const rel = process.argv[4];
+const { buildRedTestCommands } = await import(cliUrl);
+
+const derived = buildRedTestCommands(
+  {
+    red_oracle_bindings: [
+      { test_path: rel, authoritative_expected: "rejected_no_db_write" },
+    ],
+    red_test_targets_or_seams: [rel],
+  },
+  repo,
+);
+const cmds = derived.test_commands || [];
+if (cmds.length !== 1 || !cmds[0].endsWith("::test_scenario_red_behavior_value")) {
+  console.log(JSON.stringify({ case: "behavior_only", cmds }));
+  process.exit(1);
+}
+if (cmds.some((cmd) => cmd.includes("::test_scenario_red") && !cmd.endsWith("::test_scenario_red_behavior_value"))) {
+  console.log(JSON.stringify({ case: "precondition_included", cmds }));
+  process.exit(1);
+}
+
+const mixedBinding = buildRedTestCommands(
+  {
+    red_oracle_bindings: [
+      {
+        test_path: rel,
+        authoritative_expected: "rejected_no_db_write",
+        observed_intended_failures: [{ command: "test_scenario_red_behavior_value" }],
+        already_holding_not_failures: [{ command: "test_scenario_red" }],
+      },
+    ],
+  },
+  repo,
+);
+const mixed = mixedBinding.test_commands || [];
+if (mixed.length !== 1 || !mixed[0].endsWith("::test_scenario_red_behavior_value")) {
+  console.log(JSON.stringify({ case: "holding_with_failure", cmds: mixed }));
+  process.exit(2);
+}
+
+const holdingOnly = buildRedTestCommands(
+  {
+    red_oracle_bindings: [
+      {
+        test_path: rel,
+        authoritative_expected: "rejected_no_db_write",
+        already_holding_not_failures: ["test_scenario_red"],
+      },
+    ],
+  },
+  repo,
+);
+const holds = holdingOnly.test_commands || [];
+if (holds.length !== 1 || !holds[0].endsWith("::test_scenario_red")) {
+  console.log(JSON.stringify({ case: "holding_only", cmds: holds }));
+  process.exit(3);
+}
+"""
+
+
+@pytest.mark.unit
+def test_behavior_obligation_excludes_precondition_from_red_commands(tmp_path: Path) -> None:
+    """A module marker names the RED obligation; unmarked siblings stay out.
+
+    Deriving every ``def test_*`` freezes a passing precondition next to a
+    failing behavior node and receipt materialize stops at RED_MIXED_SUITE.
+    Already-holding nodes are RED commands only when the binding lists no
+    intended failure. An explicit intended failure still wins over the marker.
+    """
+    assert _HOOK.is_file()
+    assert _CLI.is_file()
+    rel = "tests/scenarios/example_change/test_sample.py"
+    module = tmp_path / rel
+    module.parent.mkdir(parents=True)
+    _ = module.write_text(
+        "import pytest\n"
+        "\n"
+        "@pytest.mark.unit\n"
+        "def test_scenario_red() -> None:\n"
+        "    assert True\n"
+        "\n"
+        "@pytest.mark.opsx_red_behavior_value\n"
+        "async def test_scenario_red_behavior_value() -> None:\n"
+        '    """@opsx-red-behavior-value: seam rejected_no_db_write."""\n'
+        "    assert False\n",
+        encoding="utf-8",
+    )
+    checker = tmp_path / "check_behavior_commands.mjs"
+    _ = checker.write_text(_BEHAVIOR_CHECKER, encoding="utf-8")
+    env = os.environ.copy()
+    env["OPSX_RECEIPT_CLI_INSPECT"] = "1"
+    run = subprocess.run(
+        ["node", "--import", _HOOK.as_uri(), str(checker), _CLI.as_uri(), str(tmp_path), rel],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=45,
+        env=env,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
 @pytest.mark.unit
 def test_receipt_cli_entrypoint_patches_red_commands(tmp_path: Path) -> None:
     """``node --import hook cli.mjs`` must patch the process entry, not only import().

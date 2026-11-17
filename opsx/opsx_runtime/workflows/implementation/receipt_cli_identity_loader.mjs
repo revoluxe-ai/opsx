@@ -9,8 +9,13 @@
  * RED commands are derived from planned `test_<name>` nodes when present.
  * Bindings that only name `test_path` (plus `red_test_targets_or_seams`) still
  * get one `poetry run pytest -q <path>::<node>` per top-level `def test_*`
- * in that module. Explicit node commands are left as-is. No nodes and no
- * planned command stays `RED_COMMANDS_EMPTY` and names the missing field.
+ * in that module. When any node carries `opsx_red_behavior_value` or
+ * `@opsx-red-behavior-value`, only those obligation nodes are RED commands;
+ * unmarked siblings are preconditions and must not share the suite
+ * (`RED_MIXED_SUITE`). `already_holding_not_failures` is omitted when the
+ * same binding lists an intended failure. Explicit node commands are left
+ * as-is. No nodes and no planned command stays `RED_COMMANDS_EMPTY` and
+ * names the missing field.
  *
  * Prior RED executions are reusable only when the declared
  * `test_content_identity` is still an accepted digest of the frozen files
@@ -102,7 +107,33 @@ function moduleUrlMatches(url, needle) {
 }
 
 const RED_MODULE_HELPER = String.raw`
-function pytestNodeNamesInTestFile(repo, testPath) {
+function redNodeIsBehaviorObligation(text, defIndex) {
+  const before = String(text || "").slice(0, defIndex).split(/\n/);
+  const decor = [];
+  for (let i = before.length - 1; i >= 0; i -= 1) {
+    const line = before[i];
+    if (line.trim() === "" || /^\s*@/.test(line) || /^\s*#/.test(line)) {
+      decor.push(line);
+      continue;
+    }
+    break;
+  }
+  let after = String(text || "").slice(defIndex);
+  const nextFn = after.slice(1).search(/\r?\n(?:async\s+)?def test_[A-Za-z0-9_]+\s*\(/);
+  if (nextFn >= 0) {
+    after = after.slice(0, nextFn + 1);
+  }
+  const doc =
+    after.match(/:\r?\n\s*"""([\s\S]*?)"""/) ||
+    after.match(/:\r?\n\s*'''([\s\S]*?)'''/);
+  const window = decor.join("\n") + "\n" + (doc ? doc[1] : "");
+  return (
+    /opsx_red_behavior_value/.test(window) ||
+    /@opsx-red-behavior-value:/.test(window)
+  );
+}
+
+function pytestNodeRecordsInTestFile(repo, testPath) {
   if (!repo || !testPath) return [];
   const abs = resourcePath(repo, testPath);
   if (!abs || !existsSync(abs)) return [];
@@ -112,14 +143,21 @@ function pytestNodeNamesInTestFile(repo, testPath) {
   } catch {
     return [];
   }
-  const nodes = [];
   const re = /^(?:async\s+)?def (test_[A-Za-z0-9_]+)\s*\(/gm;
+  const found = [];
   let match = re.exec(text);
   while (match) {
-    nodes.push(match[1]);
+    found.push({ name: match[1], index: match.index });
     match = re.exec(text);
   }
-  return nodes;
+  return found.map((row) => ({
+    name: row.name,
+    behavior: redNodeIsBehaviorObligation(text, row.index),
+  }));
+}
+
+function pytestNodeNamesInTestFile(repo, testPath) {
+  return pytestNodeRecordsInTestFile(repo, testPath).map((row) => row.name);
 }
 
 function redCommandCoversTestPath(command, testPath) {
@@ -144,8 +182,11 @@ function fillRedCommandsFromTestModules(repo, testPaths, commands) {
     }
     if (covered) continue;
     if (!String(testPath).endsWith(".py")) continue;
-    for (const node of pytestNodeNamesInTestFile(repo, testPath)) {
-      commands.push("poetry run pytest -q " + testPath + "::" + node);
+    const records = pytestNodeRecordsInTestFile(repo, testPath);
+    const behavior = records.filter((row) => row.behavior);
+    const chosen = behavior.length ? behavior : records;
+    for (const node of chosen) {
+      commands.push("poetry run pytest -q " + testPath + "::" + node.name);
     }
   }
 }
@@ -368,6 +409,68 @@ export function patchShapeRedClassification(source) {
   return crlf ? patched.replace(/\n/g, "\r\n") : patched;
 }
 
+const FINALIZE_GATE_IMPORT =
+  'import { runFrozenRedCommand } from "./opsx-apply-green.mjs";';
+const FINALIZE_GATE_IMPORT_WITH_CLASSIFIER = `import { runFrozenRedCommand } from "./opsx-apply-green.mjs";
+import { classifyCommandExecutionFromOutputWithGate } from "./opsx-apply-red-transition-gate.mjs";`;
+
+const FINALIZE_CLASSIFY_OLD = `    const cls = classifyCommandExecutionFromOutput({
+      exitCode: exec.final_exit_code,
+      output: String(exec.attempts?.[0]?.relevant_output || ""),
+    });`;
+
+const FINALIZE_CLASSIFY_NEW = String.raw`    const command = String(exec.command || "");
+    const testPathMatch = command.match(/(\S+test_\S+\.py)(?:::|\s|$)/);
+    const testPath = testPathMatch ? testPathMatch[1] : "";
+    let testSource = "";
+    if (testPath) {
+      try {
+        const abs = resourcePath(repo, testPath);
+        if (abs) testSource = readFileSync(abs, "utf8");
+      } catch {
+        testSource = "";
+      }
+    }
+    const cls = classifyCommandExecutionFromOutputWithGate({
+      exitCode: exec.final_exit_code,
+      output: String(exec.attempts?.[0]?.relevant_output || ""),
+      testSource,
+    });`;
+
+/**
+ * finalizeRedReceiptFromExecutions must use the same gate classifier as shape
+ * and the transition gate. The legacy classifier downgrades app/ scaffold
+ * RuntimeError to SCAFFOLD_DEFECT and materialize aborts with that code.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchFinalizeRedExecutionGate(source) {
+  if (typeof source !== "string") return source;
+  if (!source.includes(FINALIZE_CLASSIFY_OLD)) return source;
+  if (source.includes("finalizeRedReceiptFromExecutions") &&
+      source.includes("classifyCommandExecutionFromOutputWithGate") &&
+      source.includes("function finalizeRedReceiptFromExecutions")) {
+    const finalizeIdx = source.indexOf("function finalizeRedReceiptFromExecutions");
+    const gateIdx = source.indexOf("classifyCommandExecutionFromOutputWithGate", finalizeIdx);
+    if (gateIdx !== -1 && gateIdx < source.indexOf("function writeScaffoldDeterministic", finalizeIdx)) {
+      return source;
+    }
+  }
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
+  if (!text.includes(FINALIZE_CLASSIFY_OLD)) return source;
+  let patched = text;
+  if (!text.includes('from "./opsx-apply-red-transition-gate.mjs"')) {
+    patched = patched.replace(
+      FINALIZE_GATE_IMPORT,
+      FINALIZE_GATE_IMPORT_WITH_CLASSIFIER,
+    );
+  }
+  patched = patched.replace(FINALIZE_CLASSIFY_OLD, FINALIZE_CLASSIFY_NEW);
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
+}
+
 /**
  * @param {string} source
  * @returns {string}
@@ -492,12 +595,45 @@ export function patchDeclaredFrozenIdentity(source) {
  * @param {string} source
  * @returns {string}
  */
+const HOLDING_RED_LOOP = `    for (const hold of binding.already_holding_not_failures || []) {
+      const node = String(
+        typeof hold === "object" && hold ? hold.command : hold,
+      ).trim();
+      if (!isPlannedPytestNode(node)) {
+        continue;
+      }
+      commands.push(\`poetry run pytest -q \${testPath}::\${node}\`);
+    }`;
+
+const HOLDING_RED_LOOP_WHEN_NO_FAILURE = `    const bindingHasIntendedFailure = (binding.observed_intended_failures || []).some(
+      (obs) => isPlannedPytestNode(String(obs?.command || "").trim()),
+    );
+    for (const hold of binding.already_holding_not_failures || []) {
+      if (bindingHasIntendedFailure) {
+        break;
+      }
+      const node = String(
+        typeof hold === "object" && hold ? hold.command : hold,
+      ).trim();
+      if (!isPlannedPytestNode(node)) {
+        continue;
+      }
+      commands.push(\`poetry run pytest -q \${testPath}::\${node}\`);
+    }`;
+
 function patchRedCommandDerivation(source) {
-  if (source.includes("function fillRedCommandsFromTestModules")) {
-    return source;
-  }
+  if (typeof source !== "string") return source;
   const crlf = source.includes("\r\n");
-  const text = source.replace(/\r\n/g, "\n");
+  let text = source.replace(/\r\n/g, "\n");
+  if (
+    !text.includes("bindingHasIntendedFailure") &&
+    text.includes(HOLDING_RED_LOOP)
+  ) {
+    text = text.replace(HOLDING_RED_LOOP, HOLDING_RED_LOOP_WHEN_NO_FAILURE);
+  }
+  if (text.includes("function fillRedCommandsFromTestModules")) {
+    return crlf ? text.replace(/\n/g, "\r\n") : text;
+  }
   const fn = "function buildRedTestCommands(slice) {";
   const ret =
     "  return { test_paths: [...testPaths], test_commands: [...new Set(commands)] };";
@@ -516,7 +652,7 @@ function patchRedCommandDerivation(source) {
     !text.includes(mainRead) ||
     !text.includes("\nmain();")
   ) {
-    return source;
+    return crlf ? text.replace(/\n/g, "\r\n") : text;
   }
   let patched = text
     .replace(fn, `${RED_MODULE_HELPER}function buildRedTestCommands(slice, repo) {`)
@@ -664,6 +800,7 @@ export async function load(url, context, nextLoad) {
     patched = patchPriorRedFrozenIdentityReuse(patched);
     patched = patchShapeCliSpawn(patched);
     patched = patchRedValidatorSpawn(patched);
+    patched = patchFinalizeRedExecutionGate(patched);
     patched = patchRedValidateErrors(patched);
     patched = patchImplementFrozenIdentity(patched);
   }

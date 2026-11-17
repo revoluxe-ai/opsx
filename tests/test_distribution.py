@@ -86,7 +86,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
     def _seed_opsx_context(self, project: Project) -> None:
         dest_dir = project.root / "opsx"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SOURCE.parent / "opsx.mdc", dest_dir / "opsx.mdc")
+        shutil.copyfile(SOURCE / "tests/fixtures/opsx.mdc", dest_dir / "opsx.mdc")
 
     async def installed(self, project=None):
         project = project or self.projects[0]

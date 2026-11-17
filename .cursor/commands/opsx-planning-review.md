@@ -17,6 +17,8 @@ This target-local gate has higher precedence than later command steps.
 
 # /opsx-planning-review
 
+**Mandatory prerequisite:** independently reviewed `architecture.md` with current `ARCHITECTURE-REVIEW.json` precedes `design.md`. Run `python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change <name>` before review. A missing/stale gate is `ARCHITECTURE_STAGE_BLOCKED` and first bad artifact = `architecture.md`, even if OpenSpec reports complete. Never accept self-attested READY.
+
 Независимый **READ_ONLY** verifier готового planning package Change перед
 `/opsx-apply`.
 

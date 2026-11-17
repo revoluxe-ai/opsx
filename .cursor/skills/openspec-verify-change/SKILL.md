@@ -10,6 +10,11 @@ metadata:
   generatedBy: "1.16.0"
 ---
 
+## Mandatory OPSX Architecture boundary
+
+When this skill is selected for an OPSX-managed Change, follow `.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md` (Core source). This requirement overrides stock OpenSpec artifact progression, not unrelated projects without OPSX. Before implementation or archive verification claim, require current independent Architecture acceptance; missing/stale evidence blocks OPSX GO. The consumer-side read-only gate is `python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change <change>`. The reviewer attestation is a separate action, not a side effect of skill use.
+
+
 Verify that an implementation matches the change artifacts (specs, tasks, design).
 
 **Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.

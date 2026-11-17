@@ -168,11 +168,12 @@ The artifact types and their purpose depend on the schema. Use the `instruction`
 
 Common artifact patterns:
 
-**spec-driven schema** (proposal → specs → design → tasks):
+**spec-driven schema** (proposal → specs → mandatory architecture.md + review → design → tasks):
 - **proposal.md**: Ask user about the change if not clear. Fill in Why, What Changes, Capabilities, Impact.
   - The Capabilities section is critical - each capability listed will need a spec file.
 - **specs/<capability>/spec.md**: Create one spec per capability listed in the proposal's Capabilities section (use the capability name, not the change name).
-- **design.md**: Document technical decisions, architecture, and implementation
+- **architecture.md** (OPSX-mandatory outside stock OpenSpec schema): document and independently review structural decisions before design.
+- **design.md**: Document technical implementation of reviewed architecture and
   approach **only after** `DESIGN_READINESS` passes (see **Design Generation**
   below). Resolve SoT/ownership/write-path/recovery before READY; never defer
   those to apply. When the Change has temporal/stateful behavior, also emit a
@@ -189,13 +190,40 @@ Common artifact patterns:
 
 For other schemas, follow the `instruction` field from the CLI output.
 
+### Mandatory Architecture stage (BEFORE technical design)
+
+**Authority:** `.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md`.
+After reviewed Owner Contract and upstream proposal/specs/decisions are in place,
+but BEFORE writing `design.md`, create `<changeRoot>/architecture.md` using
+that contract's seven sections. For unchanged architecture, document and justify
+the existing boundaries rather than skipping this stage. Do NOT use the design
+artifact to make architectural choices.
+
+The stock OpenSpec schema may report `design` as `ready` or optional; this
+does not satisfy OPSX Architecture. An independent `/opsx-architecture-review`
+must accept the architecture and write a revision/inputs-bound review receipt.
+The architecture author must not issue their own review.
+
+Before `design.md`, `tasks.md` or reporting planning READY, run:
+
+```bash
+python opsx/core/tools/openspec/architecture_stage_gate.py check --change "<name>" --root .
+```
+
+If BLOCKED, stop before Technical Design. `/opsx-continue` may create the
+architecture draft within its planning authority, then must PAUSE for the
+separate review. Never self-issue receipt, use a stale one, or silently advance.
+If upstream changes after review, repeat architecture review before design.
+
 ### Design Generation (design.md — shared with `/opsx-ff`)
 
 **Authority:** `.cursor/pipeline/contracts/DESIGN_GENERATION.md` (SoT).
 `/opsx-continue` and `/opsx-ff` MUST produce semantically equivalent designs
 from the same upstream context (advancement mode differs only).
 
-When the ready artifact is `design` (or you are about to write `design.md`):
+When the ready artifact is `design` (or you are about to write `design.md`):\n\n**Revision binding:** include `ARCHITECTURE_SHA256: <accepted architecture.md SHA-256>` in `design.md` before `DESIGN_STATUS: READY`. Revalidate after an Architecture change, even if rereviewed.
+
+0. Require current accepted `architecture.md` + `ARCHITECTURE-REVIEW.json` through the mandatory gate above. Stop otherwise.
 
 1. Read dependency artifacts (owner-contract, proposal, specs, decisions) and
    relevant repository evidence / architecture decisions (context-first).
@@ -218,10 +246,11 @@ DESIGN_STATUS: READY
 ```
 
 4. Technical architecture choices (PG vs Redis, existing vs new state,
-   owner component, write authority, recovery) MUST be resolved in design
-   from evidence + decisions, with WHAT/WHO/WHERE/WHO-writes/HOW-recover +
-   rationale. Owner confirm is not required when WHAT/SCOPE/ACCEPTANCE are
-   unchanged. Forbidden: «выбрать в apply», «PG/Redis — apply-time»,
+   owner component, write authority, recovery) MUST already be resolved in the
+   independently accepted `architecture.md`. In design, detail their implementation
+   and reference the approved WHAT/WHO/WHERE/WHO-writes/HOW-recover decisions.
+   A new choice or contradiction is `ARCHITECTURE_CONFLICT`: stop and return
+   to Architecture for rereview, not silent design-time rearchitecture.\n   Forbidden: «выбрать в apply», «PG/Redis — apply-time»,
    READY + deferred architecture.
 
 5. If a required technical choice cannot be safely resolved:

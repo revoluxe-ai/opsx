@@ -16,6 +16,8 @@ duplicate full pillar logic in three places.
 
 ## Purpose
 
+**Mandatory Architecture stage:** Owner Contract → proposal/specs/decisions → reviewed `architecture.md` → technical `design.md` → tasks. See `ARCHITECTURE_STAGE_V1.md`. An independent review of Architecture is required for **every** Change (including unchanged architecture). Check `architecture_stage_gate.py check` and its current SHA-256 review receipt; missing/stale/reviewer-self-attestation blocks planning review and apply irrespective of stock OpenSpec artifact status. First bad artifact is `architecture.md` or its review evidence before design. No risk-mode shortcuts.
+
 Answer exactly one question:
 
 ```text
@@ -419,7 +421,7 @@ Distinguish **symptom** from **first bad artifact**.
 Walk upstream → downstream:
 
 ```text
-Owner Contract → decisions → design → spec → scenario plan → tasks
+Owner Contract → proposal/specs → architecture.md + independent review → technical design → scenario plan → tasks
 ```
 
 `FIRST_BAD_ARTIFACT` = earliest artifact where meaning/modality diverges
@@ -450,6 +452,7 @@ MODE: READ_ONLY
 STATUS: PASS | REPAIR_REQUIRED | NEEDS_OWNER | BLOCKED
 
 SEMANTIC_CONTINUITY: PASS|FAIL
+ARCHITECTURE_STAGE: PASS|FAIL (mandatory, current independent review)
 NORMATIVE_PRESERVATION: PASS|FAIL
 DESIGN_READINESS: PASS|FAIL
 AUTHORITY_AND_SOT: PASS|FAIL|NOT_APPLICABLE

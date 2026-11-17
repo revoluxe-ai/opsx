@@ -26,6 +26,14 @@ def _load(name: str, path: Path) -> ModuleType:
 
 
 GATE = _load("planning_gate", AE_DIR / "planning_gate.py")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dependency_evidence_layer(monkeypatch):
+    # Independently test dependency S3 trust; mandatory Architecture Gate has
+    # separate integration tests, not a production bypass.
+    monkeypatch.setattr(GATE, "_require_architecture_stage", lambda *_: None)
+
 ORACLE = _load("architecture_evidence", AE_DIR / "architecture_evidence.py")
 CAPTURE = _load("doc_capture", AE_DIR / "doc_capture.py")
 TRUST = _load("trust_provenance", AE_DIR / "trust_provenance.py")
@@ -38,10 +46,10 @@ ISOLATED_TEST_TRUST = "test_fixture"
 
 def _mirror(repo: Path) -> None:
     for rel in (
-        "opsx/registry/architecture_evidence.schema.json",
+        "opsx_tools/registry/architecture_evidence.schema.json",
     ):
         src = REPO_ROOT / rel
-        dest = repo / rel
+        dest = repo / "opsx/registry/architecture_evidence.schema.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(src.read_bytes())
     for sub in ("authoritative", "trusted-executions", "trusted-review"):

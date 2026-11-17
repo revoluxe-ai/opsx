@@ -96,7 +96,7 @@ class WorkerRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             core = Path(tmp)
             venv = core / "venv"
-            py = venv / "Scripts" / "python.exe"
+            py = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             py.parent.mkdir(parents=True, exist_ok=True)
             py.write_text("", encoding="utf-8")
 

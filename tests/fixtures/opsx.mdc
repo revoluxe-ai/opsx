@@ -1,0 +1,35 @@
+---
+description: "Synthetic OPSX context for isolated distribution tests"
+alwaysApply: false
+---
+
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves only through:
+
+  opsx/project/capabilities.yaml
+
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
+
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
+
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
+## 20. Project context
+Test fixture only. No product authority.
+
+## 21. Ownership
+Project intent and write scope must be explicitly authorized.
+
+## 26. Verification
+A PASS requires revision-bound evidence.
+
+## 27.0.2 Supervisor
+Retries fail closed without convergence.
+
+## 28. Recovery
+Unresolved failures require a recovery contract.

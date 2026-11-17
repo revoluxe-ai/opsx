@@ -79,7 +79,7 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
         await stage_proven_command_replacements(self.project, plan)
         opsx_dir = self.project.root / "opsx"
         opsx_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SOURCE.parent / "opsx.mdc", opsx_dir / "opsx.mdc")
+        shutil.copyfile(SOURCE / "tests/fixtures/opsx.mdc", opsx_dir / "opsx.mdc")
         result = await install(self.project, repository=str(self.origin), no_runtime=True)
         self.assertEqual(result["status"], "INSTALLED")
         self.assertFalse((self.project.root / ".cursor/commands/opsx-one.md").read_text(encoding="utf-8").startswith("donor"))

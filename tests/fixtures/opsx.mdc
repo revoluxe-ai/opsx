@@ -1,0 +1,23 @@
+---
+description: "Synthetic @opsx project context for standalone distribution tests"
+alwaysApply: false
+---
+
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves through the target capability profile.
+
+## 20. Project context
+Test fixture only. No product authority.
+
+## 21. Ownership
+Project intent and write scope must be explicitly authorized.
+
+## 26. Verification
+A PASS requires revision-bound evidence.
+
+## 27.0.2 Supervisor
+Retries fail closed without convergence.
+
+## 28. Recovery
+Unresolved failures require a recovery contract.

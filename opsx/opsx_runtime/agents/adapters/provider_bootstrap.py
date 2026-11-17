@@ -24,8 +24,15 @@ def ensure_adapter_factories_registered() -> None:
         if not factories_registered():
             raise RuntimeError(f"configured adapter {selected!r} did not register factories")
         return
+    # Preserve the existing Cursor SDK default when additional provider
+    # packages are installed. Codex is opt-in via OPSX_ADAPTER_MODULE.
+    importlib.import_module("agents.adapters.cursor_sdk")
+    if factories_registered():
+        return
     adapters_root = Path(__file__).resolve().parent
     for entry in sorted(adapters_root.iterdir()):
+        if entry.name == "codex_app_server":
+            continue  # never silently select the new provider as a fallback
         if not entry.is_dir() or entry.name.startswith("_"):
             continue
         init_py = entry / "__init__.py"

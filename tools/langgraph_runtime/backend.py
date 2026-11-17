@@ -6,6 +6,8 @@ No Temporal Activity APIs or Temporal Server are used.
 from __future__ import annotations
 
 from opsx.project_context import resource_path
+from opsx_cli.codex_provider import DEFAULT_CODEX_MODEL
+from opsx_cli.codex_app_server import CodexGuardedLangGraphAdapter
 
 import sys
 import uuid
@@ -18,7 +20,7 @@ if str(_TEMPORAL_DIR) not in sys.path:
     sys.path.insert(0, str(_TEMPORAL_DIR))
 
 from model_config import AgentModelConfig  # noqa: E402
-from sdk_cursor_adapter import make_sdk_cursor_adapter  # noqa: E402
+# Cursor SDK is imported lazily only if the Cursor provider is selected.
 from verification_engine import (  # noqa: E402
     build_execute_prompt,
     build_next_check_prompt,
@@ -32,14 +34,22 @@ from verification_plan_bridge import resolve_verification_plan_context  # noqa: 
 class RealVerificationBackend:
     """Runs authentic OPSX /opsx-next-check and the ledger-assigned executor."""
 
-    def __init__(self, repo: str | Path, *, run_id: str, model_config: str | None = None):
+    def __init__(self, repo: str | Path, *, run_id: str, model_config: str | None = None,
+                 provider: str = "cursor", codex_model: str = DEFAULT_CODEX_MODEL):
+        if provider not in {"cursor", "codex"}:
+            raise ValueError("Unknown execution provider")
         self.repo = Path(repo).resolve()
         self.run_id = run_id
         self.models = AgentModelConfig.load(model_config)
+        self.provider = provider
+        self.codex_model = codex_model
 
     def _adapter(self):
+        if self.provider == "codex":
+            return CodexGuardedLangGraphAdapter(self.repo, model=self.codex_model)
         # Each hop MUST have a fresh Cursor session; ledger is authority.
         key = f"langgraph:{self.run_id}:{uuid.uuid4().hex[:12]}"
+        from sdk_cursor_adapter import make_sdk_cursor_adapter
         adapter = make_sdk_cursor_adapter(
             self.repo, workflow_key=key, model_config=self.models
         )
@@ -89,6 +99,20 @@ class RealVerificationBackend:
                 "started": False,
                 "raw_output": "STATUS: VERIFICATION_CHECK_BLOCKED\nREASON: ASSIGNMENT_INCOMPLETE\n"
                 + "MISSING_FIELDS: " + ",".join(missing),
+            }
+        if self.provider == "codex":
+            # Codex CLI cannot enforce existing per-tool write authority. No dispatch.
+            return {
+                "completed": False,
+                "uncertain": False,
+                "durable_result_found": False,
+                "durable_result_status": None,
+                "expected_result_path": payload.get("expected_result_path"),
+                "required_check_id": payload.get("required_check_id"),
+                "executor": payload.get("executor"),
+                "started": False,
+                "raw_output": "STATUS: VERIFICATION_CHECK_BLOCKED\n"
+                "REASON: CODEX_WRITE_AUTHORITY_UNPROVEN\n",
             }
         # Existing bounded verification preflight, WITHOUT Temporal requirement.
         if payload.get("bounded_verify_target"):

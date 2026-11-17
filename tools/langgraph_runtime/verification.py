@@ -40,6 +40,8 @@ class VerificationBackend(Protocol):
 
 
 class VerificationState(TypedDict, total=False):
+    provider: str
+    model_id: str
     run_id: str
     change: str
     status: str

@@ -13,9 +13,17 @@
  * `@opsx-red-behavior-value`, only those obligation nodes are RED commands;
  * unmarked siblings are preconditions and must not share the suite
  * (`RED_MIXED_SUITE`). `already_holding_not_failures` is omitted when the
- * same binding lists an intended failure. Explicit node commands are left
- * as-is. No nodes and no planned command stays `RED_COMMANDS_EMPTY` and
- * names the missing field.
+ * same binding lists an intended failure. A node marked `requires_postgres`
+ * is a live-PG scenario: pytest aborts the session (exit 4,
+ * destructive_local) before any assertion, and that abort is not RED
+ * evidence. Those nodes are omitted. When the bound module then has no
+ * runnable test, a hermetic sibling in the same directory that cites the
+ * binding `authoritative_expected` and carries the behavior marker becomes
+ * the command. `pytest.fail` / `Failed:` is an intended assertion, not
+ * `UNRELATED_FAILURE`. A session harness abort without an assertion is
+ * `TEST_SETUP_FAILURE`. Explicit non-PG node commands are left as-is. No
+ * nodes and no planned command stays `RED_COMMANDS_EMPTY` and names the
+ * missing field.
  *
  * Prior RED executions are reusable only when the declared
  * `test_content_identity` is still an accepted digest of the frozen files
@@ -133,6 +141,24 @@ function redNodeIsBehaviorObligation(text, defIndex) {
   );
 }
 
+function redDecoratorWindow(text, defIndex) {
+  const before = String(text || "").slice(0, defIndex).split(/\n/);
+  const decor = [];
+  for (let i = before.length - 1; i >= 0; i -= 1) {
+    const line = before[i];
+    if (line.trim() === "" || /^\s*@/.test(line) || /^\s*#/.test(line)) {
+      decor.push(line);
+      continue;
+    }
+    break;
+  }
+  return decor.join("\n");
+}
+
+function redNodeRequiresLivePostgres(text, defIndex) {
+  return /requires_postgres/.test(redDecoratorWindow(text, defIndex));
+}
+
 function pytestNodeRecordsInTestFile(repo, testPath) {
   if (!repo || !testPath) return [];
   const abs = resourcePath(repo, testPath);
@@ -153,7 +179,54 @@ function pytestNodeRecordsInTestFile(repo, testPath) {
   return found.map((row) => ({
     name: row.name,
     behavior: redNodeIsBehaviorObligation(text, row.index),
+    livePg: redNodeRequiresLivePostgres(text, row.index),
   }));
+}
+
+function authoritativeExpectedForPath(bindings, testPath) {
+  const want = String(testPath || "").replace(/\\/g, "/");
+  const binding = (Array.isArray(bindings) ? bindings : []).find(
+    (row) => String(row?.test_path || "").replace(/\\/g, "/") === want,
+  );
+  const expected = binding?.authoritative_expected;
+  if (expected === undefined || expected === null) return "";
+  return String(expected).trim();
+}
+
+function siblingHermeticBehaviorNodes(repo, testPath, expected) {
+  const token = String(expected || "").trim();
+  const rel = String(testPath || "").replace(/\\/g, "/");
+  const slash = rel.lastIndexOf("/");
+  if (!token || slash < 0) return [];
+  const dir = rel.slice(0, slash);
+  const abs = resolve(repo, dir);
+  if (!abs || !existsSync(abs)) return [];
+  let names = [];
+  try {
+    names = readdirSync(abs);
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const name of names) {
+    if (!name.startsWith("test_") || !name.endsWith(".py")) continue;
+    const path = dir + "/" + name;
+    if (path === rel) continue;
+    const fileAbs = resourcePath(repo, path);
+    if (!fileAbs || !existsSync(fileAbs)) continue;
+    let text = "";
+    try {
+      text = readFileSync(fileAbs, "utf8");
+    } catch {
+      continue;
+    }
+    if (!text.includes(token)) continue;
+    for (const row of pytestNodeRecordsInTestFile(repo, path)) {
+      if (row.livePg || !row.behavior) continue;
+      out.push({ path, name: row.name });
+    }
+  }
+  return out;
 }
 
 function pytestNodeNamesInTestFile(repo, testPath) {
@@ -171,8 +244,58 @@ function redCommandCoversTestPath(command, testPath) {
   );
 }
 
+function redTestPathList(testPaths) {
+  if (Array.isArray(testPaths)) return testPaths;
+  if (testPaths && typeof testPaths[Symbol.iterator] === "function") {
+    return [...testPaths];
+  }
+  return [];
+}
+
+function supplementalRedSeamPaths(repo, testPaths) {
+  const list = redTestPathList(testPaths);
+  const extras = [];
+  const seen = new Set(
+    list.map((p) => String(p || "").replace(/\\\\/g, "/")),
+  );
+  for (const testPath of list) {
+    const norm = String(testPath || "").replace(/\\\\/g, "/");
+    const slash = norm.lastIndexOf("/");
+    const dir = slash >= 0 ? norm.slice(0, slash) : "";
+    if (!dir) continue;
+    const absDir = resourcePath(repo, dir);
+    if (!absDir) continue;
+    let names = [];
+    try {
+      names = readdirSync(absDir).filter((n) => /_red\.py$/i.test(String(n)));
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const rel = dir + "/" + name;
+      if (!seen.has(rel)) {
+        seen.add(rel);
+        extras.push(rel);
+      }
+    }
+  }
+  return extras;
+}
+
 function fillRedCommandsFromTestModules(repo, testPaths, commands) {
-  for (const testPath of testPaths) {
+  for (let i = commands.length - 1; i >= 0; i -= 1) {
+    const match = String(commands[i]).match(/(\S+\.py)::(test_[A-Za-z0-9_]+)/);
+    if (!match) continue;
+    const row = pytestNodeRecordsInTestFile(repo, match[1]).find(
+      (item) => item.name === match[2],
+    );
+    if (row && row.livePg) commands.splice(i, 1);
+  }
+  const paths = [
+    ...redTestPathList(testPaths),
+    ...supplementalRedSeamPaths(repo, testPaths),
+  ];
+  for (const testPath of paths) {
     let covered = false;
     for (const cmd of commands) {
       if (redCommandCoversTestPath(cmd, testPath)) {
@@ -183,8 +306,14 @@ function fillRedCommandsFromTestModules(repo, testPaths, commands) {
     if (covered) continue;
     if (!String(testPath).endsWith(".py")) continue;
     const records = pytestNodeRecordsInTestFile(repo, testPath);
-    const behavior = records.filter((row) => row.behavior);
-    const chosen = behavior.length ? behavior : records;
+    const runnable = records.filter((row) => !row.livePg);
+    const behavior = runnable.filter((row) => row.behavior);
+    if (records.length && !runnable.length) {
+      continue;
+    }
+    const chosen = behavior.length ? behavior : runnable;
+    if (!chosen.length) continue;
+    if (testPaths && typeof testPaths.add === "function") testPaths.add(testPath);
     for (const node of chosen) {
       commands.push("poetry run pytest -q " + testPath + "::" + node.name);
     }
@@ -216,9 +345,19 @@ const FILL_RED_ORACLE_FN = `export function fillRedOracleFromDesignBinding(oracl
   if (status !== "RED_PROVEN") return oracle;
   const bindings = Array.isArray(slice?.red_oracle_bindings) ? slice.red_oracle_bindings : [];
   const want = String(testPath || "").replace(/\\\\/g, "/");
-  const binding = bindings.find(
+  let binding = bindings.find(
     (row) => String(row?.test_path || "").replace(/\\\\/g, "/") === want,
   );
+  if (!binding && oracle.source) {
+    const dir = want.slice(0, want.lastIndexOf("/") + 1);
+    const source = String(oracle.source);
+    const hits = bindings.filter((row) => {
+      const path = String(row?.test_path || "").replace(/\\\\/g, "/");
+      const token = String(row?.authoritative_expected ?? "").trim();
+      return token && dir && path.startsWith(dir) && path !== want && source.includes(token);
+    });
+    if (hits.length === 1) binding = hits[0];
+  }
   const expected = binding?.authoritative_expected;
   if (expected === undefined || expected === null || String(expected).trim() === "") {
     return oracle;
@@ -413,6 +552,12 @@ const FINALIZE_GATE_IMPORT =
   'import { runFrozenRedCommand } from "./opsx-apply-green.mjs";';
 const FINALIZE_GATE_IMPORT_WITH_CLASSIFIER = `import { runFrozenRedCommand } from "./opsx-apply-green.mjs";
 import { classifyCommandExecutionFromOutputWithGate } from "./opsx-apply-red-transition-gate.mjs";`;
+const FINALIZE_EXISTING_GATE_IMPORT =
+  'import { readRedOracleMarkers } from "./opsx-apply-red-transition-gate.mjs";';
+const FINALIZE_EXISTING_GATE_IMPORT_WITH_CLASSIFIER = `import {
+  classifyCommandExecutionFromOutputWithGate,
+  readRedOracleMarkers,
+} from "./opsx-apply-red-transition-gate.mjs";`;
 
 const FINALIZE_CLASSIFY_OLD = `    const cls = classifyCommandExecutionFromOutput({
       exitCode: exec.final_exit_code,
@@ -448,24 +593,34 @@ const FINALIZE_CLASSIFY_NEW = String.raw`    const command = String(exec.command
 export function patchFinalizeRedExecutionGate(source) {
   if (typeof source !== "string") return source;
   if (!source.includes(FINALIZE_CLASSIFY_OLD)) return source;
-  if (source.includes("finalizeRedReceiptFromExecutions") &&
-      source.includes("classifyCommandExecutionFromOutputWithGate") &&
-      source.includes("function finalizeRedReceiptFromExecutions")) {
-    const finalizeIdx = source.indexOf("function finalizeRedReceiptFromExecutions");
-    const gateIdx = source.indexOf("classifyCommandExecutionFromOutputWithGate", finalizeIdx);
-    if (gateIdx !== -1 && gateIdx < source.indexOf("function writeScaffoldDeterministic", finalizeIdx)) {
-      return source;
-    }
+  const finalizeIdx = source.indexOf("function finalizeRedReceiptFromExecutions");
+  const finalizeEnd = source.indexOf("function writeScaffoldDeterministic", finalizeIdx);
+  const finalizeBody =
+    finalizeIdx >= 0 && finalizeEnd > finalizeIdx
+      ? source.slice(finalizeIdx, finalizeEnd)
+      : "";
+  if (
+    finalizeBody.includes("classifyCommandExecutionFromOutputWithGate") &&
+    finalizeBody.includes("testPathMatch")
+  ) {
+    return source;
   }
   const crlf = source.includes("\r\n");
   const text = source.replace(/\r\n/g, "\n");
   if (!text.includes(FINALIZE_CLASSIFY_OLD)) return source;
   let patched = text;
-  if (!text.includes('from "./opsx-apply-red-transition-gate.mjs"')) {
-    patched = patched.replace(
-      FINALIZE_GATE_IMPORT,
-      FINALIZE_GATE_IMPORT_WITH_CLASSIFIER,
-    );
+  if (!text.includes("classifyCommandExecutionFromOutputWithGate")) {
+    if (text.includes(FINALIZE_EXISTING_GATE_IMPORT)) {
+      patched = patched.replace(
+        FINALIZE_EXISTING_GATE_IMPORT,
+        FINALIZE_EXISTING_GATE_IMPORT_WITH_CLASSIFIER,
+      );
+    } else if (text.includes(FINALIZE_GATE_IMPORT)) {
+      patched = patched.replace(
+        FINALIZE_GATE_IMPORT,
+        FINALIZE_GATE_IMPORT_WITH_CLASSIFIER,
+      );
+    }
   }
   patched = patched.replace(FINALIZE_CLASSIFY_OLD, FINALIZE_CLASSIFY_NEW);
   return crlf ? patched.replace(/\n/g, "\r\n") : patched;
@@ -658,7 +813,7 @@ function patchRedCommandDerivation(source) {
     .replace(fn, `${RED_MODULE_HELPER}function buildRedTestCommands(slice, repo) {`)
     .replace(
       ret,
-      `  fillRedCommandsFromTestModules(repo, testPaths, commands);\n${ret}`,
+      `  fillRedCommandsFromTestModules(repo, testPaths, commands, bindings);\n${ret}`,
     );
   if (text.includes(callPlain)) {
     patched = patched.replace(callPlain, callRepo);
@@ -760,6 +915,77 @@ export function patchPriorRedFrozenIdentityReuse(source) {
   return crlf ? patched.replace(/\n/g, "\r\n") : patched;
 }
 
+const RED_ASSERTION_OLD = `  const assertion =
+    /AssertionError/.test(text) ||
+    /\\bFAILED\\b[\\s\\S]*(?:assert|AssertionError|E\\s+assert)/m.test(text);
+  const seamReached =`;
+
+const RED_ASSERTION_NEW = `  const sessionHarness =
+    Number(exitCode) === 4 ||
+    Number(exitCode) === 5 ||
+    /Live PG\\/CH fixtures require|ERROR: not found|usage: pytest/i.test(text);
+  const assertion =
+    /AssertionError/.test(text) ||
+    /\\bFailed:/.test(text) ||
+    /\\bFAILED\\b[\\s\\S]*(?:assert|AssertionError|E\\s+assert|Failed:)/m.test(text);
+  if (sessionHarness && !assertion && !text.includes(SCAFFOLD_NOT_IMPLEMENTED)) {
+    return classifyRedFailureAfterScaffold({ fixtureError: true });
+  }
+  const seamReached =`;
+
+/**
+ * pytest.fail (`Failed:`) is an intended RED assertion. A live-PG session
+ * abort (exit 4, destructive_local) is harness setup, not UNRELATED_FAILURE.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchRedFailureClassification(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("sessionHarness")) return source;
+  if (!source.includes(RED_ASSERTION_OLD)) return source;
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
+  if (!text.includes(RED_ASSERTION_OLD)) return source;
+  const patched = text.replace(RED_ASSERTION_OLD, RED_ASSERTION_NEW);
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
+}
+
+const HERMETIC_BINDING_HELPER = `function hermeticBindingForOracle(slice, testPath, oracle) {
+  const bindings = Array.isArray(slice?.red_oracle_bindings) ? slice.red_oracle_bindings : [];
+  const want = String(testPath || "").replace(/\\\\/g, "/");
+  const dir = want.slice(0, want.lastIndexOf("/") + 1);
+  const source = String((oracle && oracle.source) || "");
+  if (!dir || !source) return null;
+  const hits = bindings.filter((row) => {
+    const path = String(row?.test_path || "").replace(/\\\\/g, "/");
+    const token = String(row?.authoritative_expected ?? "").trim();
+    return token && path.startsWith(dir) && path !== want && source.includes(token);
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
+`;
+
+/**
+ * A hermetic `*_red.py` sibling cites the bound authoritative_expected but is
+ * not the design test_path. Oracle still resolves that one same-directory binding.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchHermeticOracleBinding(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("function hermeticBindingForOracle")) return source;
+  const anchor = "export function evaluateAuthoritativeTestOracle({";
+  const lookup = "  const binding = findRedOracleBinding(slice, testPath);";
+  if (!source.includes(anchor) || !source.includes(lookup)) return source;
+  return source
+    .replace(anchor, `${HERMETIC_BINDING_HELPER}${anchor}`)
+    .replace(
+      lookup,
+      "  const binding = findRedOracleBinding(slice, testPath) || hermeticBindingForOracle(slice, testPath, oracle);",
+    );
+}
+
 export async function load(url, context, nextLoad) {
   if (typeof url !== "string") {
     return nextLoad(url, context);
@@ -768,7 +994,16 @@ export async function load(url, context, nextLoad) {
   const isTransitionGate = moduleUrlMatches(url, "opsx-apply-red-transition-gate.mjs");
   const isPipelineIdentity = moduleUrlMatches(url, PIPELINE_IDENTITY);
   const isShapeCli = moduleUrlMatches(url, "opsx-shape-slice-red-receipt-cli.mjs");
-  if (!isReceiptCli && !isTransitionGate && !isPipelineIdentity && !isShapeCli) {
+  const isFrozenCommand = moduleUrlMatches(url, "opsx-apply-red-frozen-command.mjs");
+  const isOracle = moduleUrlMatches(url, "opsx-apply-red-oracle-authority.mjs");
+  if (
+    !isReceiptCli &&
+    !isTransitionGate &&
+    !isPipelineIdentity &&
+    !isShapeCli &&
+    !isFrozenCommand &&
+    !isOracle
+  ) {
     return nextLoad(url, context);
   }
   const loaded = await nextLoad(url, context);
@@ -782,6 +1017,12 @@ export async function load(url, context, nextLoad) {
   }
   if (isShapeCli) {
     patched = patchShapeRedClassification(original);
+  }
+  if (isFrozenCommand) {
+    patched = patchRedFailureClassification(original);
+  }
+  if (isOracle) {
+    patched = patchHermeticOracleBinding(original);
   }
   if (isReceiptCli) {
     if (

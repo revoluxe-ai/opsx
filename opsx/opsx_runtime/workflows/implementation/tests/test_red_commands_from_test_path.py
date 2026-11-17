@@ -303,3 +303,169 @@ def test_receipt_cli_entrypoint_patches_red_commands(tmp_path: Path) -> None:
     # returns the bare code and the next hop cannot fill commands.
     assert body.get("code") == "RED_COMMANDS_EMPTY", run.stdout + run.stderr
     assert "def test_" in str(body.get("message") or ""), run.stdout + run.stderr
+
+
+_LIVE_PG_CHECKER = r"""
+const cliUrl = process.argv[2];
+const gateUrl = process.argv[3];
+const oracleUrl = process.argv[4];
+const repo = process.argv[5];
+const canonical = process.argv[6];
+const seam = process.argv[7];
+const { buildRedTestCommands } = await import(cliUrl);
+const {
+  classifyCommandExecutionFromOutputWithGate,
+  fillRedOracleFromDesignBinding,
+} = await import(gateUrl);
+const { evaluateAuthoritativeTestOracle } = await import(oracleUrl);
+
+const expected = "daily_amount_unchanged_by_search_pause";
+const derived = buildRedTestCommands(
+  {
+    red_oracle_bindings: [
+      { test_path: canonical, authoritative_expected: expected },
+    ],
+    red_test_targets_or_seams: [canonical],
+  },
+  repo,
+);
+const cmds = derived.test_commands || [];
+if (
+  cmds.length !== 1 ||
+  !cmds[0].endsWith("::test_flat_cabinet_daily_unchanged_when_search_paused_red")
+) {
+  console.log(JSON.stringify({ case: "commands", cmds, paths: derived.test_paths }));
+  process.exit(1);
+}
+if (cmds.some((cmd) => cmd.includes("::test_scenario_red"))) {
+  console.log(JSON.stringify({ case: "pg_kept", cmds }));
+  process.exit(1);
+}
+if (!(derived.test_paths || []).includes(seam)) {
+  console.log(JSON.stringify({ case: "paths", paths: derived.test_paths }));
+  process.exit(1);
+}
+
+const failOut = [
+  "E       Failed: RED_PROVEN: daily_amount_unchanged_by_search_pause",
+  "FAILED tests/x.py::test_flat_cabinet_daily_unchanged_when_search_paused_red - Failed:",
+].join("\n");
+const failed = classifyCommandExecutionFromOutputWithGate({
+  output: failOut,
+  exitCode: 1,
+  testSource: "",
+});
+if (failed.classification !== "INTENDED_BEHAVIOR_MISSING" || failed.red_qualified !== true) {
+  console.log(JSON.stringify({ case: "pytest_fail", failed }));
+  process.exit(2);
+}
+const harness = [
+  "collected 1 item",
+  "ERROR: Live PG/CH fixtures require @pytest.mark.destructive_local. Offenders:",
+  "- tests/scenarios/example_change/test_canonical.py::test_scenario_red",
+].join("\n");
+const setup = classifyCommandExecutionFromOutputWithGate({
+  output: harness,
+  exitCode: 4,
+  testSource: "",
+});
+if (setup.classification !== "TEST_SETUP_FAILURE" || setup.code !== "TEST_SETUP_FAILURE") {
+  console.log(JSON.stringify({ case: "harness", setup }));
+  process.exit(3);
+}
+
+const slice = {
+  slice_id: "slice-a",
+  red_oracle_bindings: [
+    { test_path: canonical, authoritative_expected: expected },
+  ],
+};
+const filled = fillRedOracleFromDesignBinding(
+  {
+    ok: true,
+    spec: null,
+    behavior: null,
+    source: "authoritative token " + expected + "\n",
+  },
+  "RED_PROVEN",
+  slice,
+  seam,
+);
+if (filled.spec !== expected || filled.behavior !== "NOT-MET") {
+  console.log(JSON.stringify({ case: "fill", filled }));
+  process.exit(4);
+}
+const verdict = evaluateAuthoritativeTestOracle({
+  artifact: { slice_id: "slice-a" },
+  design: { slices: [slice] },
+  slice,
+  testPath: seam,
+  oracle: filled,
+  status: "RED_PROVEN",
+});
+if (!verdict.ok) {
+  console.log(JSON.stringify({ case: "oracle", verdict }));
+  process.exit(5);
+}
+"""
+
+
+@pytest.mark.unit
+def test_live_pg_binding_uses_hermetic_sibling(tmp_path: Path) -> None:
+    """A requires_postgres scenario is not the frozen RED command.
+
+    The session abort (exit 4, destructive_local) is harness setup. The
+    same-directory ``*_red.py`` behavior node is the command, ``pytest.fail``
+    counts as the intended assertion, and that sibling still resolves the
+    design binding's authoritative_expected.
+    """
+    assert _HOOK.is_file()
+    assert _CLI.is_file()
+    canonical = "tests/scenarios/example_change/test_canonical.py"
+    seam = "tests/scenarios/example_change/test_slice_red.py"
+    canonical_path = tmp_path / canonical
+    canonical_path.parent.mkdir(parents=True)
+    _ = canonical_path.write_text(
+        "import pytest\n"
+        "\n"
+        "@pytest.mark.requires_postgres\n"
+        "@pytest.mark.destructive_local\n"
+        "async def test_scenario_red():\n"
+        "    assert False\n",
+        encoding="utf-8",
+    )
+    _ = (tmp_path / seam).write_text(
+        "import pytest\n"
+        "\n"
+        "@pytest.mark.opsx_red_behavior_value\n"
+        "def test_flat_cabinet_daily_unchanged_when_search_paused_red():\n"
+        '    """daily_amount_unchanged_by_search_pause"""\n'
+        '    pytest.fail("RED_PROVEN")\n',
+        encoding="utf-8",
+    )
+    checker = tmp_path / "check_live_pg_red.mjs"
+    _ = checker.write_text(_LIVE_PG_CHECKER, encoding="utf-8")
+    tools = _CLI.parent
+    env = os.environ.copy()
+    env["OPSX_RECEIPT_CLI_INSPECT"] = "1"
+    run = subprocess.run(
+        [
+            "node",
+            "--import",
+            _HOOK.as_uri(),
+            str(checker),
+            _CLI.as_uri(),
+            (tools / "opsx-apply-red-transition-gate.mjs").as_uri(),
+            (tools / "opsx-apply-red-oracle-authority.mjs").as_uri(),
+            str(tmp_path),
+            canonical,
+            seam,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=45,
+        env=env,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr

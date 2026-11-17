@@ -48,6 +48,11 @@ from agents.abc_agent import (
     log_cursor_bridge_stream_drop,
     log_cursor_bridge_resume_impossible,
 )
+from .failure_classification import (
+    call_with_provider_capacity_retry,
+    is_cursor_provider_at_capacity,
+    wait_with_provider_capacity_retry,
+)
 
 REPO_ROOT = project_root()
 EXECUTOR_ROOT = resource_path(REPO_ROOT, "tools", "cursor_executor")
@@ -356,19 +361,32 @@ class CursorSDKAdapter(ABCAdapter):
                             }
                             send_kw = {"tools": allowed}
                         if not prompt_sent:
-                            if self.bridge_runtime is not None:
-                                await self.bridge_runtime.throttle_sdk_start()
-                            if session_agent_id:
-                                agent = await AsyncAgent.resume(
-                                    session_agent_id, options, client=client
-                                )
-                            else:
-                                agent = await AsyncAgent.create(options, client=client)
+                            async def _open_cursor_agent() -> Any:
+                                if self.bridge_runtime is not None:
+                                    await self.bridge_runtime.throttle_sdk_start()
+                                if session_agent_id:
+                                    return await AsyncAgent.resume(
+                                        session_agent_id, options, client=client
+                                    )
+                                return await AsyncAgent.create(options, client=client)
+
+                            agent = await call_with_provider_capacity_retry(
+                                _open_cursor_agent,
+                            )
+                            if not session_agent_id:
                                 session_agent_id = str(agent.agent_id)
-                            if send_kw is not None:
-                                run = await agent.send(scoped_prompt, send_kw)
-                            else:
-                                run = await agent.send(scoped_prompt)
+
+                            async def _send_cursor_prompt() -> Any:
+                                # Capacity on send means the run was refused, not
+                                # started. Retrying this call does not replay a
+                                # prompt that already has a run id.
+                                if send_kw is not None:
+                                    return await agent.send(scoped_prompt, send_kw)
+                                return await agent.send(scoped_prompt)
+
+                            run = await call_with_provider_capacity_retry(
+                                _send_cursor_prompt,
+                            )
                             active_run_id = str(run.id)
                             prompt_sent = True
                         else:
@@ -394,19 +412,26 @@ class CursorSDKAdapter(ABCAdapter):
                         ).resolve()
                         intra_guard = state.get("intra_run_budget_guard")
                         try:
-                            result = await wait_cursor_run_with_live_log(
-                                run,
-                                timeout_seconds=self.timeout_seconds,
-                                label=stream_label,
-                                stream_log=stream_log,
-                                emit_stderr=True,
-                                payload_model=payload_model,
-                                tool_call_guard=tool_call_guard,
-                                repo_root=repo_root,
-                                intra_run_budget_guard=intra_guard,
-                                useful_progress_stall_seconds=useful_progress_stall_seconds_for_tools(
-                                    allowed,
-                                ),
+                            async def _wait_accepted_run() -> Any:
+                                # Capacity while waiting does not mean the
+                                # prompt was refused. Re-wait this same run.
+                                return await wait_cursor_run_with_live_log(
+                                    run,
+                                    timeout_seconds=self.timeout_seconds,
+                                    label=stream_label,
+                                    stream_log=stream_log,
+                                    emit_stderr=True,
+                                    payload_model=payload_model,
+                                    tool_call_guard=tool_call_guard,
+                                    repo_root=repo_root,
+                                    intra_run_budget_guard=intra_guard,
+                                    useful_progress_stall_seconds=useful_progress_stall_seconds_for_tools(
+                                        allowed,
+                                    ),
+                                )
+
+                            result = await wait_with_provider_capacity_retry(
+                                _wait_accepted_run,
                             )
                         except BudgetExceeded as exc:
                             raise AgentRunContractError(
@@ -451,8 +476,10 @@ class CursorSDKAdapter(ABCAdapter):
                         if self.bridge_runtime is not None and client is not None:
                             await self.bridge_runtime.invalidate(client)
                         if stream_resume_index >= max_stream_resumes:
-                            raise_cursor_infra_failure(exc, state=state)
+                            raise
                         continue
+                    if is_cursor_provider_at_capacity(exc):
+                        raise_cursor_infra_failure(exc, state=state)
                     if prompt_sent and is_cursor_resume_target_gone(exc):
                         log_cursor_bridge_resume_impossible(
                             agent_name=agent_name,

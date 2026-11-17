@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+# Standalone core CI has no editable install of the runtime package.
+_RUNTIME_ROOT = Path(__file__).resolve().parents[1] / "opsx" / "opsx_runtime"
+if str(_RUNTIME_ROOT) not in sys.path:
+    sys.path.insert(0, str(_RUNTIME_ROOT))
 
 from opsx_cli.context import OpsxError, Project
 from opsx_cli.supervisor_classify import FailureOwner, classify_attempt

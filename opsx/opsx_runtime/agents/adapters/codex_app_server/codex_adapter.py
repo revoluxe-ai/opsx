@@ -6,6 +6,7 @@ shell/patch paths are denied, and mutating tools remain disabled until proven.
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel
@@ -17,6 +18,25 @@ from agents.read_scope_turn import build_tool_call_guard
 from opsx_cli.codex_app_server import run_guarded_codex_turn
 from opsx_cli.codex_provider import DEFAULT_CODEX_MODEL, CodexProviderError
 from opsx_cli.codex_tool_gateway import CodexToolDenied, CodexToolGateway, SUPPORTED_TOOLS
+from opsx_cli.codex_write_journal import CodexWriteJournal
+
+
+def _require_linked_worktree(workspace: Path) -> None:
+    """Write authority is confined to a separate Git worktree, never the main checkout."""
+    proc = subprocess.run(
+        ["git", "-C", str(workspace), "rev-parse", "--absolute-git-dir",
+         "--git-common-dir", "--show-toplevel"],
+        capture_output=True, text=True, check=False, timeout=10, encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        raise CodexProviderError("CODEX_WRITE_WORKTREE_UNVERIFIED")
+    lines = proc.stdout.splitlines()
+    if len(lines) != 3:
+        raise CodexProviderError("CODEX_WRITE_WORKTREE_UNVERIFIED")
+    git_dir, common, top = (Path(line).resolve() for line in lines)
+    if top != workspace or git_dir == common or not git_dir.is_dir() or not common.is_dir():
+        raise CodexProviderError("CODEX_WRITE_REQUIRES_LINKED_WORKTREE")
 
 
 class CodexAppServerAdapter(ABCAdapter):
@@ -44,10 +64,7 @@ class CodexAppServerAdapter(ABCAdapter):
             raise CodexProviderError("CODEX_RESUME_NOT_PROVEN")
         if len(set(tools)) != len(tools) or set(tools) - SUPPORTED_TOOLS:
             raise CodexProviderError("CODEX_TOOL_AUTHORITY_UNPROVEN")
-        if "edit" in tools:
-            # Guarded edit exists in host gateway but durable crash recovery and
-            # Windows OS isolation must be independently accepted first.
-            raise CodexProviderError("CODEX_WRITE_ISOLATION_NOT_PROVEN")
+        writable = "edit" in tools
         # Never silently substitute a hard-selected Cursor model/tool tier.
         declared = state.get("model")
         if declared is not None:
@@ -61,19 +78,36 @@ class CodexAppServerAdapter(ABCAdapter):
             read_scope = resolve_effective_read_scope(agent_key, state)
         if tool_call_guard is None:
             tool_call_guard = build_tool_call_guard(read_scope, workspace, agent_key=agent_key)
-        try:
-            gateway = CodexToolGateway(
-                workspace, tools, guard=tool_call_guard, read_scope=read_scope,
+        if writable:
+            from agents.config import read_scope_enforcement_mode
+            if read_scope_enforcement_mode() != "enforce":
+                raise CodexProviderError("CODEX_WRITE_SCOPE_ENFORCEMENT_REQUIRED")
+            _require_linked_worktree(workspace)
+            # No write is attempted until stale pending edits are recovered.
+            with CodexWriteJournal(workspace) as journal:
+                journal.recover(CodexToolGateway._atomic_replace)
+                try:
+                    gateway = CodexToolGateway(
+                        workspace, tools, guard=tool_call_guard,
+                        read_scope=read_scope, journal=journal,
+                    )
+                except CodexToolDenied as exc:
+                    raise CodexProviderError(exc.code) from exc
+                outcome = await run_guarded_codex_turn(
+                    gateway, prompt=prompt, model=model,
+                    reasoning_effort="low", timeout_seconds=self.timeout_seconds,
+                )
+        else:
+            try:
+                gateway = CodexToolGateway(
+                    workspace, tools, guard=tool_call_guard, read_scope=read_scope,
+                )
+            except CodexToolDenied as exc:
+                raise CodexProviderError(exc.code) from exc
+            outcome = await run_guarded_codex_turn(
+                gateway, prompt=prompt, model=model,
+                reasoning_effort="low", timeout_seconds=self.timeout_seconds,
             )
-        except CodexToolDenied as exc:
-            raise CodexProviderError(exc.code) from exc
-        outcome = await run_guarded_codex_turn(
-            gateway,
-            prompt=prompt,
-            model=model,
-            reasoning_effort="low",
-            timeout_seconds=self.timeout_seconds,
-        )
         result = AgentResult(
             text=outcome.text,
             status="COMPLETED",

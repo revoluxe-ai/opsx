@@ -11,6 +11,7 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
+from .codex_write_journal import CodexWriteJournal
 
 
 READ_TOOLS = frozenset({"read", "grep", "glob", "ls"})
@@ -64,6 +65,7 @@ class CodexToolGateway:
         *,
         guard: Callable[..., None] | None,
         read_scope: Any | None,
+        journal: CodexWriteJournal | None = None,
     ) -> None:
         self.root = root.resolve()
         self.allowed = frozenset(tools)
@@ -74,8 +76,14 @@ class CodexToolGateway:
         self.read_scope = read_scope
         self.calls: list[dict[str, str]] = []
         self._edited_before: dict[Path, bytes] = {}
-        if "edit" in self.allowed and not getattr(read_scope, "restrict_write_allow", None):
-            raise CodexToolDenied("CODEX_WRITE_SCOPE_REQUIRED")
+        self.journal = journal
+        if "edit" in self.allowed:
+            if not getattr(read_scope, "restrict_write_allow", None):
+                raise CodexToolDenied("CODEX_WRITE_SCOPE_REQUIRED")
+            if journal is None:
+                raise CodexToolDenied("CODEX_WRITE_JOURNAL_REQUIRED")
+            if journal.root != self.root:
+                raise CodexToolDenied("CODEX_WRITE_JOURNAL_ROOT_MISMATCH")
 
     def _path(self, value: Any) -> Path:
         if not isinstance(value, str) or not value or "\x00" in value:
@@ -107,16 +115,28 @@ class CodexToolGateway:
         return target.read_text(encoding="utf-8", errors="replace")
 
     def rollback_edits(self) -> None:
-        """Restore the original byte content of every authorized edit in this turn."""
-        errors = []
-        for target, original in reversed(list(self._edited_before.items())):
-            try:
-                self._atomic_replace(target, original)
-            except OSError:
-                errors.append(target.name)
+        """Revision-aware rollback; refuse to overwrite external edits."""
+        if self.journal is not None:
+            self.journal.recover(self._atomic_replace)
         self._edited_before.clear()
-        if errors:
-            raise CodexToolDenied("CODEX_EDIT_ROLLBACK_FAILED")
+
+    def confirm_edits(self) -> None:
+        if self.journal is not None:
+            self.journal.confirm()
+        self._edited_before.clear()
+
+    def _check_static_write_scope(self, rel_path: str) -> None:
+        """Enforce explicit allow/deny independently of OPSX warn/off mode."""
+        try:
+            from agents.config import path_matches_pattern
+        except ImportError as exc:
+            raise CodexToolDenied("CODEX_SCOPE_MATCHER_UNAVAILABLE") from exc
+        patterns = tuple(getattr(self.read_scope, "restrict_write_allow", None) or ())
+        deny = tuple(getattr(self.read_scope, "deny", ()) or ())
+        if not patterns or not any(path_matches_pattern(rel_path, pat) for pat in patterns):
+            raise CodexToolDenied("CODEX_WRITE_OUTSIDE_ALLOWLIST")
+        if any(path_matches_pattern(rel_path, pat) for pat in deny):
+            raise CodexToolDenied("CODEX_WRITE_DENIED_PATH")
 
     @staticmethod
     def _atomic_replace(target: Path, content: bytes) -> None:
@@ -141,6 +161,7 @@ class CodexToolGateway:
         target = self._path(args["path"])
         rel = target.relative_to(self.root).as_posix()
         clean_args = {"path": rel, "old_string": old, "new_string": new}
+        self._check_static_write_scope(rel)
         self._authorize("edit", clean_args, {"kind": "tool_call", "status": "running"})
         if not target.is_file() or target.stat().st_size > MAX_READ_BYTES:
             raise CodexToolDenied("CODEX_EDIT_TARGET_INVALID")
@@ -156,11 +177,13 @@ class CodexToolGateway:
             raise CodexToolDenied("CODEX_EDIT_TOO_LARGE")
         if target.read_bytes() != before:
             raise CodexToolDenied("CODEX_EDIT_CONCURRENT_MODIFICATION")
+        assert self.journal is not None
+        self.journal.begin(rel, before, after)  # fsync evidence before any mutation
         self._edited_before.setdefault(target, before)
-        self._atomic_replace(target, after)
         try:
+            self._atomic_replace(target, after)
             self._authorize("edit", clean_args, {"kind": "tool_call", "status": "completed"})
-        except CodexToolDenied:
+        except BaseException:
             self.rollback_edits()
             raise
         self.calls.append({"tool": "edit", "verdict": "ALLOWED"})

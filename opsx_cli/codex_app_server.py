@@ -252,10 +252,11 @@ async def run_guarded_codex_turn(
                     "ephemeral": True,
                     "dynamicTools": dynamic_tool_specs(tuple(gateway.allowed)),
                     "developerInstructions": (
-                        "Use only the provided OPSX host tools for file access. "
-                        "Never invoke shell, native patch, MCP/app tools, or subagents. "
-                        "The Codex execution workspace is intentionally empty. "
-                        "All project reads go through host tools and are gated by OPSX."
+                        "Use only the explicitly provided OPSX host tools for all "
+                        "file reads and writes. Never invoke shell, native patch, "
+                        "MCP/app tools, or subagents. The Codex execution workspace "
+                        "is intentionally empty; all project operations go through "
+                        "host tools guarded by OPSX."
                     ),
                 },
             })
@@ -300,14 +301,14 @@ async def run_guarded_codex_turn(
                     break
             if not host.done or not host.final_text or not host.turn_id:
                 raise CodexProviderError("CODEX_APP_SERVER_INCOMPLETE")
+            gateway.confirm_edits()  # verified convergence before durable success
             return CodexAppServerOutcome(
                 text=host.final_text, thread_id=host.thread_id,
                 turn_id=host.turn_id, usage=host.usage,
                 calls=tuple(host.gateway.calls),
             )
         except BaseException:
-            # Host-side edits are provisional until the entire turn is verified.
-            # This is not a crash-safe WAL; production write hops stay blocked.
+            # Rollback only identity-matched provisional edits; on ambiguity PAUSE.
             gateway.rollback_edits()
             raise
         finally:

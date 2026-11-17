@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import tempfile
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "opsx" / "opsx_runtime"))
 from unittest.mock import patch
 
 from opsx_cli.codex_app_server import CodexServerHost
+from opsx_cli.codex_write_journal import CodexWriteJournal
 from opsx_cli.codex_tool_gateway import (
     CodexToolDenied,
     CodexToolGateway,
@@ -127,6 +131,14 @@ class CodexGatewayTests(unittest.TestCase):
         self.assertEqual(r["error"]["code"], -32601)
         self.assertTrue(host.failed)
 
+    def _edit_journal(self):
+        jdir = tempfile.TemporaryDirectory()
+        self.addCleanup(jdir.cleanup)
+        journal = CodexWriteJournal(self.repo, path=Path(jdir.name) / "recovery.sqlite3")
+        journal.__enter__()
+        self.addCleanup(journal.__exit__, None, None, None)
+        return journal
+
     def test_edit_uses_pre_and_post_opsx_guard(self):
         from types import SimpleNamespace
         events = []
@@ -136,7 +148,8 @@ class CodexGatewayTests(unittest.TestCase):
         gateway = CodexToolGateway(
             self.repo, ["edit"],
             guard=edit_guard,
-            read_scope=SimpleNamespace(restrict_write_allow=("allowed/a.txt",)),
+            read_scope=SimpleNamespace(restrict_write_allow=("allowed/a.txt",), deny=()),
+            journal=self._edit_journal(),
         )
         output = gateway.dispatch("edit", {
             "path": "allowed/a.txt", "old_string": "alpha",
@@ -145,6 +158,7 @@ class CodexGatewayTests(unittest.TestCase):
         self.assertIn("EDIT_APPLIED", output)
         self.assertEqual((self.repo / "allowed/a.txt").read_text(), "gamma\nbeta\n")
         self.assertEqual(events, [("edit", "running"), ("edit", "completed")])
+        gateway.confirm_edits()
 
     def test_edit_post_guard_rejects_and_rolls_back(self):
         from types import SimpleNamespace
@@ -154,7 +168,8 @@ class CodexGatewayTests(unittest.TestCase):
         gateway = CodexToolGateway(
             self.repo, ["edit"],
             guard=reject_post,
-            read_scope=SimpleNamespace(restrict_write_allow=("allowed/a.txt",)),
+            read_scope=SimpleNamespace(restrict_write_allow=("allowed/a.txt",), deny=()),
+            journal=self._edit_journal(),
         )
         with self.assertRaises(CodexToolDenied):
             gateway.dispatch("edit", {

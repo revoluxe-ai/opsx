@@ -1,223 +1,266 @@
 ---
 name: openspec-verify-change
-description: Verify implementation matches OpenSpec change artifacts. Use when the user wants to validate that implementation is complete, correct, and coherent before archiving. Also use when the user says "openspec verify" or "opsx verify".
-allowed-tools: Bash(openspec:*)
+description: Read-only audit of an OpenSpec change before archive using openspec/config.yaml rules and VERIFY_POLICY.md settings.
+allowed-tools: Bash(openspec:*), Bash(python openspec/tools/check_config_contract.py:*), Bash(poetry run pytest:*), Bash(git diff:*), Bash(rg:*)
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: openspec
-  version: "1.0"
-  generatedBy: "1.16.0"
+  version: "1.1"
+  generatedBy: "1.6.0"
 ---
 
-Verify that an implementation matches the change artifacts (specs, tasks, design).
+Verify является read-only audit command после `/opsx-apply` и до `/opsx-archive`.
+Никогда не меняй production code, planning artifacts, tasks, decisions или tests во время verify.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Verify phases:** Read and follow
+`.cursor/pipeline/contracts/VERIFY_PHASES.md` first (`mode=impl` | `mode=archive`,
+default archive). `mode=impl` → PHASE_IMPL only (`✅ IMPL_OK` / `❌ IMPL_GAPS`);
+never archive. `mode=archive` → PHASE_ARCHIVE + full `.cursor/commands/opsx-verify.md`
+audit (`✅ GO` / `❌ NO_GO`). Not the same as `/opsx-test … verify`.
+After either phase, when the next step is a local `/opsx-*` hop in this
+workspace, emit **LOCAL_HOP_COPY_BLOCK** (one fenced Owner-local prompt) per
+VERIFY_PHASES — bare `NEXT_ACTION` / `## Следующая команда` alone is
+insufficient.
 
-**Project check:** These steps expect a project that already uses OpenSpec. Before the first step that writes anything (`new change`, `archive`, `sync specs`, or authoring an artifact file), confirm the project has a root: run `openspec list --json` (with `--store <id>` when a store is selected, since the store is then the root) and read `root`. A root object means the project is set up. `"root": null` means it is not - there is no `openspec/` directory here, and a write such as `openspec new change` would create one as a side effect. The command also exits non-zero, which is that answer rather than a broken CLI, so read the JSON instead of retrying or working around it.
+**Semantic write-target authority:** Read and follow
+`.cursor/commands/opsx-verify.md`, `openspec/policies/VERIFY_POLICY.md`, and
+`.cursor/pipeline/contracts/SEMANTIC_WRITE_TARGET.md`. Unresolved high-risk
+multi-target writes are archive blocker `unresolved_semantic_write_target`
+(`NO_GO`). Durable RESOLVED requires **exact** SWT schema tokens
+(`TARGET_ENTITY_OR_LEG` / `ALLOWED_ADAPTERS` / `FORBIDDEN_ADAPTERS`);
+decision Allowed/Forbidden prose alone is **not** RESOLVED (`prose≠RESOLVED`).
+On that blocker emit `PRODUCT_ACCEPTANCE_FAIL_PILLAR=MEANING_LOCK` when
+applicable, human `prose≠RESOLVED; lift Allowed/Forbidden into SWT fields`,
+and primary `NEXT_ACTION: /opsx-update <change>` — **not** scenario
+re-certify. Forbidden sibling adapters and missing paired positive/negative
+proof also fail verify; green tests against an ambiguous target are insufficient.
 
-One `"root": null` is not about setup: when a `status` error message starts with `Declared in` or `Invalid store declaration in` and names this project's `openspec/config.yaml` (or `config.yml`), the project does use OpenSpec through a store it declares, which this machine cannot resolve (the store is not registered, or the `store:` line is malformed). Do not treat it as uninitialized and skip the branches below: stop before writing and show the user that error's `message` and `fix`.
+**Product Acceptance (kernel DONE, `mode=archive`):** Follow
+`.cursor/pipeline/contracts/PRODUCT_ACCEPTANCE.md` via `opsx-verify.md`.
+When `PRODUCT_ACCEPTANCE_REQUIRED=true`, `LIFECYCLE_COVERAGE` needs durable
+`OWNER_LIFECYCLE_ECHO` + Owner `CONFIRM_LIFECYCLE` **and** scenario
+`VERDICT=PASS` with acceptance rows mapped 1:1 to echo steps. Scenario PASS
+alone does not clear LIFECYCLE; soft tooling waive cannot clear PA. Details
+remain in `.cursor/commands/opsx-verify.md`.
 
-Otherwise, with no root, what happens next depends on how this workflow was reached:
+**Store selection:** Если пользователь называет store или работа находится в standalone OpenSpec store, сначала запусти `openspec store list --json`, выбери registered store id и передавай `--store <id>` в команды, которые читают specs/changes: `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`. Остальные команды не принимают этот флаг. Без store команды работают от ближайшего локального `openspec/` root.
 
-- **Auto-selected**: you chose this workflow yourself, without the user naming OpenSpec, naming this skill, or running its slash command. Stop using OpenSpec and answer the request normally, as you would with no OpenSpec installed. Do not ask them to set anything up and do not mention OpenSpec setup.
-- **Explicit OpenSpec request**: the user named OpenSpec, named this skill, or ran its slash command. Stop before writing and ask how to proceed: set this project up (`openspec init`), target a store they already have (`--store <id>`), or continue without OpenSpec for this request. Wait for their answer.
+**OpenSpec config contract:** перед чтением `openspec/config.yaml` запусти из repository root:
+```bash
+python openspec/tools/check_config_contract.py
+```
+Если команда возвращает non-zero, выведи unknown top-level keys / rules contract violations из output, не продолжай verify и ставь `NO_GO`.
 
-In both branches, never create the root as a side effect: do not run `openspec init` until the user asks for it, do not hand-create `openspec/` files, and do not let a command create it.
+**Обязательная настройка:** перед выводом результата прочитай:
+- `openspec/config.yaml` для shared OpenSpec context и `rules.verify`
+- `openspec/policies/VERIFY_POLICY.md` для Verify command policy
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+Примени `rules.verify` из config и `verify` policy из `VERIFY_POLICY.md`.
 
-**Steps**
+Если настройки отсутствуют или неполные, явно напиши это в разделе `Итоговый вердикт` и используй strict fallback:
+- язык ответа: русский
+- единый verdict: `GO` или `NO_GO`
+- последняя строка: ровно `✅ GO` или `❌ NO_GO`
+- failed targeted tests, archive blockers, placement violations и task validation mismatch дают `NO_GO`
+
+**Input:** optionally specify a change name. Если имя не указано, infer только когда контекст однозначен; иначе запусти `openspec list --json` и попроси пользователя выбрать change.
+
+## Steps
 
 1. **Select the change**
 
-   If a name is provided, use it. Otherwise:
-   - Infer from conversation context if the user mentioned a change
-   - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
+   Если change name указан, используй его. Иначе:
+   - infer from conversation context only when unambiguous
+   - если ambiguous, запусти `openspec list --json` и попроси выбрать
 
-   When prompting, show all active changes returned by the list, including changes with `status: "no-tasks"`.
-   Include the schema used for each change if available.
-   Mark changes with incomplete tasks as "(In Progress)".
+   Всегда сообщи: `Проверяю change: <name>`. Для override: `/opsx-verify <other>`.
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx-verify <other>`).
+2. **Load verify settings**
 
-2. **Check status to understand the schema**
+   Сначала проверь contract `openspec/config.yaml`:
+   ```bash
+   python openspec/tools/check_config_contract.py
+   ```
+
+   Если contract check падает, зафиксируй unknown keys / rules contract violations, не продолжай verify и верни `NO_GO`.
+
+   Прочитай `openspec/config.yaml` как UTF-8. Извлеки:
+   - `rules.verify`
+
+   Прочитай `openspec/policies/VERIFY_POLICY.md` как UTF-8. Извлеки:
+   - `verify.default_mode`
+   - `verify.language`
+   - `verify.final_marker`
+   - `verify.verdict`
+   - `verify.archive_blockers`
+   - `verify.output`
+
+   Используй эти настройки как источник truth для verdict и формата ответа.
+
+3. **Resolve change context**
+
+   Run:
    ```bash
    openspec status --change "<name>" --json
-   ```
-   Parse the JSON to understand:
-   - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context
-   - Which artifacts exist for this change
-
-3. **Get planning context and load artifacts**
-
-   ```bash
    openspec instructions apply --change "<name>" --json
    ```
 
-   This returns the change directory, `contextFiles` (artifact ID -> array of concrete file paths), `taskTrackingConfigured`, and top-level `tasks` and `progress` aggregated from every concrete file matched by the schema's `apply.tracks` configuration that could be read. Read all available artifacts from `contextFiles`.
+   Parse `schemaName`, `changeRoot`, `artifactPaths`, `actionContext`, `contextFiles`, tasks progress and task statuses. Use concrete paths from `artifactPaths.<id>.existingOutputPaths` and `contextFiles`; do not assume artifact names beyond command output.
 
-   Treat apply `state` and `instruction` as context, not a verification verdict. Do not implement tasks or archive the change during verification.
+4. **Read planning artifacts**
 
-4. **Initialize verification report structure**
+   Read proposal, design, specs, tasks, optional decisions, and any other existing artifacts reported by status/apply instructions. Extract:
+   - required observable behavior
+   - completed and remaining tasks
+   - declared architecture decision references
+   - ownership and placement claims
+   - validation plan and targeted checks
+   - open questions
 
-   Create a report structure with three dimensions:
-   - **Completeness**: Track tasks and spec coverage
-   - **Correctness**: Track requirement implementation and scenario coverage
-   - **Coherence**: Track design adherence and pattern consistency
+5. **Architecture Decision Lookup**
 
-   Each dimension can have CRITICAL, WARNING, or SUGGESTION issues.
+   - Resolve decision paths context-first (`artifactPaths.decisions` / user paths / index); further `openspec/decisions/` lookup only for remaining gaps (budget ? 3 unless `EVIDENCE_GAP`). Never dump the full tree.
+   - Read proposed decisions from `contextFiles.decisions` or `artifactPaths.decisions.existingOutputPaths`, if any.
+   - Output relevant decisions by path and status in `Архитектурное размещение`.
+   - If the change touches ownership, layering, write paths, or domain invariants and no relevant decision exists, mark `Architecture Decision Missing`.
+   - If proposed decisions exist, get `openspec instructions decisions --change "<name>" --json` and apply `rules.decisions`.
+   - Compare implementation placement against accepted/proposed decisions.
+   - Passing tests не являются proof, если placement нарушает accepted decision.
 
-   Verification is advisory. Respect intentional omissions such as `skip_specs: true`, optional design documents, and schemas without task tracking. Do not require or invent optional or intentionally omitted artifacts to obtain a clean report. `Not verified` describes a limit of this report, not a new archive prerequisite. Archive retains its own checks and user-confirmation behavior.
+6. **Verify implementation read-only**
 
-   Mark checks the schema does not define, or artifacts the status reports as intentionally skipped, as **Not applicable**. The correctness checks of a change whose readable delta specs contain REMOVED or RENAMED requirements but no ADDED or MODIFIED requirements are also **Not applicable** (see step 6). Exclude them from skipped-check counts and the archive-readiness assessment. Reserve **Not verified** for applicable checks whose evidence is missing or unusable.
+   Inspect implemented code paths, local diff, and relevant tests without editing. Check:
+   - behavior matches proposal/specs
+   - tasks are accurately checked off
+   - implementation layer matches cited architecture decisions
+   - forbidden layers do not own logic reserved for another layer
+   - tests prove behavior and do not hide placement violations
+   - async tests do not manually mutate shared module-level dependencies around awaited code
+   - tests do not stub the pipeline so the real guard is never exercised
+   - write-gate regression tests prove the guarded entity is filtered before candidate/handler/write boundary, not only that a final mock was not called
+   - regression tests fail if the intended guard is removed
+   - gates with both blocked and allowed behavior have a paired positive case
+   - archive blockers from `verify.archive_blockers`
 
-   If only task evidence is available for applicable checks, verify task completion only and mark the remaining applicable checks, including **Code Pattern Consistency**, as not verified with the reason "Only task evidence available".
+7. **Run relevant checks**
 
-   If artifacts cannot be read or contain no usable requirements, scenarios, or design decisions, mark the affected checks as not verified with the specific reason. Continue checks supported by the remaining evidence, but a partially checked input set is not a fully verified check. Missing requirements affect Spec Coverage and Requirement Implementation Mapping; missing scenarios affect Scenario Coverage; missing design decisions affect Design Adherence.
-
-5. **Verify Completeness**
-
-   **Task Completion**:
-   - If `taskTrackingConfigured` is false, report **Task Completion** as not applicable. Do not treat empty `tasks` as missing evidence.
-   - Otherwise, use the top-level `tasks` and `progress` fields. They already aggregate every readable concrete file matched by `apply.tracks`, regardless of the tracked artifact's ID; do not infer tracking from a `contextFiles` key.
-   - If `unavailableTrackingFiles` is nonempty, mark **Task Completion** as not verified and include every unavailable path and reason. Continue using any readable task evidence, but do not infer completion from the partial `tasks` and `progress` fields.
-   - If `taskTrackingConfigured` is true and `tasks` is empty, mark **Task Completion** as not verified and record the reason from apply `state` and `instruction`. Nonzero totals alone do not establish evaluable task descriptions.
-   - Report complete vs total tasks from `progress`.
-   - If `progress.remaining` is greater than 0:
-     - Add CRITICAL issue for each listed incomplete task. If the remaining count exceeds the listed incomplete tasks, also report the incomplete checkboxes without descriptions and recommend adding descriptions and completing them. Do not infer completion from the listed tasks alone.
-     - Recommendation: "Complete task: <description>" or "Mark as done if already implemented"
-
-   **Spec Coverage**:
-   - If status marks the spec artifact skipped by `skip_specs: true`, or the schema defines no spec artifact (no artifact whose `artifactPaths.<id>.outputPath` is under `specs/`), report the spec-dependent checks as not applicable.
-   - Otherwise, `contextFiles` is keyed by artifact id, and artifact ids come from the active schema, so do not assume an id such as `specs`. The spec artifacts are those whose `artifactPaths.<id>.outputPath` is under `specs/`; read their files from `contextFiles.<id>`. If those spec files are absent or empty, mark **Spec Coverage**, **Requirement Implementation Mapping**, and **Scenario Coverage** as not verified; do not treat any of them as clean.
-   - If delta specs exist in those spec files:
-     - Extract all requirements (marked with "### Requirement:", or listed as `FROM:`/`TO:` pairs under `## RENAMED Requirements`) and note the delta section each one sits under: `## ADDED`, `## MODIFIED`, `## REMOVED`, or `## RENAMED Requirements`. The section decides what the check looks for.
-     - For each ADDED or MODIFIED requirement (for MODIFIED, check the text in the delta, not the old wording):
-       - Search codebase for keywords related to the requirement
-       - Assess if implementation likely exists
-     - If ADDED or MODIFIED requirements appear unimplemented:
-       - Add CRITICAL issue: "Requirement not found: <requirement name>"
-       - Recommendation: "Implement requirement X: <description>"
-     - For each REMOVED requirement, the change asks for the behavior to be gone, so invert the check:
-       - A REMOVED block carries only the requirement name and any `**Reason**`/`**Migration**` notes, so the delta does not describe the behavior itself. Before searching, read the baseline requirement in the main spec at `<planningHome.root>/openspec/specs/<capability-path>/spec.md`, using the same capability path as the delta spec. Match it by exact normalized name, the rule OpenSpec uses when it applies REMOVED blocks: the heading text after `Requirement:`, trimmed, with a closing `#` run dropped only when a space or tab precedes it (so `C#` keeps its `#`), compared case-sensitively. A similarly worded heading is not a match; a rename belongs under RENAMED. Its body and scenarios are the evidence for the behavior that must be gone; never search from the requirement name alone.
-       - If that file holds no requirement with that exact normalized name - for example because an earlier sync already applied the removal, or a similarly named ADDED requirement replaced it - recover the baseline from the same file's history, in the planning repository rather than the current directory: `git -C "<planningHome.root>" log -p -- openspec/specs/<capability-path>/spec.md`, or `git -C "<planningHome.root>" show <commit>^:./openspec/specs/<capability-path>/spec.md` once you have identified the commit that applied the removal. Empty output means the pathspec matched nothing, not that there is no baseline: `git log` reports an unmatched path as success, so re-check the path before drawing any conclusion from silence.
-       - A baseline that adds nothing to its own title - no body beyond a restatement of the name, no scenarios - is unusable evidence, the same as a missing one. If no usable baseline is available in either place, mark **Spec Coverage** as not verified for that entry with the reason and stop there: do not search, and never count an unsearched removal as passing.
-       - Search codebase for that behavior. Matches in `openspec/` artifacts or docs, or in code that serves only the Migration note or an ADDED requirement, are not evidence by themselves. Report any code path that still delivers the removed behavior, including one shared with an ADDED requirement.
-       - Finding no implementation is the expected result, but only once the baseline behavior was the thing you searched for. Never report a REMOVED requirement as "Requirement not found" or recommend implementing it.
-       - If the behavior is still present:
-         - Add CRITICAL issue: "Removed requirement still implemented: <requirement name>"
-         - Recommendation: "Remove the remaining implementation at <file>:<lines>, following the requirement's Migration note if it has one"
-     - For each RENAMED entry (`FROM:`/`TO:`), the name changes but the behavior stays, so check the TO requirement for that unchanged behavior:
-       - Do not report the FROM name as missing, and do not require code symbols, identifiers, or file names to be renamed.
-       - If the TO name also appears under MODIFIED, its behavior is checked there against the MODIFIED text; skip it here.
-       - Otherwise, read the baseline requirement in the main spec at `<planningHome.root>/openspec/specs/<capability-path>/spec.md`, using the same capability path as the delta spec: the requirement under the FROM name, or under the TO name only when the FROM name is absent because the main spec is already synced. Its body and scenarios are the evidence for the behavior the TO requirement keeps.
-       - Search codebase for that behavior and assess if it is still implemented.
-       - If it appears unimplemented:
-         - Add CRITICAL issue: "Renamed requirement not found: <TO name>"
-         - Recommendation: "Restore the behavior of <TO name> (renamed from <FROM name>); a rename must not change behavior"
-       - If the baseline requirement cannot be found or read, mark **Spec Coverage** as not verified for that entry with the reason. Never count an unchecked rename as passing.
-
-6. **Verify Correctness**
-
-   If the delta specs are readable and contain at least one REMOVED or RENAMED requirement but no ADDED or MODIFIED requirements (the change only removes or renames requirements), report **Requirement Implementation Mapping** and **Scenario Coverage** as **Not applicable**. The REMOVED and RENAMED checks under Spec Coverage are the evidence for such a change (each REMOVED and RENAMED entry with a usable baseline is checked there against its baseline behavior, and an entry already marked not verified there stays not verified), so do not mark these two checks as not verified. A delta spec with no parseable requirements at all is unusable evidence, not a removal-only change: mark these checks as not verified.
-
-   **Requirement Implementation Mapping**:
-   - For each ADDED or MODIFIED requirement from delta specs (REMOVED entries, and RENAMED entries without a MODIFIED block, were settled under Spec Coverage):
-     - Search codebase for implementation evidence
-     - If found, note file paths and line ranges
-     - Assess if implementation matches requirement intent
-     - If divergence detected:
-       - Add WARNING: "Implementation may diverge from spec: <details>"
-       - Recommendation: "Review <file>:<lines> against requirement X"
-
-   **Scenario Coverage**:
-   - For each scenario under an ADDED or MODIFIED requirement in delta specs (marked with "#### Scenario:"):
-     - Check if conditions are handled in code
-     - Check if tests exist covering the scenario
-     - If scenario appears uncovered:
-       - Add WARNING: "Scenario not covered: <scenario name>"
-       - Recommendation: "Add test or implementation for scenario: <description>"
-   - Skip scenarios under a REMOVED requirement; that behavior is meant to be gone.
-
-7. **Verify Coherence**
-
-   **Design Adherence**:
-   - If the schema defines no design artifact (no artifact with id `design`, and none whose `artifactPaths.<id>.outputPath` is or ends in `design.md`), report **Design Adherence** as not applicable.
-   - If the design artifact's `contextFiles.<id>` file exists:
-     - Extract key decisions (look for sections like "Decision:", "Approach:", "Architecture:")
-     - Verify implementation follows those decisions
-     - If contradiction detected:
-       - Add WARNING: "Design decision not followed: <decision>"
-       - Recommendation: "Update implementation or revise design.md to match reality"
-   - Otherwise, if the design artifact's `contextFiles.<id>` file is absent or empty: mark **Design Adherence** as not verified. With other supporting artifacts, **Code Pattern Consistency** still runs; the task-only case remains limited to task completion.
-
-   **Code Pattern Consistency**:
-   - If implementation changes cannot be identified, mark **Code Pattern Consistency** as not verified and explain the missing evidence.
-   - Otherwise, review new code for consistency with project patterns
-   - Check file naming, directory structure, coding style
-   - If significant deviations found:
-     - Add SUGGESTION: "Code pattern deviation: <details>"
-     - Recommendation: "Consider following project pattern: <example>"
-
-8. **Generate Verification Report**
-
-   **Summary Scorecard**:
-   ```markdown
-   ## Verification Report: <change-name>
-
-   ### Summary
-   | Dimension    | Status           |
-   |--------------|------------------|
-   | Completeness | X/Y tasks, N reqs|
-   | Correctness  | M/N reqs covered |
-   | Coherence    | Followed/Issues  |
+   Run targeted tests or validation commands appropriate for the changed files and validation plan. At minimum, run OpenSpec validation for the change when available:
+   ```bash
+   openspec validate "<name>" --type change --strict --json
    ```
 
-   In each Status cell, report the results of checks that ran and `Not verified (<reason>)` for every skipped check. If all checks in a dimension were skipped, start the cell with `Not verified`. Never score a skipped check as passing. Treat every not verified or partially verified check as skipped in the final assessment. Count only ADDED and MODIFIED requirements in N, and report REMOVED and RENAMED requirements separately (for example, "1 removal confirmed, 1 rename verified", or "1 removal not verified (baseline unavailable)"). For a change that only removes or renames requirements, the Correctness cell reads `Not applicable (no ADDED or MODIFIED requirements)`.
+   If a check cannot run, report it explicitly and decide verdict using strict mode. If a task is `[x]` but its validation/test/check fails, write `Task completion mismatch: yes`.
 
-   **Issues by Priority**:
+8. **Compute one overall verdict**
 
-   1. **CRITICAL** (Must fix before archive):
-      - Incomplete tasks
-      - Missing requirement implementations
-      - Removed requirements still implemented
-      - Renamed requirements whose behavior is no longer implemented
-      - Each with specific, actionable recommendation
+   Produce exactly one overall verdict: `GO` or `NO_GO`.
 
-   2. **WARNING** (Should fix):
-      - Spec/design divergences
-      - Missing scenario coverage
-      - Each with specific recommendation
+   The overall verdict MUST be `NO_GO` when any configured condition is true:
+   - targeted/focused test failed
+   - task is checked `[x]` but validation/test/check failed
+   - archive blocker exists
+   - placement violation exists
+   - required architecture decision is missing
+   - unresolved open question blocks archive
+   - stale reference model blocks archive
+   - async test manually mutates module-level state around `await` with `module.attr = fake` and manual `try/finally` restore
+   - test stubs the pipeline so the real guard is never exercised
+   - write-gate regression only asserts `assert_not_called()` or `count == 0` without proving the guarded entity was filtered before candidate/handler/write boundary
+   - regression test would still pass if the intended guard were removed
+   - gate has both blocked and allowed behavior but lacks a paired positive case
 
-   3. **SUGGESTION** (Nice to fix):
-      - Pattern inconsistencies
-      - Minor improvements
-      - Each with specific recommendation
+   Do not write a success claim that conflicts with the overall verdict. `Archive ready: yes` is forbidden when tests failed, placement violations exist, or architecture blockers are unresolved.
 
-   **Final Assessment**:
-   - If CRITICAL issues: "X critical issue(s) found. Fix before archiving." If any check was skipped, also name every skipped check and its reason.
-   - If no CRITICAL issues, one or more warnings, and no checks were skipped: "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."
-   - If only suggestions and no checks were skipped: "No critical issues or warnings. Z suggestion(s) to consider. Ready for archive (with noted improvements)."
-   - If no issues and no checks were skipped: "All checks passed. Ready for archive."
-   - If any check was skipped and there are no CRITICAL issues: do not claim readiness. Say "No critical issues found in the checks that ran. <check(s)> not verified: <reason>." Include the warning count when nonzero.
-   - Include the suggestion count when nonzero in every final assessment.
+## Output
 
-**Verification Heuristics**
+Ответ должен быть на русском языке, кроме paths, commands, file names, class/function names and OpenSpec keywords.
 
-- **Completeness**: Focus on objective checklist items (checkboxes, requirements list)
-- **Correctness**: Use keyword search, file path analysis, reasonable inference - don't require perfect certainty
-- **Coherence**: Look for glaring inconsistencies, don't nitpick style
-- **False Positives**: When uncertain, prefer SUGGESTION over WARNING, WARNING over CRITICAL
-- **Actionability**: Every issue must have a specific recommendation with file/line references where applicable
+Use exactly these sections:
 
-**Output Format**
+```text
+## Итоговый вердикт
+GO — archive можно продолжать.
+```
 
-Use clear markdown with:
-- Table for summary scorecard
-- Grouped lists for issues (CRITICAL/WARNING/SUGGESTION)
-- Code references in format: `file.ts:123`
-- Specific, actionable recommendations
-- No vague suggestions like "consider reviewing"
+or
+
+```text
+## Итоговый вердикт
+NO_GO — archive пока нельзя.
+```
+
+Then:
+
+```text
+## Поведение
+Behavior matches spec: yes / no / partial
+
+## Архитектурное размещение
+Implementation matches architecture decisions: yes / no / partial
+Placement violations: none / список нарушений
+
+## Тесты
+Targeted tests: passed / failed / not run
+Failed tests: none / список
+
+## Согласованность tasks
+Task completion mismatch: yes / no
+Причина: ...
+
+## Готовность к archive
+Archive ready: yes / no
+Blockers:
+- ...
+
+## Следующая команда
+/opsx-archive <change-name>
+```
+
+or for `NO_GO`:
+
+```text
+## Следующая команда
+/opsx-apply <change-name>
+```
+
+Other allowed next commands for blockers: `/opsx-update <change-name>` or `manual fix`.
+
+### LOCAL_HOP_COPY_BLOCK (mandatory)
+
+Authority: `.cursor/pipeline/contracts/VERIFY_PHASES.md`.
+
+After `## Следующая команда` and **before** the final marker, when the next
+step is a local `/opsx-*` hop in this workspace, emit exactly **one** fenced
+Owner-local copy-paste prompt (workspace, change, mode+marker, gaps/blockers,
+exact Command, `DO_NOT_DO_YET` / `ALSO_OK` as applicable). Bare next-command
+line alone is insufficient. No Web four-block for this hop.
+
+The final line must be exactly one configured marker and nothing after it:
+
+```text
+✅ GO
+```
+
+or
+
+```text
+❌ NO_GO
+```
+
+(`mode=impl`: use PHASE_IMPL markers `✅ IMPL_OK` / `❌ IMPL_GAPS` and the
+LOCAL_HOP_COPY_BLOCK rules from VERIFY_PHASES — do not emit archive GO/NO_GO.)
+
+## Guardrails
+
+- Read-only only. Do not edit files.
+- Do not offer to fix code with a follow-up question like `Want me to fix?`.
+- Instead of offering a write action, state the next command: `/opsx-apply`, `/opsx-update`, or `manual fix`.
+- Do not mark verification successful when placement violates an accepted decision.
+- Do not treat passing tests as sufficient architecture proof.
+- Block async tests that manually mutate shared module-level dependencies around awaited code, especially shared executors, `run_tasks`, manager module functions, runtime services, WB write adapters, settings, and global flags.
+- Block tests that stub the pipeline so the real guard is never exercised.
+- Block write-gate tests that only assert `assert_not_called()` or `count == 0` without proving candidate/handler/write-boundary filtering.
+- Block regression tests that would still pass if the intended guard were removed.
+- Use exact file/function references for placement findings.
+- Keep one overall verdict. No mixed top-level success plus archive `NO_GO`.

@@ -17,7 +17,7 @@ in remaining_gaps. Do not discover files outside that list.
 
 ## Read scope (hard)
 Allowed read roots for this hop only:
-- `src/**`, `tests/**`, `openspec/changes/**`, `openspec/decisions/**`,
+- `src/**`, `app/**`, `tests/**`, `openspec/changes/**`, `openspec/decisions/**`,
   `openspec/specs/**`, `migrations/**`, `pyproject.toml`, `poetry.lock`
 
 Forbidden (blocked as outside_restrict_allow): the workflow runtime tree,

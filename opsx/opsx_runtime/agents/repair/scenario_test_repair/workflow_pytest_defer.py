@@ -66,8 +66,18 @@ def _source_declares_workflow_deferred(source: str, func_name: str | None) -> bo
 
 
 def _discover_mapped_node(repo: Path, change_id: str, scenario_id: str) -> str | None:
-    """Найти pytest node id mapped-теста сценария (matrix или canonical file)."""
-    node = str(trace_mappings(repo, change_id).get(scenario_id) or "")
+    """Найти pytest node id mapped-теста сценария (matrix или canonical file).
+
+    ``test_trace_matrix.json`` пишет ``scenario_trace_materialize`` **после**
+    линии implementation; первый проход ``scenario_test_authoring`` идёт раньше —
+    без матрицы используем поиск по ``tests/scenarios/<change>/test_<sha>.py``.
+    """
+    from workflows.artifact_paths import scenario_machine_receipt_path
+
+    node = ""
+    matrix_path = scenario_machine_receipt_path(repo, change_id, "test_trace_matrix.json")
+    if matrix_path.is_file():
+        node = str(trace_mappings(repo, change_id).get(scenario_id) or "")
     if "::" in node:
         return node
     rel = scenario_test_relpath(change_id, scenario_id)

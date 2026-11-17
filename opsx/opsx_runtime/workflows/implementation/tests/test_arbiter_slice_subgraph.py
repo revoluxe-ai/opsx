@@ -10,7 +10,11 @@ import pytest
 
 from agents.state import GraphState
 from workflows.implementation.graph import _invoke_apply_one_slice_subgraph
-from workflows.implementation.routing_contract import STAGE_APPLY_RED, STAGE_APPLY_SCAFFOLD
+from workflows.implementation.routing_contract import (
+    STAGE_APPLY_GREEN,
+    STAGE_APPLY_RED,
+    STAGE_APPLY_SCAFFOLD,
+)
 from workflows.implementation.routing import ImplementationLaneTerminalError
 from workflows.implementation.slice_pipeline.graph import (
     route_after_slice_stage,
@@ -352,3 +356,43 @@ async def test_arbiter_directive_bypasses_valid_receipt_skip(tmp_path: Path) -> 
 def test_red_oracle_retry_count_is_graph_state_field() -> None:
     """LangGraph хранит только ключи ``GraphState``; счётчик повтора RED должен быть в схеме."""
     assert "implementation_red_oracle_retry_count" in GraphState.__annotations__
+    assert "implementation_green_verify_retry_count" in GraphState.__annotations__
+
+
+def test_route_after_green_verify_refusal_retries_one_hop() -> None:
+    """RED_EVIDENCE_NOT_PASS: один повтор APPLY_GREEN, не конец слайса."""
+    state: GraphState = {
+        "implementation_status": "RUNNING",
+        "implementation_last_hop": STAGE_APPLY_GREEN,
+        "implementation_arbiter_target_stage": STAGE_APPLY_GREEN,
+        "implementation_arbiter_directive": "replay failed",
+        "implementation_green_verify_retry_count": 1,
+    }
+    assert route_after_slice_stage(state) == "retry_green"
+
+
+def test_route_after_green_verify_second_failure_pauses() -> None:
+    state: GraphState = {
+        "implementation_status": "PAUSED",
+        "implementation_recovery_code": "RED_EVIDENCE_NOT_PASS",
+        "implementation_last_hop": STAGE_APPLY_GREEN,
+        "implementation_green_verify_retry_count": 2,
+        "implementation_machine_gate_errors": [
+            {
+                "code": "RED_EVIDENCE_NOT_PASS",
+                "field": "red_executions",
+                "message": "exit 1 poetry run pytest -q tests/t.py::test_x\nAssertionError",
+            },
+        ],
+    }
+    with pytest.raises(ImplementationLaneTerminalError, match="AssertionError"):
+        route_after_slice_stage(state)
+
+
+def test_route_after_green_success_does_not_retry() -> None:
+    state: GraphState = {
+        "implementation_status": "RUNNING",
+        "implementation_last_hop": STAGE_APPLY_GREEN,
+        "implementation_green_verify_retry_count": 0,
+    }
+    assert route_after_slice_stage(state) == "continue"

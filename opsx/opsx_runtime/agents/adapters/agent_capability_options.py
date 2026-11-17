@@ -49,7 +49,12 @@ _SUBMIT_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
     "required": ["content", "base_digest"],
     "properties": {
-        "content": {"type": "string"},
+        "content": {
+            "anyOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "object"},
+            ]
+        },
         "base_digest": {"type": "string"},
     },
 }
@@ -76,6 +81,15 @@ def build_provider_agent_options(
     from agents.implementation.apply_design.tool_runtime import ApplyDesignToolRuntime
 
     runtime = tool_runtime if tool_runtime is not None else ApplyDesignToolRuntime(manifest)
+
+    async def _submit_apply_design(args: Mapping[str, Any], ctx: Any) -> Any:
+        from agents.implementation.apply_design.submit_argument_normalizer import (
+            normalize_submit_apply_design_args,
+        )
+
+        prepared = await normalize_submit_apply_design_args(runtime, args)
+        return await runtime.submit_apply_design(prepared, ctx)
+
     custom_tools = {
         "search_repository": AgentCustomToolSpec(
             description="Search allowed repository domains by query. No path argument.",
@@ -88,9 +102,14 @@ def build_provider_agent_options(
             execute=runtime.read_source,
         ),
         "submit_apply_design": AgentCustomToolSpec(
-            description="Submit APPLY-DESIGN JSON for the current change only.",
+            description=(
+                "Submit APPLY-DESIGN JSON for the current change only. "
+                "content is a JSON string or object. A from-file directive may "
+                "include other keys; runtime deep-merges them onto the canon "
+                "and drops an authored artifact sha256 before validation."
+            ),
             input_schema=_SUBMIT_SCHEMA,
-            execute=runtime.submit_apply_design,
+            execute=_submit_apply_design,
         ),
     }
     local_payload = dict(local)

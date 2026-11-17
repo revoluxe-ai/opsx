@@ -7,6 +7,9 @@ Bug Team product hops — ``agents.repair.product_surface`` (единый ист
 
 from __future__ import annotations
 
+import json
+import os
+
 from agents.config import GLOBAL_READ_SCOPE, path_matches_pattern
 from agents.repair.product_surface import (
     REPAIR_PRODUCT_HOP_KEYS,
@@ -27,6 +30,7 @@ _SLICE_APPLY_KEYS = frozenset(
 
 _APPLY_SLICE_RESTRICT: tuple[str, ...] = (
     "src/**",
+    "app/**",
     "tests/**",
     "openspec/changes/**",
     "openspec/decisions/**",
@@ -56,6 +60,51 @@ def _within_global_ceiling(pattern: str) -> bool:
         ):
             return True
     return False
+
+
+_UNSAFE_SOURCE_ROOT_PREFIXES: tuple[str, ...] = (
+    "opsx/",
+    ".opsx/",
+    ".cursor/",
+    ".git/",
+    ".github/",
+    "node_modules/",
+    "tools/",
+    ".venv/",
+)
+
+
+def product_source_root_globs_from_env() -> tuple[str, ...]:
+    """Глобы ``product.source_roots`` из ``OPSX_PRODUCT_SOURCE_ROOTS_JSON``.
+
+    Пустой или отсутствующий env не подменяет деревья ``src/**`` и ``app/**``.
+    Корни вне product (``opsx/``, ``.git/``, …) не расширяют restrict.
+    """
+    raw = os.environ.get("OPSX_PRODUCT_SOURCE_ROOTS_JSON", "").strip()
+    if not raw:
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    globs: list[str] = []
+    for item in parsed:
+        if not isinstance(item, str):
+            continue
+        norm = item.replace("\\", "/").strip().strip("/")
+        if not norm or ".." in norm.split("/"):
+            continue
+        if any(
+            norm == prefix.rstrip("/") or norm.startswith(prefix)
+            for prefix in _UNSAFE_SOURCE_ROOT_PREFIXES
+        ):
+            continue
+        if norm.startswith(".env"):
+            continue
+        globs.append(norm if norm.endswith("/**") else f"{norm}/**")
+    return tuple(dict.fromkeys(globs))
 
 
 def restrict_allow_for_agent(agent_key: str | None) -> tuple[str, ...] | None:

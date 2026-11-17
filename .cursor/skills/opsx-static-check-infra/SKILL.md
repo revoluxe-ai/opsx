@@ -18,7 +18,7 @@ Working team layout for this repo (keep it lean):
   base/                                   # worker + shell + prompt rules
   contracts/                              # packet + synthesis
   checks/<id>/instructions.md + context.md
-.cursor/skills/opsx-static-check-infra/   # this skill
+opsx/core/.cursor/skills/opsx-static-check-infra/   # this skill
 .cursor/rules/opsx-static-check-infra.mdc # short invariants
 ```
 

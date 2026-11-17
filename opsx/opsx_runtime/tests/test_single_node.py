@@ -168,11 +168,16 @@ def test_review_scope_has_stage_head_and_diff(tmp_path: Path) -> None:
     assert git(source, "diff", "--name-only", "stage...HEAD") == "admission.py"
 
 
-def test_shell_requires_allow_git_shell(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="shell opt-in"):
+def test_review_rejects_shell_tool() -> None:
+    repo_root = Path(__file__).resolve().parents[5]
+    with pytest.raises(ValueError, match="shell is forbidden"):
         asyncio.run(
-            _review_adapter(allow_git_shell=False).run(
-                {"workspace": str(tmp_path), "model": HAIKU_LOW},
+            _review_adapter(allow_git_shell=True).run(
+                {
+                    "workspace": str(repo_root),
+                    "repository_path": str(repo_root),
+                    "model": HAIKU_LOW,
+                },
                 prompt="test",
                 tools=["shell"],
             )

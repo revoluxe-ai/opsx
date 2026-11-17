@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agents.agent_visible_text import sanitize_mapping_for_agent_prompt
 from agents.common.contract_prompts import prepend_contracts
 from agents.implementation.apply_scaffold.scaffold_hop_visible_text import (
     sanitize_scaffold_hop_visible_text,
@@ -13,6 +14,7 @@ from agents.implementation.prompt.stage_authority import stage_authority, stage_
 from agents.implementation.prompt.slice_input_pack import build_stage_slice_embed
 from pathlib import Path
 from agents.implementation.prompt.slice_receipt_hop_tool import slice_receipt_hop_tool_block
+from workflows.implementation.gate_error_text import format_gate_error_line
 from agents.implementation.prompt.stage_receipt_preservation import (
     STAGE_RECEIPT_PRESERVATION_AUTHORITY,
     green_design_redo_block,
@@ -61,9 +63,21 @@ def build_split_apply_prompt(
         repo_root=repo,
     )
     slice_embed_json = json.dumps(slice_embed, ensure_ascii=False, indent=2)
-    gaps_json = json.dumps(impl_verify_answer, ensure_ascii=False, indent=2)
-    artifacts_json = json.dumps(artifact_bundle, ensure_ascii=False, indent=2)
-    machine_json = json.dumps(machine_context or {}, ensure_ascii=False, indent=2)
+    gaps_json = json.dumps(
+        sanitize_mapping_for_agent_prompt(impl_verify_answer),
+        ensure_ascii=False,
+        indent=2,
+    )
+    artifacts_json = json.dumps(
+        sanitize_mapping_for_agent_prompt(artifact_bundle),
+        ensure_ascii=False,
+        indent=2,
+    )
+    machine_json = json.dumps(
+        sanitize_mapping_for_agent_prompt(machine_context or {}),
+        ensure_ascii=False,
+        indent=2,
+    )
     dispatched_slice = impl_verify_answer.get("slice_id") if impl_verify_answer else None
     dispatch_block = ""
     if dispatched_slice:
@@ -92,11 +106,12 @@ def build_split_apply_prompt(
         lines: list[str] = []
         for entry in machine_errors:
             if isinstance(entry, dict):
-                code = str(entry.get("code") or "?")
-                message = str(entry.get("message") or "")
+                shown = dict(entry)
                 if stage_key == "apply_scaffold":
-                    message = sanitize_scaffold_hop_visible_text(message)
-                lines.append(f"- {code}: {message}")
+                    shown["message"] = sanitize_scaffold_hop_visible_text(
+                        str(entry.get("message") or "")
+                    )
+                lines.append(f"- {format_gate_error_line(shown)}")
         if lines:
             dispatch_block += (
                 "\nMachine validator errors from the prior hop (fix within stage "

@@ -20,6 +20,7 @@ REPAIR_PRODUCT_HOP_KEYS: Final[frozenset[str]] = frozenset(
 # ``migrations/env.py`` — URL из env; секреты в ``.env`` (глобальный deny).
 REPAIR_PRODUCT_READ_GLOBS: Final[tuple[str, ...]] = (
     "src/**",
+    "app/**",
     "tests/**",
     "migrations/**",
     "alembic.ini",
@@ -29,6 +30,7 @@ REPAIR_PRODUCT_READ_GLOBS: Final[tuple[str, ...]] = (
 # Write: только код продукта, тесты и файлы ревизий (не env.py / alembic.ini).
 REPAIR_PRODUCT_WRITE_GLOBS: Final[tuple[str, ...]] = (
     "src/**",
+    "app/**",
     "tests/**",
     "migrations/versions/**",
 )
@@ -55,7 +57,8 @@ def format_repair_product_surface_prompt() -> str:
     write_lines = "\n".join(f"- `{p}`" for p in REPAIR_PRODUCT_WRITE_GLOBS)
     return (
         "### REPAIR PRODUCT SURFACE (authoritative — overrides legacy worker WRITE_BOUNDARY)\n\n"
-        "Product code lives under `src/**` (there is no top-level `app/` in this repository).\n"
+        "Product code lives under `src/**` or `app/**` (both are in READ and WRITE ALLOW). "
+        "Use the tree this repository actually contains; do not invent a third layout.\n"
         "Alembic: `migrations/versions/**` for revision files; read `migrations/**` and "
         "`alembic.ini` for context (no secrets in repo; live DSN only via environment).\n\n"
         "READ ALLOW (repo-relative):\n"

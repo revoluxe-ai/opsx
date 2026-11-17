@@ -11,6 +11,7 @@ import pytest
 
 from agents.repair.scenario_test_repair.live_checks import run_focused_checks
 from agents.repair.scenario_test_repair.workflow_pytest_defer import (
+    _discover_mapped_node,
     _ensure_pytest_import,
     ensure_workflow_deferred_on_node,
     repair_pytest_gate_machine_gap,
@@ -18,6 +19,7 @@ from agents.repair.scenario_test_repair.workflow_pytest_defer import (
     validate_mapped_workflow_deferred_marker,
     workflow_defer_blocks_supported_verdict,
 )
+from agents.common.scenario_files import scenario_digest, scenario_test_relpath
 from agents.verify.scenario_coverage_verify.row_cycle import _row_audit_supported
 
 
@@ -307,3 +309,19 @@ def test_workflow_defer_blocks_supported_only_without_marker(tmp_path: Path) -> 
     node_missing = "tests/scenarios/visual/test_no_marker.py::test_hermetic_seam"
     assert workflow_defer_blocks_supported_verdict(repo, node_missing) is True
     assert _row_audit_supported(repo, _supported_patch(node_missing)) is False
+
+
+def test_discover_mapped_node_without_trace_matrix_uses_canonical_test(
+    tmp_path: Path,
+) -> None:
+    """До scenario_trace_materialize матрицы нет — node id из canonical test_*.py."""
+    repo = tmp_path
+    change_id = "visual"
+    scenario_id = SID
+    rel = scenario_test_relpath(change_id, scenario_id)
+    path = repo / rel
+    path.parent.mkdir(parents=True)
+    path.write_text(_scenario_body(marker=False), encoding="utf-8")
+    assert not (repo / "opsx" / "receipts" / change_id / "scenario-coverage").exists()
+    node = _discover_mapped_node(repo, change_id, scenario_id)
+    assert node == f"{rel}::test_hermetic_seam"

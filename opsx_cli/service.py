@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import subprocess
 import sys
 import urllib.error
@@ -15,9 +16,58 @@ import uuid
 import webbrowser
 
 from .context import OpsxError, Project, safe_change_id
+from .provider_settings import load_provider, validate_provider, PROVIDER_MODULES
 from .storage import read_json, write_bytes, write_json
+from .supervisor import WorkflowSupervisor
+from .supervisor_meta import format_opsx_pytest_arg, resolve_opsx_pytest_target
+from .worker_runtime import (
+    resolve_worker_interpreter,
+    worker_interpreter_candidates,
+)
+from .supervisor_timeouts import (
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_SUPERVISOR_TIMEOUT_MINUTES,
+    DEFAULT_WORKFLOW_TIMEOUT_MINUTES,
+    SupervisorTimeouts,
+)
 
-_PANEL_CHILDREN: dict[int, subprocess.Popen] = {}
+# Панель живёт в этом процессе (asyncio-задача uvicorn), не в отдельном Python.
+_PANEL_SERVERS: dict[str, tuple[object, asyncio.Task]] = {}
+
+
+def _interpreter_supports_panel(path: str) -> bool:
+    """Проверяет, что в интерпретаторе установлены зависимости локальной панели."""
+    try:
+        result = subprocess.run(
+            [path, "-c", "import fastapi, uvicorn"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _panel_interpreter_candidates(project: Project, installation: dict) -> list[str]:
+    """OPSX runtime с fastapi/uvicorn; product ``.venv`` не подменяет LangGraph worker."""
+    return worker_interpreter_candidates(project, installation)
+
+
+async def resolve_panel_interpreter(project: Project, installation: dict) -> str:
+    """Выбирает Python с fastapi/uvicorn для subprocess панели."""
+    def pick() -> str:
+        for path in _panel_interpreter_candidates(project, installation):
+            if _interpreter_supports_panel(path):
+                return path
+        raise OpsxError(
+            "PANEL_DEPS_MISSING",
+            "Для opsx start нужны fastapi и uvicorn. "
+            "Выполните opsx upgrade (без --no-runtime) или "
+            "pip install 'opsx-cli[web]' в активном окружении.",
+        )
+
+    return await asyncio.to_thread(pick)
 
 
 async def _http(state: dict, path: str, *, method: str = "GET") -> dict:
@@ -46,6 +96,12 @@ async def panel_status(project: Project) -> dict:
 
 
 async def start_panel(project: Project, *, port: int = 8765, browser: bool = True) -> dict:
+    """Поднять панель в текущем процессе и вернуть управление, когда health отвечает.
+
+    WorkflowSupervisor живёт в той же asyncio-задаче, что и HTTP. Отдельный
+    Python для панели не запускается: его смерть обрывала супервизор и
+    оставляла worker сиротой.
+    """
     current = await panel_status(project)
     if current.get("running"):
         if browser:
@@ -56,33 +112,91 @@ async def start_panel(project: Project, *, port: int = 8765, browser: bool = Tru
         raise OpsxError("NOT_INSTALLED", "Run opsx install first.")
     if not 1 <= port <= 65535:
         raise OpsxError("PORT_INVALID", "Port must be between 1 and 65535.")
-    interpreter = str(project.root / installation["runtime_python"]) if installation.get("runtime_python") else sys.executable
-    state = {"instance_id": uuid.uuid4().hex, "token": secrets.token_urlsafe(32),
-             "url": f"http://127.0.0.1:{port}", "project_root": str(project.root)}
-    await write_json(project.panel_state, state)
-    log = project.runs / "panel.log"
-    def launch() -> subprocess.Popen:
-        with log.open("ab") as stream:
-            flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-            return subprocess.Popen(
-                [interpreter, "-m", "opsx_cli.panel", "--project", str(project.root), "--port", str(port)],
-                cwd=project.root, env=project.environment(), stdout=stream, stderr=subprocess.STDOUT,
-                creationflags=flags, start_new_session=os.name != "nt",
+
+    def assert_port_free() -> None:
+        """Connect-probe: Windows SO_REUSEADDR lets bind succeed on a busy port."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.4)
+            busy = sock.connect_ex(("127.0.0.1", port)) == 0
+        if busy:
+            raise OpsxError(
+                "PORT_IN_USE",
+                f"127.0.0.1:{port} is already in use. "
+                "Stop the old process (opsx stop does not own it) or run opsx start --port <n>.",
             )
-    process = await asyncio.to_thread(launch)
-    _PANEL_CHILDREN[process.pid] = process
-    state["pid"] = process.pid
+
+    await asyncio.to_thread(assert_port_free)
+    import uvicorn
+
+    from .panel import create_app
+
+    state = {
+        "instance_id": uuid.uuid4().hex,
+        "token": secrets.token_urlsafe(32),
+        "url": f"http://127.0.0.1:{port}",
+        "project_root": str(project.root),
+        "pid": os.getpid(),
+        "active_run_id": None,
+    }
     await write_json(project.panel_state, state)
+    holder: dict = {}
+    app = create_app(project, state, shutdown=lambda: setattr(holder["server"], "should_exit", True))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    holder["server"] = server
+
+    async def _serve() -> None:
+        try:
+            await server.serve()
+        finally:
+            _PANEL_SERVERS.pop(str(project.root), None)
+            await asyncio.to_thread(project.panel_state.unlink, missing_ok=True)
+
+    task = asyncio.create_task(_serve())
+    _PANEL_SERVERS[str(project.root)] = (server, task)
     for _ in range(100):
         await asyncio.sleep(0.1)
-        if process.poll() is not None:
-            raise OpsxError("PANEL_START_FAILED", f"Panel exited {process.returncode}; see {log}")
+        if task.done():
+            exc = task.exception()
+            raise OpsxError("PANEL_START_FAILED", f"Panel exited before ready: {exc}")
         status = await panel_status(project)
         if status.get("running"):
             if browser:
                 await asyncio.to_thread(webbrowser.open, state["url"])
             return {"status": "STARTED", **status}
-    raise OpsxError("PANEL_START_TIMEOUT", f"Panel did not become ready; see {log}")
+    raise OpsxError("PANEL_START_TIMEOUT", "Panel did not become ready in this process.")
+
+
+async def join_panel(project: Project) -> None:
+    """Держать процесс, пока in-process панель не остановится."""
+    bound = _PANEL_SERVERS.get(str(project.root))
+    if bound is None:
+        return
+    _server, task = bound
+    await task
+
+
+async def foreground_start(project: Project, *, port: int = 8765, browser: bool = True) -> None:
+    """Панель в этом процессе до Ctrl+C или POST /api/shutdown.
+
+    Если fastapi есть только в другом интерпретаторе, процесс заменяется
+    через exec (не остаётся родитель, который можно убить отдельно от сервера).
+    """
+    current = await panel_status(project)
+    if current.get("running"):
+        print(str(current["url"]), flush=True)
+        return
+    installation = await read_json(project.installation)
+    if not installation:
+        raise OpsxError("NOT_INSTALLED", "Run opsx install first.")
+    interpreter = await resolve_panel_interpreter(project, installation)
+    if Path(interpreter).resolve() != Path(sys.executable).resolve():
+        argv = [interpreter, "-m", "opsx_cli", "start", "--project", str(project.root), "--port", str(port)]
+        if not browser:
+            argv.append("--no-browser")
+        os.execve(interpreter, argv, project.environment())
+    started = await start_panel(project, port=port, browser=browser)
+    print(str(started.get("url") or ""), flush=True)
+    await join_panel(project)
 
 
 async def stop_panel(project: Project) -> dict:
@@ -94,10 +208,6 @@ async def stop_panel(project: Project) -> dict:
     for _ in range(100):
         await asyncio.sleep(0.1)
         if not (await panel_status(project)).get("running"):
-            child = _PANEL_CHILDREN.pop(state.get("pid"), None)
-            if child is not None:
-                await asyncio.to_thread(child.wait, timeout=5)
-            await asyncio.to_thread(project.panel_state.unlink, missing_ok=True)
             return {"status": "STOPPED"}
     raise OpsxError("PANEL_STOP_TIMEOUT", "Owned panel did not confirm shutdown.")
 
@@ -108,57 +218,194 @@ class RunService:
         self.project = project
         self.process: asyncio.subprocess.Process | None = None
 
-    async def execute(self, *, mode: str, change: str, bug: str = "",
-                      timeout: float = 2700, echo: bool = False, run_id: str | None = None) -> dict:
-        change = safe_change_id(change)
+    async def resolve_worker_runtime(self) -> tuple[str, dict[str, str]]:
+        """Интерпретатор OPSX worker (LangGraph), не product pytest venv."""
         metadata = await read_json(self.project.installation)
         if not metadata:
             raise OpsxError("NOT_INSTALLED", "Run opsx install first.")
-        interpreter = metadata.get("runtime_python")
-        if not interpreter:
-            raise OpsxError("RUNTIME_NOT_INSTALLED", "Install the runtime with opsx upgrade.")
-        interpreter = str(self.project.root / interpreter)
+
+        def pick() -> str:
+            return resolve_worker_interpreter(self.project, metadata)
+
+        interpreter = await asyncio.to_thread(pick)
+        env = self.project.environment()
+        settings = await read_json(self.project.settings, {})
+        for key, value in settings.get("environment", {}).items():
+            if key.startswith("OPSX_") and key not in ("OPSX_PROJECT_ROOT", "OPSX_CORE_ROOT"):
+                env[str(key)] = str(value)
+        return interpreter, env
+
+    async def rerun_fix_checks(
+        self,
+        fix_report: dict,
+        *,
+        timeout_seconds: float,
+    ) -> list[dict]:
+        """Перезапуск именованных pytest из отчёта fix-агента (контроллер, не модель)."""
+        checks = fix_report.get("checks_run") or []
+        if not isinstance(checks, list):
+            return []
+        results: list[dict] = []
+        core = self.project.core
+        for item in checks:
+            if not isinstance(item, dict):
+                continue
+            node_id = str(item.get("node_id") or "").strip()
+            if not node_id:
+                continue
+            try:
+                test_file = resolve_opsx_pytest_target(core, node_id)
+                pytest_arg = format_opsx_pytest_arg(core, node_id)
+            except ValueError as exc:
+                results.append({"node_id": node_id, "exit_code": 1, "error": str(exc)})
+                continue
+            if not test_file.is_file():
+                results.append(
+                    {
+                        "node_id": node_id,
+                        "exit_code": 4,
+                        "error": f"pytest test file missing: {test_file}",
+                    }
+                )
+                continue
+            argv = [sys.executable, "-m", "pytest", pytest_arg, "-q", "--tb=short"]
+
+            def run() -> tuple[int, str]:
+                completed = subprocess.run(
+                    argv,
+                    cwd=core,
+                    capture_output=True,
+                    text=True,
+                    timeout=max(30.0, timeout_seconds),
+                    check=False,
+                )
+                tail = (completed.stdout or "")[-2000:] + (completed.stderr or "")[-2000:]
+                return int(completed.returncode), tail
+
+            code, tail = await asyncio.to_thread(run)
+            results.append({"node_id": node_id, "exit_code": code, "tail": tail})
+        return results
+
+    async def execute(
+        self,
+        *,
+        mode: str,
+        change: str,
+        bug: str = "",
+        timeout: float | None = None,
+        workflow_timeout_minutes: float = DEFAULT_WORKFLOW_TIMEOUT_MINUTES,
+        supervisor_timeout_minutes: float = DEFAULT_SUPERVISOR_TIMEOUT_MINUTES,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+        echo: bool = False,
+        run_id: str | None = None,
+        provider: str | None = None,
+    ) -> dict:
+        change = safe_change_id(change)
         run_id = run_id or uuid.uuid4().hex
+        if mode == "workflow":
+            provider = validate_provider(
+                provider if provider is not None else (await asyncio.to_thread(load_provider, self.project))["provider"]
+            )
+            timeouts = SupervisorTimeouts.from_minutes(
+                workflow_timeout_minutes=workflow_timeout_minutes,
+                supervisor_timeout_minutes=supervisor_timeout_minutes,
+                max_attempts=max_attempts,
+            )
+            supervisor = WorkflowSupervisor(
+                self,
+                timeouts=timeouts,
+                change_id=change,
+                run_id=run_id,
+                echo=echo,
+                provider=provider,
+            )
+            return await supervisor.run()
+        timeout_seconds = float(timeout if timeout is not None else 2700)
+        return await self._execute_single(
+            mode=mode,
+            change=change,
+            bug=bug,
+            timeout_seconds=timeout_seconds,
+            echo=echo,
+            run_id=run_id,
+        )
+
+    async def _execute_single(
+        self,
+        *,
+        mode: str,
+        change: str,
+        bug: str,
+        timeout_seconds: float,
+        echo: bool,
+        run_id: str,
+    ) -> dict:
+        from .supervisor_subprocess import run_worker_with_watchdog
+
         directory = self.project.runs / "controller" / run_id
         await asyncio.to_thread(directory.mkdir, parents=True, exist_ok=True)
-        request = {"schema_version": 1, "mode": mode, "change_id": change, "bug": bug,
-                   "timeout_seconds": timeout, "project_root": str(self.project.root),
-                   "core_root": str(self.project.core)}
+        request = {
+            "schema_version": 1,
+            "mode": mode,
+            "change_id": change,
+            "bug": bug,
+            "timeout_seconds": timeout_seconds,
+            "project_root": str(self.project.root),
+            "core_root": str(self.project.core),
+        }
         await write_json(directory / "request.json", request)
-        record = {"run_id": run_id, "status": "RUNNING", "mode": mode, "change_id": change,
-                  "started_at": datetime.now(timezone.utc).isoformat(), "log": str(directory / "output.log")}
+        record = {
+            "run_id": run_id,
+            "status": "RUNNING",
+            "mode": mode,
+            "change_id": change,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "log": str(directory / "output.log"),
+        }
         await write_json(directory / "status.json", record)
         try:
-            env = self.project.environment()
-            settings = await read_json(self.project.settings, {})
-            for key, value in settings.get("environment", {}).items():
-                if key.startswith("OPSX_") and key not in ("OPSX_PROJECT_ROOT", "OPSX_CORE_ROOT"):
-                    env[str(key)] = str(value)
-            self.process = await asyncio.create_subprocess_exec(
-                interpreter, "-m", "opsx_cli.worker", str(directory / "request.json"),
-                cwd=self.project.root, env=env, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
+            interpreter, env = await self.resolve_worker_runtime()
+            code, hang = await run_worker_with_watchdog(
+                interpreter=interpreter,
+                request_path=directory / "request.json",
+                log_path=directory / "output.log",
+                cwd=self.project.root,
+                env=env,
+                wall_clock_limit=timeout_seconds,
+                silence_limit=300.0,
+                echo=echo,
             )
-            record["pid"] = self.process.pid
-            await write_json(directory / "status.json", record)
-            assert self.process.stdout is not None
-            while data := await self.process.stdout.read(65536):
-                def append() -> None:
-                    with (directory / "output.log").open("ab") as stream:
-                        stream.write(data)
-                await asyncio.to_thread(append)
-                if echo:
-                    await asyncio.to_thread(sys.stdout.write, data.decode("utf-8", "replace"))
-                    await asyncio.to_thread(sys.stdout.flush)
-            code = await self.process.wait()
-            record.update(status="PASS" if code == 0 else "FAILED", exit_code=code,
-                          finished_at=datetime.now(timezone.utc).isoformat())
+            worker_record = await read_json(directory / "status.json", record)
+            if hang:
+                worker_record["error"] = hang
+            process_status = "COMPLETED" if code == 0 else "FAILED"
+            verification = worker_record.get("verification_status") or "NOT_EVALUATED"
+            workflow = worker_record.get("workflow_status") or "UNKNOWN"
+            aggregate = verification if verification in {
+                "PASS",
+                "FAIL",
+                "NOT_READY",
+                "NOT_EVALUATED",
+            } else ("PROCESS_COMPLETED" if code == 0 else "PROCESS_FAILED")
+            record.update(
+                process_exit_code=code,
+                process_status=process_status,
+                workflow_status=workflow,
+                verification_status=verification,
+                status=aggregate,
+                exit_code=code
+                if verification not in {"PASS", "FAIL", "NOT_READY"}
+                else (0 if verification == "PASS" else 1),
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
             await write_json(directory / "status.json", record)
             return record
         except BaseException as exc:
-            record.update(status="OUTCOME_UNKNOWN" if self.process and self.process.returncode is None else "FAILED",
-                          error=f"{type(exc).__name__}: {exc}",
-                          finished_at=datetime.now(timezone.utc).isoformat())
+            record.update(
+                status="OUTCOME_UNKNOWN" if self.process and self.process.returncode is None else "FAILED",
+                error=f"{type(exc).__name__}: {exc}",
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
             await write_json(directory / "status.json", record)
             raise
 

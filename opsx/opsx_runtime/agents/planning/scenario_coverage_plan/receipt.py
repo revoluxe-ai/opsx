@@ -66,14 +66,14 @@ class ScenarioCoveragePlanReceipt:
                 action=PreserveAction.PAUSE,
                 code=code,
                 detail=str(planning.get("detail") or ""),
-                producer=str(planning.get("producer") or "/opsx-continue"),
+                producer=str(planning.get("producer") or "PLANNING_CONTINUE"),
             )
         if code in ("COVERAGE_PLAN_MISSING", "COVERAGE_PLAN_INVALID", "COVERAGE_RECEIPT_INVALID"):
             return PreserveDecision(
                 action=PreserveAction.NEEDS_AGENT,
                 code=code,
                 detail=str(planning.get("detail") or ""),
-                producer=str(planning.get("producer") or "/opsx-spec-scenario-coverage mode=plan"),
+                producer=str(planning.get("producer") or "SCENARIO_COVERAGE_PLAN"),
             )
         if self._can_preserve_files():
             return PreserveDecision(
@@ -85,7 +85,7 @@ class ScenarioCoveragePlanReceipt:
             action=PreserveAction.NEEDS_AGENT,
             code=code or "COVERAGE_PLAN_STALE",
             detail=str(planning.get("detail") or ""),
-            producer=str(planning.get("producer") or "/opsx-spec-scenario-coverage mode=plan"),
+            producer=str(planning.get("producer") or "SCENARIO_COVERAGE_PLAN"),
         )
 
     def _can_preserve_files(self) -> bool:

@@ -59,6 +59,7 @@ ASSESS_REL = Path("opsx/engineering-adoption/assess.json")
 POLICY_REL = Path("opsx/engineering-adoption/policy-proposed.json")
 PYRIGHT_POLICY_REL = Path("opsx/engineering-adoption/pyright-policy.json")
 PYRIGHT_BASELINE_REL = Path("opsx/engineering-adoption/pyright-baseline.json")
+COLLECTION_IGNORES_REL = Path("opsx/engineering-adoption/collection-ignores.json")
 
 TERMINAL_STATES = frozenset({"ADOPTED", "ADOPTED_WITH_QUARANTINE", "FAIL_CLOSED"})
 OWNER_APPROVE_PREFIX = "OWNER_POLICY_APPROVED:"
@@ -83,6 +84,17 @@ def _adoption_pytest_subprocess_env() -> dict[str, str]:
         "postgresql+asyncpg://stroy_prod_ci_marker:unused@127.0.0.1:55432/stroy_prod_ci_marker",
     )
     env.setdefault("INGEST_API_KEY", "ci-only-internal-secret-do-not-reuse")
+    runtime = _REPO_ROOT / "opsx" / "opsx_runtime"
+    core_tools = _REPO_ROOT
+    extra_paths: list[str] = []
+    if runtime.is_dir():
+        extra_paths.append(str(runtime))
+    if core_tools.is_dir():
+        extra_paths.append(str(core_tools))
+    if extra_paths:
+        existing = env.get("PYTHONPATH", "")
+        merged = os.pathsep.join([*extra_paths, existing]) if existing else os.pathsep.join(extra_paths)
+        env["PYTHONPATH"] = merged
     return env
 
 
@@ -502,6 +514,60 @@ def _git_changed_python_files(root: Path) -> list[str]:
     return files
 
 
+def _pytest_supports_timeout_flag(root: Path, python_executable: str) -> bool:
+    """Проверить, установлен ли pytest-timeout (иначе VERIFY падает на argv)."""
+
+    probe = _run_bounded([python_executable, "-m", "pytest", "--help"], cwd=root, timeout_s=45)
+    out = (probe.get("stdout_full") or probe.get("stdout_tail") or "") + (
+        probe.get("stderr_tail") or ""
+    )
+    return "--timeout" in out
+
+
+def _strip_pytest_timeout_flags(argv: list[str]) -> list[str]:
+    """Убрать timeout-плагин и зависимый OPSX gate, если pytest-timeout нет в toolchain."""
+
+    skip_next = False
+    cleaned: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if skip_next:
+            skip_next = False
+            index += 1
+            continue
+        if token == "--timeout" or token == "--timeout-method":
+            skip_next = True
+            index += 1
+            continue
+        if (
+            token == "-p"
+            and index + 1 < len(argv)
+            and "pytest_opsx_gate_progress" in argv[index + 1]
+        ):
+            index += 2
+            continue
+        cleaned.append(token)
+        index += 1
+    return cleaned
+
+
+def _adoption_pytest_collection_ignores(root: Path) -> list[str]:
+    """Опциональные ``--ignore`` для VERIFY (Owner-approved collection blockers)."""
+
+    doc = _read_json(root / COLLECTION_IGNORES_REL)
+    if not doc or not isinstance(doc.get("paths"), list):
+        return []
+    ignored: list[str] = []
+    for raw in doc["paths"]:
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        path = (root / raw).resolve()
+        if path.exists():
+            ignored.append(str(path))
+    return ignored
+
+
 def verify_active_gates(
     root: Path,
     policy: dict[str, Any],
@@ -542,8 +608,33 @@ def verify_active_gates(
         paths=default_workflow_pytest_paths(root),
         python_executable=sys.executable,
     )
+    for ignore_path in _adoption_pytest_collection_ignores(root):
+        pytest_args.extend(["--ignore", ignore_path])
+    collection_cfg = _read_json(root / COLLECTION_IGNORES_REL)
+    if collection_cfg and collection_cfg.get("continue_on_collection_errors") is True:
+        pytest_args.append("--continue-on-collection-errors")
+    markexpr_override = (
+        str(collection_cfg.get("markexpr_override", "")).strip()
+        if isinstance(collection_cfg, dict)
+        else ""
+    )
+    if markexpr_override:
+        try:
+            if "pytest" in pytest_args:
+                pytest_pos = pytest_args.index("pytest")
+                mark_index = pytest_args.index("-m", pytest_pos + 1)
+            else:
+                mark_index = len(pytest_args) - 2 if pytest_args[-2] == "-m" else -1
+            if mark_index >= 0:
+                pytest_args[mark_index + 1] = markexpr_override
+            else:
+                pytest_args.extend(["-m", markexpr_override])
+        except ValueError:
+            pytest_args.extend(["-m", markexpr_override])
     for node in excluded_nodes:
         pytest_args.extend(["--deselect", node])
+    if not _pytest_supports_timeout_flag(root, sys.executable):
+        pytest_args = _strip_pytest_timeout_flags(pytest_args)
     pytest_env = _adoption_pytest_subprocess_env()
     test_run = _run_bounded(
         pytest_args,

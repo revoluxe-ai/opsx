@@ -3,29 +3,23 @@ description: "Primary project-tuned bug discovery (Bugbot analogue for WB Sky): 
 argument-hint: "base=<branch> head=<branch> [change=<id>] [scope=<paths>] [focus=<theme>] [deep] [GO]"
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
 
-This command was transferred from a project-specific OPSX realization.
-For stroy-system, product-specific realization MUST resolve through:
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves only through:
 
   opsx/project/capabilities.yaml
-  opsx/shared/target-capability-resolution.md
 
-Any inherited donor literal (WB Sky, adv-bot, Poetry, pyproject.toml, app/**,
-tests/**, npm/package.json, src/**, public/**, deploy names) is historical or
-compatibility text only and is NOT execution authority.
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-Before any product-specific read/write/command execution, resolve the
-corresponding TARGET capability. If unresolved, fail closed:
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
-STATUS: FAIL_CLOSED
-REASON: TARGET_CAPABILITY_UNRESOLVED
-CAPABILITY: <required capability>
-NEXT_ACTION: define/discover capability in opsx/project/capabilities.yaml
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
 
-Do not infer product stack from the donor repository.
-Control-plane runtime paths under tools/temporal and tools/cursor_executor are
-separate from product Temporal/runtime adoption.
 
 # /opsx-project-bug-hunt
 

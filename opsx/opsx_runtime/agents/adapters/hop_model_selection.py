@@ -72,6 +72,13 @@ def default_hop_model_selection() -> dict[str, Any]:
     return model_selection_for_hop(ModelResolveResult(model=DEFAULT_HOP_MODEL))
 
 
+def supervisor_fix_model_selection() -> dict[str, Any]:
+    """Пресет супервизора: Grok 4.7 Medium Standard (``SUPERVISOR_FIX_MODEL``)."""
+    from model_config.model_presets import SUPERVISOR_FIX_MODEL
+
+    return model_selection_for_hop(ModelResolveResult(model=SUPERVISOR_FIX_MODEL))
+
+
 def implementation_arbiter_model_selection() -> dict[str, Any]:
     """Model selection for ``implementation_arbiter`` resume hops."""
     from model_config.model_presets import IMPLEMENTATION_ARBITER_MODEL

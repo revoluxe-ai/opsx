@@ -18,6 +18,7 @@ from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .backend import RealVerificationBackend
+from opsx_cli.codex_provider import DEFAULT_CODEX_MODEL
 from .journal import DispatchJournal
 from .verification import build_verification_graph
 
@@ -66,6 +67,8 @@ def _summary(state, run_id: str):
     return {
         "run_id": run_id,
         "change": data.get("change"),
+        "provider": data.get("provider", "cursor"),
+        "model_id": data.get("model_id"),
         "status": data.get("status", "NOT_STARTED"),
         "next": list(state.next or ()),
         "next_check_runs": data.get("next_check_runs", 0),
@@ -75,6 +78,18 @@ def _summary(state, run_id: str):
     }
 
 
+def ensure_resume_provider_identity(snapshot, *, provider: str, codex_model: str) -> None:
+    """Prevent a resumed ledger from silently changing provider or model."""
+    values = snapshot.values or {}
+    if not values:
+        return
+    previous_provider = values.get("provider", "cursor")
+    if previous_provider != provider:
+        raise RuntimeError("PROVIDER_IDENTITY_MISMATCH: existing checkpoint belongs to another provider")
+    if previous_provider == "codex" and values.get("model_id") != codex_model:
+        raise RuntimeError("MODEL_IDENTITY_MISMATCH: model substitution is not permitted")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Durable real OPSX verification on LangGraph")
     p.add_argument("command", choices=["run", "resume", "status"])
@@ -82,7 +97,9 @@ def main(argv=None):
     p.add_argument("--repo", type=Path, default=DEFAULT_REPO)
     p.add_argument("--run-id", help="Explicit new identity for another verification cycle")
     p.add_argument("--model-config")
-    p.add_argument("--execute", action="store_true", help="Required to invoke live Cursor SDK")
+    p.add_argument("--provider", choices=("cursor", "codex"), default="cursor")
+    p.add_argument("--codex-model", default=DEFAULT_CODEX_MODEL)
+    p.add_argument("--execute", action="store_true", help="Required for external model execution")
     args = p.parse_args(argv)
     repo = args.repo.resolve()
     if not (resource_path(repo, ".git")).exists():
@@ -90,7 +107,7 @@ def main(argv=None):
     if not args.change or "/" in args.change or "\\" in args.change or ".." in args.change:
         p.error("Invalid change ID")
     if args.command in ("run", "resume") and not args.execute:
-        p.error("Real Cursor execution requires --execute")
+        p.error("Provider execution requires --execute")
 
     run_id = args.run_id or f"verification:{args.change}"
     root = resource_path(repo, "opsx", "runs", "langgraph")
@@ -102,20 +119,27 @@ def main(argv=None):
         with SqliteSaver.from_conn_string(str(resource_path(root, "checkpoints.sqlite3"))) as saver:
             saver.setup()
             backend = RealVerificationBackend(
-                repo, run_id=run_id, model_config=args.model_config
+                repo, run_id=run_id, model_config=args.model_config,
+                provider=args.provider, codex_model=args.codex_model
             )
             journal = DispatchJournal(resource_path(root, "dispatch.sqlite3"))
             graph = build_verification_graph(
                 backend, journal, repo=repo, checkpointer=saver
             )
             snapshot = graph.get_state(cfg)
+            if args.command == "resume":
+                ensure_resume_provider_identity(
+                    snapshot, provider=args.provider, codex_model=args.codex_model,
+                )
             if args.command == "status":
                 outcome = _summary(snapshot, run_id)
             elif args.command == "run":
                 if snapshot.values:
                     raise RuntimeError("Run already has checkpoints; use resume/status or a new --run-id")
                 graph.invoke(
-                    {"run_id": run_id, "change": args.change},
+                    {"run_id": run_id, "change": args.change,
+                     "provider": args.provider,
+                     "model_id": args.codex_model if args.provider == "codex" else None},
                     config=cfg,
                     durability="sync",
                 )

@@ -13,7 +13,7 @@ The prompt is **exactly** `agents/verify/bugbot/prompt/get_prompt.py`.
 No precomputed diff, additional system message, or appended instructions are
 supplied: the model must inspect `stage...HEAD` itself using Git. It has
 read/grep/glob/ls/shell tools; shell is enabled when the runner sets
-`allow_git_shell=True` on the adapter.
+`allow_git_shell=False` on the adapter (shell never granted).
 
 The runner uses the **current Git worktree** as the Cursor agent workspace.
 Artifacts land under `opsx/runs/bugbot/real-<id>/` (no nested `repository/`

@@ -107,6 +107,38 @@ async def test_incomplete_json_does_not_replace_full_design(repo: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_machine_gate_failure_returns_validator_errors(repo: Path) -> None:
+    manifest = build_apply_design_manifest("visual", repo_root=repo)
+    rt = ApplyDesignToolRuntime(manifest)
+    gate_errors = [
+        {
+            "code": "next_stage",
+            "message": "APPLY_DESIGN_READY requires next_stage=APPLY_DESIGN_REVIEW",
+        }
+    ]
+    with patch(
+        "agents.implementation.apply_design.tool_runtime.validate_apply_design_at_path_async",
+        new_callable=AsyncMock,
+        return_value=DesignMachineGateResult(
+            ok=False,
+            status="FAIL",
+            exit_code=1,
+            errors=gate_errors,
+        ),
+    ):
+        out = await rt.submit_apply_design(
+            {
+                "content": json.dumps(_ready_body("visual")),
+                "base_digest": rt.current_revision_digest(),
+            },
+            None,
+        )
+    assert out.get("ok") is False
+    assert out.get("code") == "DESIGN_MACHINE_GATE_FAILED"
+    assert out.get("errors") == gate_errors
+
+
+@pytest.mark.asyncio
 async def test_two_sequential_valid_submits_same_hop(repo: Path) -> None:
     manifest = build_apply_design_manifest("visual", repo_root=repo)
     rt = ApplyDesignToolRuntime(manifest)

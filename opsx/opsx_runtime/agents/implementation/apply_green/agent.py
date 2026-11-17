@@ -1,4 +1,4 @@
-"""Runtime-агент apply-green hop (команда ``/opsx-apply-green``) в split-apply pipeline."""
+"""Runtime-агент apply-green hop (стадия APPLY GREEN) в split-apply pipeline."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from check_workflow_receipt import CheckWorkflowReceiptStatus
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 from workflows.repair.schemas import FixEvidence
 
-_EXECUTION_ROUTE = "/opsx-apply-green"
+_EXECUTION_ROUTE = "APPLY_GREEN"
 _STREAM_AGENT = "apply_green"
 _PATCH_PREFIX = "apply_green"
 

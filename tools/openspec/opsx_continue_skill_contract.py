@@ -25,7 +25,7 @@ from tools.openspec.opsx_mutation_authority import enforce_mutation_authority
 CONTRACT_IMPLEMENTATION_ID = "stroy-opsx-continue-skill-contract-v0.1.0"
 
 GUARD_REL = Path("tools/openspec/openspec_guard.py")
-SKILL_REL = Path(".cursor/skills/openspec-continue-change/SKILL.md")
+SKILL_REL = Path("opsx/core/.cursor/skills/openspec-continue-change/SKILL.md")
 COMMAND_REL = Path(".cursor/commands/opsx-continue.md")
 PROJECTIZATION_REL = Path("opsx/projectization.yaml")
 TRANSFER_STATE_REL = Path("opsx/transfer/TRANSFER_STATE.json")

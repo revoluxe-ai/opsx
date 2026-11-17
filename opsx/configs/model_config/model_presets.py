@@ -11,8 +11,10 @@ from .models.grok_47 import Grok47, Grok47Low, ReasoningEffort
 
 composer_standart = Composer()
 
+# 256k: живой registry принимает этот Medium (fast=false). context=500k
+# тот же slug отвергает как invalid parameters, hop падает до первого токена.
 grok_medium = Grok47(
-    context=GrokContext.CTX_500K,
+    context=GrokContext.CTX_256K,
     reasoning_effort=ReasoningEffort.MEDIUM,
     fast=False,
 )
@@ -50,6 +52,9 @@ arbiter_high_model = ClaudeSonnet55(
     reasoning=SonnetReasoning.HIGH,
 )
 IMPLEMENTATION_ARBITER_MODEL = arbiter_high_model
+
+# Process supervisor fix: Grok 4.7 Medium Standard (preset, не fast).
+SUPERVISOR_FIX_MODEL = grok_medium
 
 # CLI / --model-id alias (subagent slug); SDK id остаётся ``grok-4.7`` + params.
 GROK_47_LOW_PRESET_SLUG = "grok-4.7-low"

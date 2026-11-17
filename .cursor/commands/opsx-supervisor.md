@@ -1,26 +1,20 @@
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
 
-This command was transferred from a project-specific OPSX realization.
-For stroy-system, product-specific realization MUST resolve through:
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves only through:
 
   opsx/project/capabilities.yaml
-  opsx/shared/target-capability-resolution.md
 
-Any inherited donor literal (WB Sky, adv-bot, Poetry, pyproject.toml, app/**,
-tests/**, npm/package.json, src/**, public/**, deploy names) is historical or
-compatibility text only and is NOT execution authority.
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-Before any product-specific read/write/command execution, resolve the
-corresponding TARGET capability. If unresolved, fail closed:
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
-STATUS: FAIL_CLOSED
-REASON: TARGET_CAPABILITY_UNRESOLVED
-CAPABILITY: <required capability>
-NEXT_ACTION: define/discover capability in opsx/project/capabilities.yaml
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
 
-Do not infer product stack from the donor repository.
-Control-plane runtime paths under tools/temporal and tools/cursor_executor are
-separate from product Temporal/runtime adoption.
 
 # /opsx-supervisor
 
@@ -34,7 +28,28 @@ command contracts, bug-case lifecycle или test modes.
 
 ```text
 CONTRACT_VERSION=OPSX_SUPERVISOR_ORCHESTRATION_V2
+RUNTIME_CONTRACT=opsx/core/opsx/contract_prompts/process_supervisor/SUPERVISOR.md
+RUNTIME_CONTRACT_LOADER=opsx/core/opsx/contract_prompts/process_supervisor/loader.py
 ```
+
+## Runtime contract (SUPERVISOR.md — load via loader, not `.cursor/commands`)
+
+Супервизор **может** создать и подключить нового OPSX runtime-агента **только**
+по существующему паттерну и **только** в рамках `opsx/opsx.mdc` §27.0.0.2.
+Запрещено изобретать новую форму агента, новую tool-surface, новый write-path
+или новый prompt-канал. «Создать и подключить» = скопировать образец (контракт
+промпта, runner-hook, allowlist), зарегистрировать как соседние роли, текст —
+только через OPSX prompt-loader (`get_prompt`, `opsx/contract_prompts/**`).
+
+**Shell запрещён** для OPSX runtime-агентов при создании/подключении: не выдавать
+терминал, pytest CLI, poetry, node, bash или PowerShell. Tool-list — фиксированный
+набор именованных функций паттерна-образца; копия **наследует** его и **никогда**
+не получает `shell`.
+
+Runtime-агенту **нельзя** передавать имя slash-команды или текст из
+`.cursor/commands`. Супервизор **не** правит продукт / `openspec/changes/**`
+руками — только META allowlist и hops OPSX. Полный чеклист и пути образцов —
+`opsx/opsx.mdc` §27.0.0.2 и `SUPERVISOR.md`.
 
 Твоя функция:
 
@@ -273,6 +288,11 @@ COMMAND_EDITING=FORBIDDEN
 COMMAND_CONTRACT_EXTENSION=FORBIDDEN
 PIPELINE_EDITING=FORBIDDEN
 ```
+
+Исключение только для **runtime agent create/connect** по §27.0.0.2 /
+`SUPERVISOR.md`: один downstream META-owner по задокументированному образцу;
+без новой slash-команды, без `shell` на агенте, без command-link в prompt
+runtime-hop.
 
 Если подходящей разрешённой команды нет:
 

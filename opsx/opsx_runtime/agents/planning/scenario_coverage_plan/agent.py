@@ -13,7 +13,7 @@ from agents.adapters.abc_adapter import (
 from agents.adapters.adapter_transport import adapter_transport_state
 from agents.adapters.agent_stream import compose_agent_stream_label
 from agents.common.planning_artifacts import inspect_plan_artifacts
-from agents.common.scenario_files import materialize_scenario_files
+from agents.common.scenario_files import materialize_scenario_files, reconcile_scenario_filenames
 from agents.planning.scenario_coverage_plan.plan_receipt_writer import commit_plan_machine_receipt
 from agents.planning.scenario_coverage_plan.prompt.get_prompt import get_prompt
 from agents.verify.impl_verify.preflight import load_change_artifact_bundle
@@ -84,10 +84,8 @@ class ScenarioCoveragePlanAgent(ABCAgent):
         )
         if answer.status == "PLAN_READY":
             coverage = repo_path / "openspec" / "changes" / change_id / "scenario-coverage"
-            try:
-                _ = materialize_scenario_files(coverage)
-            except ValueError:
-                pass
+            _ = materialize_scenario_files(coverage)
+            _ = reconcile_scenario_filenames(coverage)
             _ = commit_plan_machine_receipt(repo_path, change_id)
         ready = inspect_plan_artifacts(repo_path, change_id, phase="planning")
         status = "READY" if ready.get("status") == "READY" and answer.status == "PLAN_READY" else "PAUSED"

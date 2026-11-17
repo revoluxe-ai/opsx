@@ -34,6 +34,7 @@ def run_subprocess_utf8(
     cwd: str | Path | None = None,
     timeout: int | float | None = None,
     env: Mapping[str, str] | None = None,
+    base_env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """``subprocess.run`` с ``text=False`` и UTF-8 decode на выходе.
 
@@ -43,6 +44,7 @@ def run_subprocess_utf8(
         cwd: рабочая директория.
         timeout: секунды.
         env: дополнительные переменные поверх UTF-8 defaults.
+        base_env: полная замена ``os.environ`` (ключи, которых нет, не наследуются).
 
     Returns:
         CompletedProcess с str stdout/stderr (replacement на невалидных UTF-8).
@@ -52,7 +54,7 @@ def run_subprocess_utf8(
         "capture_output": True,
         "text": False,
         "check": False,
-        "env": subprocess_utf8_env(env),
+        "env": subprocess_utf8_env(env, base=base_env),
     }
     if cwd is not None:
         kwargs["cwd"] = str(cwd)

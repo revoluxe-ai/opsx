@@ -14,6 +14,8 @@ opsx/receipts/
 opsx/runs/
 opsx/logs/
 opsx/tmp/
+pytest-of-vkita/
+tmp*/opsx/runs/
 *.sqlite*
 *.db
 *.log

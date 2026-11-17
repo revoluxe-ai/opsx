@@ -113,8 +113,21 @@ def validate_red_operative(
         red_arg = rel.as_posix()
     except ValueError:
         red_arg = str(red_json)
-    cmd = ["node", str(script), red_arg]
-    proc = run_subprocess_utf8(cmd, cwd=repo_root, timeout=timeout_sec)
+    hook = Path(__file__).resolve().with_name("receipt_cli_identity_hook.mjs")
+    if hook.is_file():
+        cmd = ["node", "--import", hook.as_uri(), str(script), red_arg]
+    else:
+        cmd = ["node", str(script), red_arg]
+    from agents.agent_tools.deterministic.pytest_tool import (
+        frozen_command_subprocess_env,
+    )
+
+    proc = run_subprocess_utf8(
+        cmd,
+        cwd=repo_root,
+        timeout=timeout_sec,
+        base_env=frozen_command_subprocess_env(repo_root),
+    )
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""
     status: str | None = None

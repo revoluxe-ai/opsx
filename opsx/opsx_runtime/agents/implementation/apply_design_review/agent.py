@@ -22,7 +22,6 @@ from agents.implementation.machine_gate_helpers import (
     operative_gate_dict,
     sdk_terminal,
 )
-from agents.repair.helpers import MUTATING
 from agents.state import GraphState
 from agents.verify.impl_verify.preflight import (
     collect_apply_machine_context,
@@ -36,10 +35,13 @@ from workflows.implementation.slice_stage_operative_validation import (
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 from workflows.repair.schemas import FixEvidence
 
-_EXECUTION_ROUTE = "/opsx-apply-design-review"
+_EXECUTION_ROUTE = "APPLY_DESIGN_REVIEW"
 _STREAM_AGENT = "apply_design_review"
 _PATCH_PREFIX = "apply_design_review"
 _GATE_FAIL_CODE = "DESIGN_REVIEW_OPERATIVE_GATE_FAILED"
+# Slice restrict_allow не покрывает opsx/**. grep/glob/ls делают hop discovery
+# и сжигают read-scope коррекции (READ_SCOPE_EXHAUSTED). Только scoped read+edit.
+_APPLY_DESIGN_REVIEW_TOOLS = ("read", "edit")
 
 
 class ApplyDesignReviewAgent(ABCAgent):
@@ -78,7 +80,7 @@ class ApplyDesignReviewAgent(ABCAgent):
             ),
             prompt=prompt,
             agent_key="apply_design_review",
-            tools=MUTATING,
+            tools=_APPLY_DESIGN_REVIEW_TOOLS,
             resume_agent_id=resume_for_role(state, "agent_id"),
             payload_model=ApplyDesignReviewAnswer,
             format_instructions=schema_format_reminder(ApplyDesignReviewAnswer),
@@ -119,7 +121,7 @@ class ApplyDesignReviewAgent(ABCAgent):
                     ),
                     prompt=repair_prompt,
                     agent_key="apply_design_review",
-                    tools=MUTATING,
+                    tools=_APPLY_DESIGN_REVIEW_TOOLS,
                     resume_agent_id=resume_for_role(state, "agent_id"),
                     payload_model=ApplyDesignReviewAnswer,
                     format_instructions=schema_format_reminder(ApplyDesignReviewAnswer),

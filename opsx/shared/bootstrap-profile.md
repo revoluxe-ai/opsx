@@ -11,7 +11,7 @@ For `stroy-system`, bootstrap does NOT authorize copying donor DEFAULT_INSTALL o
 - `.cursor/commands/opsx-meta-bootstrap.md`
 - `.cursor/commands/opsx-meta-import-command.md`
 - `.cursor/commands/opsx-projectize.md`
-- `.cursor/commands/opsx.md`
+- `opsx/opsx.mdc`
 - `.cursor/commands/opsx-meta.md`
 - `opsx/shared/bootstrap-profile.md`
 - `opsx/shared/meta-orientation.md`

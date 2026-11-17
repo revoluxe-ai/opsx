@@ -33,6 +33,36 @@ class DesignSubmissionRecord:
     unchanged: bool
     sha256: str | None
     code: str | None
+    message: str | None = None
+
+
+def remember_design_submission(
+    accepted: DesignSubmissionRecord | None,
+    latest: DesignSubmissionRecord,
+) -> tuple[DesignSubmissionRecord | None, DesignSubmissionRecord]:
+    """Не затирать принятую публикацию отклонённым candidate того же hop.
+
+    ``INVALID_ARGS`` и прочие отказы до replace не меняют канон. Решение hop
+    остаётся на последнем ``ok`` submit, а не на последнем вызове tool.
+    """
+    if latest.ok:
+        return latest, latest
+    if accepted is not None and accepted.ok:
+        return accepted, accepted
+    return None, latest
+
+
+def design_hop_effective_status(answer_status: str, decision_status: str) -> str:
+    """Принятый канон важнее ``ESCALATE_ARBITER``.
+
+    ``artifact_sha256`` связывает review с байтами файла. Прошедший gate
+    design идёт в review, а не в паузу из-за эскалации модели.
+    """
+    if decision_status in ("APPLY_COMPLETE", "NO_CHANGE"):
+        return decision_status
+    if answer_status == "ESCALATE_ARBITER":
+        return "ESCALATE_ARBITER"
+    return decision_status
 
 
 @dataclass(frozen=True, slots=True)

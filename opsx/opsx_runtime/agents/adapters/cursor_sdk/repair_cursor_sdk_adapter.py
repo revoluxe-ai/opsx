@@ -44,7 +44,11 @@ from agents.verify.repair.run_pytest_tool import (
     hop_includes_run_pytest_tool,
     merge_run_pytest_custom_tools,
 )
-from agents.abc_agent import is_cursor_bridge_stream_drop, log_cursor_bridge_stream_drop
+from agents.abc_agent import (
+    is_cursor_bridge_stream_drop,
+    log_cursor_bridge_stream_drop,
+    raise_cursor_infra_failure,
+)
 from agents.adapters.abc_adapter import ABCAdapter, ActiveCursorAgentRunError, AgentResult
 from agents.config import ReadScopeViolation
 from opsx_recording.adapter_hooks import adapter_inbox_capture_scope
@@ -53,6 +57,11 @@ from workflows.repo_paths import normalize_workspace_path  # noqa: E402
 
 from .capability_options import build_provider_agent_options
 from .cursor_bridge_runtime import CursorBridgeRuntime
+from .failure_classification import (
+    call_with_provider_capacity_retry,
+    is_cursor_provider_at_capacity,
+    wait_with_provider_capacity_retry,
+)
 from workflows.stop_errors import OpsxStageStop
 
 from .cursor_sdk_stream import (
@@ -315,44 +324,58 @@ class RepairCursorSDKAdapter(ABCAdapter):
                 run: Any = None
                 result: Any = None
                 while True:
-                    try:
+                    use_resume = resume_agent_id if stall_retry == 0 else None
+
+                    async def _open_cursor_agent() -> Any:
                         if self.bridge_runtime is not None:
                             await self.bridge_runtime.throttle_sdk_start()
-                        use_resume = resume_agent_id if stall_retry == 0 else None
                         if use_resume:
-                            agent = await AsyncAgent.resume(
+                            return await AsyncAgent.resume(
                                 str(use_resume), options, client=client
                             )
-                        else:
-                            agent = await AsyncAgent.create(options, client=client)
+                        return await AsyncAgent.create(options, client=client)
+
+                    async def _send_cursor_prompt() -> Any:
                         if send_kwargs:
-                            run = await agent.send(scoped_prompt, send_kwargs)
-                        else:
-                            run = await agent.send(scoped_prompt)
+                            return await agent.send(scoped_prompt, send_kwargs)
+                        return await agent.send(scoped_prompt)
+
+                    try:
+                        agent = await call_with_provider_capacity_retry(_open_cursor_agent)
+                        run = await call_with_provider_capacity_retry(_send_cursor_prompt)
                     except InternalServerError as exc:
                         if use_resume and "already has active run" in str(exc).lower():
                             raise ActiveCursorAgentRunError(str(use_resume)) from exc
+                        if is_cursor_provider_at_capacity(exc):
+                            raise_cursor_infra_failure(exc, state=state)
                         raise
                     agent_id_for_pause = str(
                         getattr(agent, "agent_id", "") or use_resume or "",
                     )
                     try:
-                        result = await wait_cursor_run_with_live_log(
-                            run,
-                            timeout_seconds=self.timeout_seconds,
-                            label=stream_label,
-                            stream_log=stream_log,
-                            emit_stderr=True,
-                            payload_model=payload_model,
-                            tool_call_guard=tool_call_guard,
-                            repo_root=repo_root,
-                            observed_soft_scope_violation_out=(
-                                soft_scope_violations
-                                if agent_key == "test_repair"
-                                else None
-                            ),
-                            intra_run_budget_guard=intra_guard,
-                            useful_progress_stall_seconds=stall_guard_seconds,
+                        async def _wait_accepted_run() -> Any:
+                            # The prompt already has a run id. Capacity here
+                            # is a blip on that run, not a reason to send again.
+                            return await wait_cursor_run_with_live_log(
+                                run,
+                                timeout_seconds=self.timeout_seconds,
+                                label=stream_label,
+                                stream_log=stream_log,
+                                emit_stderr=True,
+                                payload_model=payload_model,
+                                tool_call_guard=tool_call_guard,
+                                repo_root=repo_root,
+                                observed_soft_scope_violation_out=(
+                                    soft_scope_violations
+                                    if agent_key == "test_repair"
+                                    else None
+                                ),
+                                intra_run_budget_guard=intra_guard,
+                                useful_progress_stall_seconds=stall_guard_seconds,
+                            )
+
+                        result = await wait_with_provider_capacity_retry(
+                            _wait_accepted_run,
                         )
                         break
                     except ReadScopeViolation as exc:
@@ -379,6 +402,8 @@ class RepairCursorSDKAdapter(ABCAdapter):
                         sys.stderr.flush()
                         continue
                     except Exception as exc:
+                        if is_cursor_provider_at_capacity(exc):
+                            raise_cursor_infra_failure(exc, state=state)
                         if (
                             isinstance(exc, (asyncio.TimeoutError, APITimeoutError))
                             or is_cursor_bridge_stream_drop(exc)

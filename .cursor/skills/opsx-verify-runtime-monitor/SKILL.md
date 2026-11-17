@@ -9,7 +9,11 @@ description: >-
 
 # OPSX verify runtime monitor (META only)
 
-Подключать вместе с `.cursor/rules/opsx.mdc` §27.0–§27.0.4.
+Подключать вместе с `opsx/opsx.mdc` §27.0–§27.0.4.
+
+## Журнал супервизора (жёстко)
+
+Журнал супервизора — только SQLite (`opsx/runs/supervisor/<run_id>/journal.sqlite`, WAL, короткая транзакция на событие). Писать журнал в ndjson/jsonl запрещено: файл разрастается и вешает прогон. Читать хвост/status — через SQLite (`SupervisorJournal.rows_since` / `list_entries`), не tail `journal.ndjson`.
 
 ## Роль чата
 
@@ -24,8 +28,8 @@ description: >-
 | Любые правки `src/**`, `tests/**` (продукт) | Обход repair subgraph и receipts |
 | «Быстрый фикс» под project_bug / pytest / security finding | Доказательство должно идти через hop |
 | Ослабить `cli_outcome.py`, security validators, receipts | Ложный SECURITY_COMPLETE |
-| Второй verify на тот же change | §27.0 opsx.mdc |
-| `tail`/`grep` по `opsx/logs/**` вместо живого терминала | §27.0 opsx.mdc |
+| Второй verify на тот же change | §27.0 `opsx/opsx.mdc` |
+| `tail`/`grep` по `opsx/logs/**` вместо живого терминала | §27.0 `opsx/opsx.mdc` |
 
 **Owner GO на продукт** — только если пользователь **дословно** поручил правку `src/`/`tests/` **вне** pipeline или остановил verify и поручил product fix отдельно.
 
@@ -44,7 +48,7 @@ description: >-
 
 ## Наблюдение
 
-1. Одна команда из `opsx.mdc` §27.0.0; не мешать foreground-run.
+1. Одна команда из `opsx/opsx.mdc` §27.0.0; не мешать foreground-run.
 2. Прогресс — из **stdout/stderr того терминала**, не из side-log.
 3. Успех security — только **`verify_impl_security_pass(state)`**: `SECURITY_COMPLETE`, 0 confirmed findings, saved `check_receipt` (`fresh_audit` / `durable_pass`). Exit 0 и маркеры в логе **не** считать pass.
 

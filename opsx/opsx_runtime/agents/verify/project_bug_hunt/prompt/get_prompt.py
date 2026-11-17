@@ -1,4 +1,4 @@
-"""Промпт ProjectBugHuntAgent (семантика /opsx-project-bug-hunt для stroy-system verify)."""
+"""Промпт ProjectBugHuntAgent (stroy-system verify bug hunt hop)."""
 
 from __future__ import annotations
 

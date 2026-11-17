@@ -511,7 +511,11 @@ def format_live_line(label: str, record: dict[str, Any]) -> str:
     if kind == "timeout":
         return _stamp_live_line(f"{prefix} TIMEOUT: {record.get('message')}")
     if kind == "terminal":
-        return _stamp_live_line(f"{prefix} finished status={record.get('status')}")
+        message = str(record.get("message") or "").strip()
+        line = f"{prefix} finished status={record.get('status')}"
+        if message:
+            line = f"{line} {message}"
+        return _stamp_live_line(line)
     if kind == "get_run_poll":
         return _stamp_live_line(
             f"{prefix} get_run_poll status={record.get('status')!r} "
@@ -1354,7 +1358,7 @@ async def _abort_on_useful_progress_stall(
         ),
         owner="infra",
         next_action=(
-            "Stop run_named_bug_repair_ui (Ctrl+C), restart process for new code, "
+            "opsx stop; opsx start for new code, "
             "then retry classifier hop or check Cursor provider health"
         ),
     )
@@ -1433,6 +1437,9 @@ async def wait_cursor_run_with_live_log(
         wait_task.cancel()
 
     async def _emit_terminal_result(terminal: RunResult, *, message: str) -> None:
+        detail = str(getattr(terminal, "result", "") or "").strip()
+        if detail:
+            message = f"{message}: {detail[:500]}"
         sink.emit(
             {
                 "kind": "terminal",
@@ -1839,7 +1846,9 @@ async def wait_cursor_run_with_live_log(
     finally:
         from agents.config import ReadScopeViolation  # noqa: PLC0415
 
-        observe_budget_exc = observe_task.exception()
+        observe_budget_exc = (
+            observe_task.exception() if observe_task.done() else None
+        )
         scope_hop_exit = (
             isinstance(primary_exc, (ReadScopeViolation, BudgetExceeded))
             or isinstance(observe_budget_exc, BudgetExceeded)

@@ -77,7 +77,7 @@ def resource_path(repo: Path, *parts: str | Path) -> Path:
     execution = context.project_root if context else Path(os.environ.get("OPSX_PROJECT_ROOT", Path.cwd()))
 
     def _same_path(left: Path, right: Path) -> bool:
-        """Сравнить пути после resolve(): на Windows abspath и resolve() могут расходиться."""
+        """Normalize resolved paths consistently, including Windows short/long paths."""
         return os.path.normcase(str(left.resolve())) == os.path.normcase(str(right.resolve()))
 
     same_project = _same_path(Path(repo), execution)

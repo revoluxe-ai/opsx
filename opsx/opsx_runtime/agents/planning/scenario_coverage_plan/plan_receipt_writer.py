@@ -18,6 +18,7 @@ from agents.common.scenario_files import (
 from check_workflow_receipt import CheckWorkflowReceipt
 
 _ROW = re.compile(r"^\s*-\s+SCENARIO_ID:\s*(.*?)\s*$")
+_ROW_PLAIN = re.compile(r"^\s*SCENARIO_ID:\s*(.*?)\s*$")
 
 
 def _hash_file(path: Path) -> str:
@@ -60,7 +61,7 @@ def _scenario_file_entries(coverage: Path) -> list[dict[str, Any]]:
     for path in sorted(folder.glob("*.md")):
         scenario_id = ""
         for line in path.read_text(encoding="utf-8").splitlines():
-            match = _ROW.match(line)
+            match = _ROW.match(line) or _ROW_PLAIN.match(line)
             if match:
                 scenario_id = match.group(1)
                 break

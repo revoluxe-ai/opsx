@@ -1,4 +1,4 @@
-"""Runtime-агент apply-hop (``/opsx-apply``) после IMPL_GAPS, scenario FAIL или archive NO_GO."""
+"""Runtime-агент verify-side apply hop после IMPL_GAPS, scenario FAIL или archive NO_GO."""
 
 from __future__ import annotations
 
@@ -227,7 +227,7 @@ class ApplyAgent(ABCAgent):
                 status="FIXED",
                 summary=answer.gap_closure_summary,
                 files_changed=list(answer.files_changed),
-                execution_route="/opsx-apply",
+                execution_route="VERIFY_APPLY",
                 notes=answer.tasks_summary,
             ).model_dump(mode="json")
 

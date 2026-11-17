@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from unittest.mock import patch
 
 from opsx_cli.context import OpsxError, Project
@@ -39,12 +42,13 @@ def init(root: Path) -> None:
 
 class DistributionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        # CI installs the [web] extra; do not mutate the test runner environment.
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.origin = self.root / "origin"
         init(self.origin)
         for rel in ["opsx_cli", "opsx/opsx_runtime/run_verify_impl.py",
-                    "opsx_tools/registry/apply_design.schema.json", ".cursor/rules/opsx.mdc"]:
+                    "opsx/opsx.mdc", "opsx_tools/registry/apply_design.schema.json"]:
             src, dest = SOURCE / rel, self.origin / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             if src.is_dir():
@@ -76,8 +80,17 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         shutil.rmtree(self.root, onerror=writable)
         self.temp.cleanup()
 
+    def _seed_opsx_context(self, project: Project) -> None:
+        dest_dir = project.root / "opsx"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / "opsx.mdc").write_text(
+            "---\ndescription: OPSX fixture\nalwaysApply: false\n---\n\n# Test context\n",
+            encoding="utf-8",
+        )
+
     async def installed(self, project=None):
         project = project or self.projects[0]
+        self._seed_opsx_context(project)
         return await install(project, repository=str(self.origin), ref="v1", no_runtime=True)
 
     def version_two(self, broken=False):
@@ -85,7 +98,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         p.write_text("v2 content\n")
         (p.parent / "opsx-two.md").write_text("new command\n")
         if broken:
-            (self.origin / ".cursor/rules/opsx.mdc").unlink()
+            (self.origin / "opsx_cli/cli.py").unlink()
         git(self.origin, "add", ".")
         git(self.origin, "commit", "-m", "v2")
         git(self.origin, "tag", "v2")
@@ -101,11 +114,20 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn(
             "alwaysApply: false",
-            (project.root / ".cursor/rules/opsx.mdc").read_text(encoding="utf-8"),
+            (project.root / "opsx/opsx.mdc").read_text(encoding="utf-8"),
         )
         self.assertFalse((project.root / "AGENTS.md").exists())
         self.assertFalse((project.root / "src").exists())
         self.assertFalse((project.core / "opsx/project").exists())
+
+    async def test_core_context_is_seeded_from_pinned_core_without_owner_override(self):
+        project = self.projects[0]
+        context = project.root / "opsx/opsx.mdc"
+        self.assertFalse(context.exists())
+        result = await install(project, repository=str(self.origin), ref="v1", no_runtime=True)
+        self.assertEqual(result["status"], "INSTALLED")
+        self.assertEqual(context.read_bytes(), (project.core / "opsx/opsx.mdc").read_bytes())
+        self.assertNotIn("opsx/opsx.mdc", result["managed_files"])
 
     async def test_install_is_idempotent_and_preserves_settings(self):
         await self.installed()
@@ -143,12 +165,17 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         receipt.write_text('{"accepted":true}')
         unrelated = project.root / ".cursor/commands/my-project.md"
         unrelated.write_text("local")
+        context = project.root / "opsx/opsx.mdc"
+        context.write_text(context.read_text(encoding="utf-8") + "\n# Owner-only addition\n", encoding="utf-8")
+        original_context = context.read_bytes()
         self.version_two()
         result = await upgrade(project, ref="v2", no_runtime=True)
         self.assertEqual(result["status"], "UPGRADED")
         self.assertEqual(project.settings.read_text(encoding="utf-8"), '{"custom": "preserved"}')
         self.assertEqual(receipt.read_text(encoding="utf-8"), '{"accepted":true}')
         self.assertEqual(unrelated.read_text(encoding="utf-8"), "local")
+        self.assertEqual(context.read_bytes(), original_context)
+        self.assertNotIn("opsx/opsx.mdc", result["managed_files"])
         self.assertTrue((project.root / ".cursor/commands/opsx-two.md").exists())
 
     async def test_manual_command_conflict_prevents_upgrade(self):
@@ -205,6 +232,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_install_retry_resumes_owned_incomplete_checkout(self):
         project = self.projects[0]
+        self._seed_opsx_context(project)
         with patch("opsx_cli.installer._prepare_runtime", side_effect=OpsxError("ENV_FAIL", "fixture")):
             with self.assertRaises(OpsxError):
                 await install(project, repository=str(self.origin), ref="v1")
@@ -237,7 +265,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         result = await uninstall(project)
         self.assertEqual(result["status"], "UNINSTALLED")
         self.assertEqual(project.settings.read_bytes(), settings)
-        self.assertFalse((project.root / ".cursor/rules/opsx.mdc").exists())
+        self.assertTrue((project.root / "opsx/opsx.mdc").exists())  # Owner-owned input survives uninstall
 
     async def test_panel_start_is_idempotent_and_stop_confirms_ownership(self):
         await self.installed()
@@ -255,10 +283,84 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(first["status"], "STARTED")
             self.assertEqual(second["status"], "ALREADY_RUNNING")
             self.assertEqual(first["instance_id"], second["instance_id"])
+            state = json.loads(project.panel_state.read_text())
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+            )
+            home = opener.open(state["url"] + "/").read().decode("utf-8")
+            self.assertIn("Запуск workflow", home)
+            self.assertIn("Implementation", home)
+            self.assertNotIn('href="/repair"', home)
+            self.assertNotIn("Ремонт", home)
+            self.assertIn("workflow-timeout-min", home)
+            self.assertIn("supervisor-timeout-min", home)
+            with self.assertRaises(urllib.error.HTTPError) as missing:
+                opener.open(state["url"] + "/repair")
+            self.assertEqual(missing.exception.code, 404)
             self.assertEqual((await stop_panel(project))["status"], "STOPPED")
             self.assertFalse((await panel_status(project))["running"])
         finally:
             await stop_panel(project)
+
+
+class PanelWorkflowRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_workflow_post_returns_run_id(self):
+        """POST /api/workflows отдаёт run_id и передаёт его в RunService.execute."""
+        import httpx
+        from httpx import ASGITransport
+
+        from opsx_cli.panel import create_app
+
+        project_root = tempfile.mkdtemp()
+        project = Project.at(project_root)
+        await asyncio.to_thread(project.runs.mkdir, parents=True, exist_ok=True)
+        # Provider selection is part of the installed project contract.
+        project.settings.parent.mkdir(parents=True, exist_ok=True)
+        project.settings.write_text(json.dumps({
+            "schema_version": 2,
+            "instance": {
+                "provider": "cursor",
+                "adapter": {"module": "agents.adapters.cursor_sdk", "extras": ["cursor"]},
+            },
+        }), encoding="utf-8")
+        state = {
+            "instance_id": "test",
+            "token": "panel-test-token",
+            "url": "http://127.0.0.1:8765",
+            "project_root": str(project.root),
+        }
+        captured: dict = {}
+
+        async def fake_execute(self, **kwargs):
+            captured.update(kwargs)
+            return {"status": "PASS", "run_id": kwargs.get("run_id")}
+
+        app = create_app(project, state)
+        transport = ASGITransport(app=app)
+        with patch("opsx_cli.panel.RunService.execute", new=fake_execute):
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url=state["url"],
+                headers={"host": "127.0.0.1:8765"},
+                cookies={"opsx_token": state["token"]},
+            ) as client:
+                response = await client.post(
+                    "/api/workflows",
+                    json={
+                        "change_id": "visual",
+                        "workflow_timeout_minutes": 45,
+                        "supervisor_timeout_minutes": 180,
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["change_id"], "visual")
+            self.assertTrue(body.get("run_id"))
+            self.assertEqual(len(body["run_id"]), 32)
+            self.assertEqual(captured.get("mode"), "workflow")
+            self.assertEqual(captured.get("provider"), "cursor")
+            self.assertEqual(captured.get("change"), "visual")
+            self.assertEqual(captured.get("run_id"), body["run_id"])
 
 
 class PathTests(unittest.TestCase):

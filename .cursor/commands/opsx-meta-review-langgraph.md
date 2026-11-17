@@ -11,84 +11,22 @@ description: "Owner scopes LangGraph review in plain language; command audits wo
 argument-hint: "<что смотреть — весь runtime / verify / repair / агент X>; опционально SCOPE=, FOCUS="
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-For stroy-system, product execution resolves through `opsx/project/capabilities.yaml`.
-Donor literals in inherited text are not execution authority.
+Product-specific execution authority resolves only through:
 
-# TARGET OVERRIDE — HIGHEST PRIORITY
+  opsx/project/capabilities.yaml
 
-**Contract:** `OPSX-WB-META-REVIEW-LANGGRAPH-01`
-**Runtime class:** `ACTIVE_WITH_LIMITS`
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-```text
-IMPLEMENTATION_STATUS: IMPLEMENTED_UNVERIFIED
-DEFAULT_MODE: READ_ONLY
-WRITES: NONE
-NOT_COMMITTED_THIS_RUN: true
-```
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
-### Authority root
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
 
-```text
-LANGGRAPH_ROOT: opsx/opsx_runtime/
-  workflows/     # graphs, subgraphs, routing
-  agents/        # hop packages (verify, repair, implementation); Cursor SDK in adapters/
-  configs/       # model roles (read-only context)
-```
-
-**Out of scope** (redirect, do not score as LangGraph gaps):
-
-| Topic | Route |
-|-------|--------|
-| OpenSpec change verify / archive GO | `/opsx-verify`, product verify |
-| Cursor slash commands only | `/opsx-meta-chat-command-audit`, fix-command-defects |
-| bug-team Task workers without graph | `.cursor/pipeline/bug-team/` + consult |
-| Temporal worker wiring only | `tools/temporal/` — note boundary, no deep audit unless Owner scopes it |
-| `src/stroy` product code | product lane |
-
-### Related meta chain
-
-- `/opsx-meta-add-agent` — new role
-- `/opsx-meta-wire-workflow-agent` — wiring plan
-- `/opsx-meta-refactor-agent` — refactor plan
-- This command — **audit first**, then route to those owners
-
-### Projectization gate
-
-Incomplete `opsx/projectization.yaml` → `FAIL_CLOSED` → `/opsx-projectize`
-
-### Hard bans (this command)
-
-- No file edits, no pytest live runs, no `run_opsx_main.py` verify unless Owner
-  explicitly passes `RUN_LIVE:` (out of default scope).
-- No commit, push, archive, deploy.
-- Findings must cite **read paths**; no invented defects.
-
-### Hard stop after READ_ONLY (mandatory)
-
-- **Запрещены** в этом invocation: `StrReplace` / `Write` по `opsx/opsx_runtime/**`,
-  `src/**`, product entrypoints.
-- Owner traceback / симптом поломки → только `FINDINGS` + `suggested_next:
-  /opsx-meta-repair-langgraph` (или wire, если gap плановый).
-- Если агент уже начал product fix без Owner GO on repair → откат + в отчёте
-  `REVIEW_ONLY_VIOLATION: code edits attempted`.
-
-### Lexicon: SDK (Subagent/Task — mandatory)
-
-**`SDK` = Cursor SDK only** in review findings and routed briefs:
-`agents/adapters/cursor_sdk/*`, `GetRun`, stream, `run.wait`,
-**`agent.run` (Cursor SDK transport)**, `SDK_*` recovery when Cursor dispatch is live.
-
-| Forbidden loose phrasing | Use instead |
-|--------------------------|-------------|
-| «SDK hop» for plan hop, `implementation_execute_hop_node`, `hop_lane_status`, stagnation | **implementation hop**, **execute hop**, **mutating hop**, **OPSX implementation lane** |
-| «SDK RCA» for orchestration / lane status | **orchestration RCA** first; Cursor SDK RCA only in `cursor_sdk/*` |
-
-Live Cursor dispatch: **mutating hop via Cursor SDK** — not a synonym for graph orchestration.
-SoT: `.cursor/commands/opsx-meta-fix-command-defects.md` § Lexicon: SDK.
-
----
 
 # /opsx-meta-review-langgraph
 

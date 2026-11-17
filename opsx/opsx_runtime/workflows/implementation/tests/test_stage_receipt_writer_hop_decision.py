@@ -235,6 +235,63 @@ def test_scaffold_dispatch_success_without_model_paths(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_scaffold_receipt_fills_inspected_digest_when_design_omits_repository_identity(
+    tmp_path: Path,
+) -> None:
+    """Design schema не требует repository_identity; receipt всё равно валиден.
+
+    Пустой planning inputs → SHA-256 пустой строки (identityDigest([])).
+    """
+    change_id = "hop-decision"
+    slice_id = "SLICE-001"
+    _init_repo(tmp_path)
+    _write_minimal_design(tmp_path, change_id, slice_id)
+    design_path = tmp_path / "openspec" / "changes" / change_id / "apply-design" / "APPLY-DESIGN.json"
+    design = json.loads(design_path.read_text(encoding="utf-8"))
+    del design["repository_identity"]
+    _ = design_path.write_text(json.dumps(design, indent=2), encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "omit-repo-identity"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    work = "src/pkg/widget.py"
+    _ = (tmp_path / work).write_text(
+        "def widget():\n    raise NotImplementedError\n",
+        encoding="utf-8",
+    )
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    result = StageReceiptWriter.record_hop_decision(
+        change_id,
+        repo_root=tmp_path,
+        decision={
+            "stage": "APPLY_SCAFFOLD",
+            "slice_id": slice_id,
+            "hop_status": "APPLY_COMPLETE",
+            "hop_worktree_baseline": baseline,
+            "hop_files_changed": [work],
+        },
+    )
+    assert result.ok, result.code
+    assert result.path is not None
+    proc = _run_schema(_SCAFFOLD_VALIDATOR, _SCHEMA_SCAFFOLD, result.path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    body = json.loads(result.path.read_text(encoding="utf-8"))
+    inspected = body["apply_design_identity"]["inspected_digest"]
+    assert inspected == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    assert body["apply_design_identity"]["planning_digest"] == "a" * 64
+    assert body["apply_design_identity"]["protected_context_digest"] == "c" * 64
+
+
+@pytest.mark.unit
 def test_scaffold_no_op_when_shape_operative_despite_no_op_allowed_false(
     tmp_path: Path,
 ) -> None:

@@ -33,7 +33,7 @@ def assess_weak_mapped_stub_row(
     if weak_for_expected_verification(source, plan_text):
         return (
             f"TRACE_WEAK_MAPPED_STUB:{scenario_id} "
-            "(boundary_integration+PG expected; handoff=/opsx-test authorship)"
+            "(boundary_integration+PG expected; handoff=SCENARIO_TEST_AUTHOR stage)"
         )
     return None
 
@@ -67,5 +67,5 @@ def assess_weak_mapped_stubs(repo_root: Path, change_id: str) -> str | None:
     sample = weak[0]
     return (
         "TRACE_WEAK_MAPPED_STUB: mapped test(s) lack boundary_integration seams; "
-        f"example={sample}; handoff=/opsx-test authorship"
+        f"example={sample}; handoff=SCENARIO_TEST_AUTHOR stage"
     )

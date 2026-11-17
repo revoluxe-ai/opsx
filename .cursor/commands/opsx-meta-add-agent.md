@@ -11,31 +11,6 @@ description: "Owner describes the agent/worker needed in plain language; command
 argument-hint: "<что нужно — свободным текстом; опционально AGENT:/PURPOSE:/CONTEXT:>"
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
-
-This command was transferred from a project-specific OPSX realization.
-For stroy-system, product-specific realization MUST resolve through:
-
-  opsx/project/capabilities.yaml
-  opsx/shared/target-capability-resolution.md
-
-Any inherited donor literal (WB Sky, adv-bot, Poetry, pyproject.toml, app/**,
-tests/**, npm/package.json, src/**, public/**, deploy names) is historical or
-compatibility text only and is NOT execution authority.
-
-Before any product-specific read/write/command execution, resolve the
-corresponding TARGET capability. If unresolved, fail closed:
-
-```text
-STATUS: FAIL_CLOSED
-REASON: TARGET_CAPABILITY_UNRESOLVED
-CAPABILITY: <required capability>
-NEXT_ACTION: define/discover capability in opsx/project/capabilities.yaml
-```
-
-Do not infer product stack from the donor repository.
-Control-plane runtime paths under tools/temporal and tools/cursor_executor are
-separate from product Temporal/runtime adoption.
 
 # TARGET OVERRIDE — HIGHEST PRIORITY
 
@@ -75,7 +50,7 @@ NOT_COMMITTED_THIS_RUN: true
 - `.cursor/commands/opsx-meta-design-command.md`
 - `.cursor/commands/opsx-meta-fix-command-defects.md`
 - `.cursor/commands/opsx-meta-consult.md`
-- `.cursor/skills/opsx-static-check-infra/SKILL.md`
+- `opsx/core/.cursor/skills/opsx-static-check-infra/SKILL.md`
 - `opsx/opsx_runtime/agents/repair/README.md`
 
 ### Projectization gate
@@ -90,6 +65,23 @@ NEXT_COMMAND: /opsx-projectize
 ```
 
 ---
+
+# PROJECT TARGET PROFILE — REQUIRED
+
+Product-specific execution authority resolves only through:
+
+  opsx/project/capabilities.yaml
+
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
+
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
+
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
 
 # /opsx-meta-add-agent
 
@@ -164,7 +156,7 @@ OWNER_CONSTRAINTS: …
 | `PIPELINE_WORKER` | Роль bug-team / supervisor Task hop | `.cursor/pipeline/bug-team/REGISTRY.md`, `workers/*.md` |
 | `CURSOR_ORCHESTRATOR` | Поведение лучше выразить как `/opsx-*` | `.cursor/commands/`, `/opsx-meta-add-command` |
 | `STATIC_CHECK_PACK` | Новый check, не отдельный «агент» | `.cursor/static-check/`, skill infra |
-| `CURSOR_SKILL` | Только skill без runtime/worker | `.cursor/skills/`, skill `create-skill` |
+| `CURSOR_SKILL` | Только skill без runtime/worker | `opsx/core/.cursor/skills/`, skill `create-skill` |
 | `DEPLOYED_BDK` | Хостинговый Agent SDK бот вне репо | `agent-sdk-create-agent` skill |
 | `EXTEND_EXISTING` | Доработка уже в `HEAD` | `/opsx-meta-fix-command-defects` |
 

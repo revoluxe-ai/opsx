@@ -27,8 +27,11 @@ Run at the root of an existing Git repository:
     opsx start
 
 Installation adds the shared core at opsx/core, prepares an isolated execution
-environment and installs OPSX Cursor commands plus the manually activated
-@opsx context. The latter remains .cursor/rules/opsx.mdc, alwaysApply: false.
+environment and installs OPSX Cursor commands. The canonical manually activated
+@opsx context is versioned at `opsx/core/opsx/opsx.mdc` (`alwaysApply: false`).
+Install seeds `opsx/opsx.mdc` from that pinned core only if absent; existing
+consumer edits are Owner-owned and preserved through upgrades/uninstall.
+An upgrade does not silently merge local context edits into the core.
 AGENTS.md is not created or edited.
 
 New project capabilities are deliberately unresolved. Use the installed
@@ -71,7 +74,7 @@ instance identified by that project's random token and identity.
 | opsx/runs, opsx/logs | Per-project execution data |
 | openspec | Product requirements and useful change artifacts |
 | .cursor/commands | Managed OPSX files alongside unrelated project commands |
-| .cursor/rules/opsx.mdc | Required manual OPSX engineering context |
+| opsx/opsx.mdc | Required manual OPSX engineering context (canonical) |
 
 Generated Cursor files have one canonical source in the core. Local edits are
 reported as conflicts during upgrade. Unrelated Cursor files are preserved.

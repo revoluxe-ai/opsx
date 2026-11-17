@@ -61,10 +61,8 @@ commit_group "refactor(opsx-process): verify graph cycle gates and logging (ци
   opsx/opsx_runtime/workflows/verify/tests/test_impl_graph.py \
   opsx/opsx_runtime/workflows/workflow_logging.py
 
-commit_group "chore(opsx-process): named bug repair UI streaming (UI named bug repair)" \
-  opsx/opsx_runtime/ui/named_bug_repair/index.html \
+commit_group "chore(opsx-process): owner-named repair intake (named bug repair)" \
   opsx/opsx_runtime/ui/named_bug_repair/intake.py \
-  opsx/opsx_runtime/ui/named_bug_repair/server.py \
   opsx/opsx_runtime/ui/named_bug_repair/stream_log.py
 
 commit_group "refactor(opsx-process): commit agent and apply implementation hops (commit-agent и apply hops)" \

@@ -5,10 +5,22 @@ component_id: opsx.commands.static_check_coverage
 runtime_class: ACTIVE
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-Resolve product paths via `opsx/project/capabilities.yaml` (`product.source_roots`).
-Do not infer `app/**` from donor repos.
+Product-specific execution authority resolves only through:
+
+  opsx/project/capabilities.yaml
+
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
+
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
+
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
+
 
 # /opsx-static-check-coverage
 

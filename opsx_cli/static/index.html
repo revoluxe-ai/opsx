@@ -1,35 +1,518 @@
 <!doctype html>
 <html lang="ru">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OPSX — управление проектом</title>
-<style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#11141b;color:#e6e9ef}
-body{max-width:1040px;margin:60px auto;padding:0 24px}header{display:flex;align-items:baseline;gap:20px}
-h1{font-size:42px;letter-spacing:-2px;margin:0}.muted{color:#9da8bb}section{background:#1b2130;border:1px solid #30394c;border-radius:16px;padding:24px;margin:24px 0}
-input,button,a.button{font:inherit;border-radius:8px;padding:11px 16px;border:1px solid #45526c}
-input{background:#111722;color:#fff;min-width:240px}button,a.button{background:#a8edbf;color:#10291a;cursor:pointer;text-decoration:none;display:inline-block}
-table{border-collapse:collapse;width:100%;text-align:left}td,th{padding:12px 6px;border-bottom:1px solid #30394c}pre{white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#ffb7b7}
-</style>
-<header><h1>OPSX</h1><span class="muted">Панель текущего проекта</span></header>
-<p id="project" class="muted">Подключение…</p>
-<section><h2>Работа</h2><p>Запустить полный workflow по существующему change.</p>
-<form id="launch"><input id="change" placeholder="change-id" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*"> <button>Запустить</button> <a class="button" href="/repair">Ремонт конкретного бага</a></form>
-<p id="error"></p></section>
-<section><h2>Запуски</h2><table><thead><tr><th>Change</th><th>Режим</th><th>Состояние</th><th>Начало</th></tr></thead><tbody id="runs"></tbody></table></section>
-<section><h2>Настройки проекта</h2><p class="muted">opsx/project/project.json</p><pre id="settings"></pre></section>
-<script>
-const text=(tag,value)=>{const el=document.createElement(tag);el.textContent=value??'';return el;};
-async function load(){
- try{
-  const profile=await fetch('/api/project').then(r=>r.json());
-  document.querySelector('#project').textContent=profile.name||'Проект';
-  document.querySelector('#settings').textContent=JSON.stringify(profile,null,2);
-  const data=await fetch('/api/runs').then(r=>r.json()), rows=document.querySelector('#runs');rows.replaceChildren();
-  for(const run of data.runs){const row=document.createElement('tr');for(const v of [run.change_id,run.mode,run.status,run.started_at])row.append(text('td',v));rows.append(row);}
- }catch(e){document.querySelector('#error').textContent=String(e);}
-}
-document.querySelector('#launch').onsubmit=async e=>{e.preventDefault();const response=await fetch('/api/workflows',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({change_id:document.querySelector('#change').value})});document.querySelector('#error').textContent=response.ok?'Запуск принят':JSON.stringify(await response.json());await load();};
-load();setInterval(load,5000);
-</script>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OPSX — запуск workflow</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#11141b;color:#e6e9ef}
+    body{max-width:1280px;margin:40px auto;padding:0 24px}
+    header{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap}
+    h1{font-size:42px;letter-spacing:-2px;margin:0}
+    .muted{color:#9da8bb}
+    section{background:#1b2130;border:1px solid #30394c;border-radius:16px;padding:24px;margin:24px 0}
+    input,select,button{font:inherit;border-radius:8px;padding:11px 16px;border:1px solid #45526c}
+    input,select{background:#111722;color:#fff;min-width:240px}
+    button{background:#a8edbf;color:#10291a;cursor:pointer}
+    button:disabled{opacity:.55;cursor:wait}
+    table{border-collapse:collapse;width:100%;text-align:left}
+    td,th{padding:12px 6px;border-bottom:1px solid #30394c}
+    pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+    #error{color:#ffb7b7}
+    #run-state{font-weight:700;margin:.5rem 0}
+    #log-pane{
+      margin-top:.6rem;padding:.85rem;min-height:70vh;max-height:70vh;
+      overflow:auto;border:1px solid #243650;border-radius:8px;background:#030914;
+      color:#d5e2f2;font:0.82rem/1.45 ui-monospace,Consolas,monospace;
+      user-select:text;cursor:text
+    }
+    #log-tools{display:flex;flex-wrap:wrap;gap:.65rem;align-items:center;margin:.4rem 0}
+    #log-tools label{display:flex;gap:.35rem;align-items:center;font-size:.85rem}
+    #log-tools .ghost{background:transparent;color:#cfe0ff;border-color:#45526c}
+    tr.run-row{cursor:pointer}
+    tr.run-row:hover td{background:#1a2840}
+    tr.run-row[aria-selected="true"] td{background:#243650}
+    .badge{display:inline-block;padding:.25rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700}
+    .badge.running{background:#193765;color:#cfe0ff}
+    .badge.done{background:#123d36;color:#bff5df}
+    .badge.fail{background:#4b202b;color:#ffd0d5}
+    .change-picker{position:relative;max-width:32rem}
+  .change-picker input{width:100%;max-width:100%;box-sizing:border-box}
+  #change-menu{
+    display:none;position:absolute;z-index:20;left:0;right:0;margin-top:.35rem;max-height:14rem;
+    overflow:auto;border:1px solid #45526c;border-radius:8px;background:#0c1424;box-shadow:0 12px 32px rgba(0,0,0,.45)
+  }
+  #change-menu.open{display:block}
+  #change-menu button{
+    display:block;width:100%;text-align:left;padding:.65rem .85rem;border:0;border-radius:0;
+    background:transparent;color:#e6e9ef;cursor:pointer
+  }
+  #change-menu button:hover,#change-menu button[aria-selected="true"]{background:#1a2840}
+  #change-menu .opt-id{font-weight:700;font-family:ui-monospace,Consolas,monospace;font-size:.88rem}
+  #change-menu .opt-preview{margin-top:.2rem;color:#9da8bb;font-size:.78rem;line-height:1.35}
+  #change-preview{margin:.55rem 0 0;font-size:.85rem;line-height:1.4;min-height:1.2em}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OPSX</h1>
+    <span class="muted">Implementation → verify</span>
+  </header>
+  <p id="project" class="muted">Подключение…</p>
+  <section>
+    <h2>Запуск workflow</h2>
+    <p class="muted">Parent graph: имплементация (или receipt skip) и полный verify до security pass.</p>
+    <form id="launch">
+      <div class="change-picker">
+        <label class="muted" for="change">Change</label>
+        <input id="change" name="change_id" placeholder="начните ввод или выберите из списка" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="change-menu" aria-autocomplete="list">
+        <div id="change-menu" role="listbox" aria-label="OpenSpec changes"></div>
+        <p id="change-preview" class="muted"></p>
+      </div>
+      <div id="provider-controls">
+        <label class="muted" for="provider-select">Исполнитель новых запусков</label>
+        <select id="provider-select" aria-label="Адаптер OPSX" disabled>
+          <option value="cursor">Cursor SDK (прежний)</option>
+          <option value="codex">Codex — ChatGPT</option>
+        </select>
+        <button type="button" id="save-provider" disabled>Сохранить адаптер</button>
+        <span class="muted" id="provider-status" role="status">Чтение настройки…</span>
+        <p class="muted">Хранится в opsx/project/project.json. Новая настройка действует только для новых запусков.</p>
+      </div>
+      <label class="muted" for="workflow-timeout-min">Таймаут workflow, мин</label>
+      <input id="workflow-timeout-min" name="workflow_timeout_minutes" type="number" min="1" step="1" value="45" title="Лимит одной попытки workflow" />
+      <label class="muted" for="supervisor-timeout-min">Таймаут супер-агента, мин</label>
+      <input id="supervisor-timeout-min" name="supervisor_timeout_minutes" type="number" min="1" step="1" value="180" title="Общий бюджет: попытки, fix, commit; не решил — стоп" />
+      <button type="submit" id="submit">Запустить</button>
+    </form>
+    <p id="run-state" hidden><span id="run-badge" class="badge running">Выполняется</span> <span id="run-meta" class="muted"></span></p>
+    <p id="error"></p>
+    <h3>Подробный лог</h3>
+    <div id="log-tools">
+      <label class="muted"><input type="checkbox" id="log-compact" checked> Компактный поток (без thinking / assistant-токенов)</label>
+      <button type="button" id="copy-log" class="ghost">Копировать лог</button>
+      <span id="log-stats" class="muted"></span>
+    </div>
+    <pre id="log-pane" aria-live="polite">Ожидание запуска…</pre>
+  </section>
+  <section>
+    <h2>Запуски</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Change</th><th>Режим</th><th>Состояние</th><th>Начало</th></tr></thead>
+      <tbody id="runs"></tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Настройки проекта</h2>
+    <p class="muted">opsx/project/project.json</p>
+    <pre id="settings"></pre>
+  </section>
+  <script>
+    const text = (tag, value) => {
+      const el = document.createElement(tag);
+      el.textContent = value ?? "";
+      return el;
+    };
+    const errorEl = document.querySelector("#error");
+    const logPane = document.querySelector("#log-pane");
+    const runState = document.querySelector("#run-state");
+    const runBadge = document.querySelector("#run-badge");
+    const runMeta = document.querySelector("#run-meta");
+    const submitBtn = document.querySelector("#submit");
+    const providerSelect = document.querySelector("#provider-select");
+    const providerSave = document.querySelector("#save-provider");
+    const providerStatus = document.querySelector("#provider-status");
+    let providerRevision = null;
+    let providerSaving = false;
+    let streamAbort = null;
+    let activeRunId = null;
+    let changeCatalog = [];
+    const changeInput = document.querySelector("#change");
+    const changeMenu = document.querySelector("#change-menu");
+    const changePreview = document.querySelector("#change-preview");
+    const logCompact = document.querySelector("#log-compact");
+    const copyLogBtn = document.querySelector("#copy-log");
+    const logStats = document.querySelector("#log-stats");
+  const LOG_LINE_CAP = 4000;
+  const LOG_CHAR_CAP = 1_500_000;
+  const TAIL_FINISHED = 600;
+  let logQueue = [];
+  let logFlushScheduled = false;
+  let logLineCount = 0;
+  let skippedLogLines = 0;
+
+    async function loadProvider() {
+      const response = await fetch("/api/provider");
+      if (!response.ok) throw new Error("Не удалось получить сохранённый адаптер");
+      const payload = await response.json();
+      providerRevision = payload.revision;
+      providerSelect.value = payload.provider;
+      providerSelect.disabled = submitBtn.disabled;
+      providerSave.disabled = submitBtn.disabled;
+      providerStatus.textContent = "Текущий: " + payload.provider + " · " + payload.model;
+    }
+
+    providerSave.addEventListener("click", async () => {
+      if (!providerRevision || providerSaving) return;
+      providerSaving = true;
+      providerSelect.disabled = true;
+      providerSave.disabled = true;
+      providerStatus.textContent = "Сохранение…";
+      try {
+        const response = await fetch("/api/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: providerSelect.value,
+            expected_revision: providerRevision,
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.detail || payload.message || "Ошибка сохранения");
+        }
+        const saved = await response.json();
+        providerRevision = saved.revision;
+        providerStatus.textContent = "Сохранено: " + saved.provider + " · " + saved.model;
+        await load();
+      } catch (err) {
+        providerStatus.textContent = "Не сохранено: " + String(err);
+        try { await loadProvider(); } catch (_) { /* останется ошибка */ }
+      } finally {
+        providerSaving = false;
+        providerSelect.disabled = submitBtn.disabled;
+        providerSave.disabled = submitBtn.disabled;
+      }
+    });
+
+    function catalogById(id) {
+      return changeCatalog.find((item) => item.id === id);
+    }
+
+    function updateChangePreview(id) {
+      const item = catalogById(id);
+      changePreview.textContent = item?.preview ? item.preview : (id ? `Change: ${id}` : "");
+    }
+
+    function renderChangeMenu(filter) {
+      const q = (filter || "").trim().toLowerCase();
+      const matches = changeCatalog.filter((item) => {
+        if (!q) return true;
+        return item.id.toLowerCase().includes(q) || (item.preview || "").toLowerCase().includes(q);
+      }).slice(0, 40);
+      changeMenu.replaceChildren();
+      for (const item of matches) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.setAttribute("role", "option");
+        btn.dataset.changeId = item.id;
+        const idNode = document.createElement("div");
+        idNode.className = "opt-id";
+        idNode.textContent = item.id;
+        btn.append(idNode);
+        if (item.preview) {
+          const prev = document.createElement("div");
+          prev.className = "opt-preview";
+          prev.textContent = item.preview;
+          btn.append(prev);
+        }
+        btn.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          changeInput.value = item.id;
+          localStorage.setItem("opsxLastChangeId", item.id);
+          updateChangePreview(item.id);
+          closeChangeMenu();
+        });
+        changeMenu.append(btn);
+      }
+      if (!matches.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.style.padding = ".75rem .85rem";
+        empty.textContent = q ? "Нет совпадений — можно ввести id вручную" : "Каталог пуст";
+        changeMenu.append(empty);
+      }
+    }
+
+    function openChangeMenu() {
+      changeMenu.classList.add("open");
+      changeInput.setAttribute("aria-expanded", "true");
+      renderChangeMenu(changeInput.value);
+    }
+
+    function closeChangeMenu() {
+      changeMenu.classList.remove("open");
+      changeInput.setAttribute("aria-expanded", "false");
+    }
+
+    async function loadChangeCatalog() {
+      try {
+        const data = await fetch("/api/changes").then((r) => r.json());
+        changeCatalog = Array.isArray(data.changes) ? data.changes : [];
+        const newest = changeCatalog[0]?.id || "";
+        if (!changeInput.value && newest) {
+          changeInput.value = newest;
+        }
+        updateChangePreview(changeInput.value.trim());
+      } catch (_) {
+        changeCatalog = [];
+      }
+    }
+
+    changeInput.addEventListener("focus", () => openChangeMenu());
+    changeInput.addEventListener("input", () => {
+      openChangeMenu();
+      updateChangePreview(changeInput.value.trim());
+    });
+    changeInput.addEventListener("blur", () => {
+      window.setTimeout(closeChangeMenu, 150);
+    });
+    document.addEventListener("click", (ev) => {
+      if (!ev.target.closest(".change-picker")) closeChangeMenu();
+    });
+
+    function shouldSkipClientLog(line) {
+      if (logCompact && !logCompact.checked) return false;
+      const low = line.toLowerCase();
+      if (low.includes(" thinking:") || low.includes(" thinkingδ:") || low.includes("thinking-delta")) return true;
+      if (line.includes('"kind": "thinking"') || line.includes('"kind": "usage"')) return true;
+      if (/\] assistant: \S{1,40}$/i.test(line)) return true;
+      return false;
+    }
+
+    function flushLogQueue() {
+      logFlushScheduled = false;
+      if (!logQueue.length) return;
+      const batch = logQueue.splice(0, logQueue.length);
+      const distanceFromBottom = logPane.scrollHeight - logPane.scrollTop - logPane.clientHeight;
+      const stickToBottom = distanceFromBottom < 48;
+      if (logPane.dataset.empty === "1" || logPane.textContent === "Ожидание запуска…") {
+        logPane.textContent = "";
+        logPane.dataset.empty = "0";
+      }
+      logPane.textContent += batch.join("");
+      if (logPane.textContent.length > LOG_CHAR_CAP) {
+        logPane.textContent = logPane.textContent.slice(-Math.floor(LOG_CHAR_CAP * 0.75));
+      }
+      if (stickToBottom) logPane.scrollTop = logPane.scrollHeight;
+      logStats.textContent = `строк: ${logLineCount}, скрыто: ${skippedLogLines}`;
+    }
+
+    function appendLog(line) {
+      if (!line) return;
+      if (shouldSkipClientLog(line)) {
+        skippedLogLines += 1;
+        return;
+      }
+      logLineCount += 1;
+      logQueue.push(line.endsWith("\n") ? line : line + "\n");
+      if (logLineCount > LOG_LINE_CAP && logLineCount % 200 === 0) {
+        const parts = logPane.textContent.split("\n");
+        if (parts.length > LOG_LINE_CAP) {
+          logPane.textContent = parts.slice(-Math.floor(LOG_LINE_CAP * 0.8)).join("\n") + "\n";
+        }
+      }
+      if (!logFlushScheduled) {
+        logFlushScheduled = true;
+        requestAnimationFrame(flushLogQueue);
+      }
+    }
+
+    function formatLogEvent(eventName, data) {
+      if (eventName === "run_started" || eventName === "done" || eventName === "result") return "";
+      if (eventName === "log" || eventName === "message") {
+        return data && typeof data.text === "string" ? data.text.replace(/\r$/, "") : "";
+      }
+      if (data && typeof data.text === "string" && data.text) return data.text.replace(/\r$/, "");
+      const body = data && Object.keys(data).length ? " " + JSON.stringify(data) : "";
+      return body ? eventName + body : "";
+    }
+
+    function setRunUi(state, meta) {
+      runState.hidden = false;
+      runBadge.className = "badge " + (state === "running" ? "running" : state === "completed" ? "done" : "fail");
+      runBadge.textContent = state === "running" ? "Выполняется" : state === "completed" ? "Завершено" : "Ошибка";
+      runMeta.textContent = meta || "";
+      submitBtn.disabled = state === "running";
+      providerSelect.disabled = state === "running" || providerSaving || !providerRevision;
+      providerSave.disabled = state === "running" || providerSaving || !providerRevision;
+    }
+
+    function parseEventData(raw) {
+      try { return JSON.parse(raw); } catch (_) { return { text: raw }; }
+    }
+
+    function drainSseBuffer(buffer, onEvent) {
+      let rest = buffer;
+      for (;;) {
+        const sep = rest.indexOf("\n\n");
+        if (sep < 0) break;
+        const block = rest.slice(0, sep);
+        rest = rest.slice(sep + 2);
+        const lines = block.split("\n").filter((line) => line && !line.startsWith(":"));
+        if (!lines.length) continue;
+        let eventName = "message";
+        const dataLines = [];
+        for (const line of lines) {
+          if (line.startsWith("event:")) eventName = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^\s/, ""));
+        }
+        if (!dataLines.length) continue;
+        onEvent(eventName, parseEventData(dataLines.join("\n")));
+      }
+      return rest;
+    }
+
+    async function consumeEvents(runId, { tail = 0, watchRunning = true } = {}) {
+      if (streamAbort) streamAbort.abort();
+      streamAbort = new AbortController();
+      activeRunId = runId;
+      if (watchRunning) localStorage.setItem("opsxActiveWorkflowRun", runId);
+      const status = await fetch("/runs/" + encodeURIComponent(runId)).then((r) => r.json()).catch(() => ({}));
+      const isLive = watchRunning && status.state === "running";
+      setRunUi(isLive ? "running" : status.state === "completed" ? "completed" : "failed", "run_id: " + runId);
+      logPane.textContent = "";
+      logPane.dataset.empty = "0";
+      logQueue = [];
+      logLineCount = 0;
+      skippedLogLines = 0;
+      logStats.textContent = "";
+      const params = new URLSearchParams();
+      if (logCompact.checked) params.set("compact", "1");
+      else params.set("compact", "0");
+      if (tail > 0) params.set("tail", String(tail));
+      const qs = params.toString();
+      const response = await fetch(
+        "/runs/" + encodeURIComponent(runId) + "/events" + (qs ? "?" + qs : ""),
+        { signal: streamAbort.signal },
+      );
+      if (!response.ok) throw new Error(await response.text());
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
+        buffer = drainSseBuffer(buffer, (eventName, data) => {
+          const line = formatLogEvent(eventName, data);
+          if (line) appendLog(line);
+          if (eventName === "result") {
+            const ok = data.status === "PASS";
+            setRunUi(ok ? "completed" : "failed", (data.change_id ? data.change_id + " — " : "") + (data.status || ""));
+            if (!ok && data.site_error && data.error) errorEl.textContent = String(data.error);
+            else errorEl.textContent = "";
+          } else if (eventName === "done") {
+            localStorage.removeItem("opsxActiveWorkflowRun");
+            submitBtn.disabled = false;
+            load();
+          }
+        });
+        if (done) break;
+      }
+    }
+
+    async function load() {
+      try {
+        const profile = await fetch("/api/project").then((r) => r.json());
+        document.querySelector("#project").textContent = profile.name || "Проект";
+        document.querySelector("#settings").textContent = JSON.stringify(profile, null, 2);
+        const data = await fetch("/api/runs").then((r) => r.json());
+        const rows = document.querySelector("#runs");
+        rows.replaceChildren();
+        for (const run of data.runs) {
+          const row = document.createElement("tr");
+          row.className = "run-row";
+          if (run.run_id === activeRunId) row.setAttribute("aria-selected", "true");
+          row.dataset.runId = run.run_id || "";
+          const shortId = run.run_id ? String(run.run_id).slice(0, 8) : "—";
+          for (const v of [shortId, run.change_id, run.mode, run.status, run.started_at]) row.append(text("td", v));
+          row.title = run.run_id ? "Открыть лог " + run.run_id : "";
+          row.addEventListener("click", async () => {
+            if (!run.run_id || run.run_id === activeRunId) return;
+            document.querySelectorAll("tr.run-row").forEach((tr) => tr.removeAttribute("aria-selected"));
+            row.setAttribute("aria-selected", "true");
+            submitBtn.disabled = false;
+            try {
+              await consumeEvents(run.run_id, { tail: TAIL_FINISHED, watchRunning: false });
+            } catch (err) {
+              if (err.name !== "AbortError") errorEl.textContent = String(err);
+            }
+          });
+          rows.append(row);
+        }
+      } catch (e) {
+        errorEl.textContent = String(e);
+      }
+    }
+
+    document.querySelector("#launch").onsubmit = async (e) => {
+      e.preventDefault();
+      errorEl.textContent = "";
+      const changeId = changeInput.value.trim();
+      localStorage.setItem("opsxLastChangeId", changeId);
+      const response = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          change_id: changeId,
+          workflow_timeout_minutes: Number(document.querySelector("#workflow-timeout-min").value || 45),
+          supervisor_timeout_minutes: Number(document.querySelector("#supervisor-timeout-min").value || 180),
+        }),
+      });
+      if (!response.ok) {
+        errorEl.textContent = JSON.stringify(await response.json());
+        return;
+      }
+      const body = await response.json();
+      if (!body.run_id) {
+        errorEl.textContent = "Сервер не вернул run_id";
+        return;
+      }
+      await load();
+      try {
+        await consumeEvents(body.run_id);
+      } catch (err) {
+        if (err.name !== "AbortError") errorEl.textContent = String(err);
+        submitBtn.disabled = false;
+      }
+    };
+
+    async function restoreActive() {
+      try {
+        const active = await fetch("/runs/active").then((r) => r.json());
+        const runId = active.run?.run_id;
+        if (!runId) {
+          localStorage.removeItem("opsxActiveWorkflowRun");
+          return;
+        }
+        if (runId !== activeRunId) await consumeEvents(runId);
+      } catch (_) {
+        /* Панель недоступна — не цепляемся к зомби из localStorage. */
+      }
+    }
+
+    copyLogBtn.addEventListener("click", async () => {
+      const textValue = logPane.textContent || "";
+      try {
+        await navigator.clipboard.writeText(textValue);
+        logStats.textContent = (logStats.textContent ? logStats.textContent + " · " : "") + "скопировано";
+      } catch (_) {
+        errorEl.textContent = "Не удалось скопировать лог";
+      }
+    });
+
+    loadChangeCatalog().then(() => {
+      const preferred = localStorage.getItem("opsxLastChangeId") || "new-tariffs";
+      const known = catalogById(preferred);
+      if (known || preferred === "new-tariffs") {
+        changeInput.value = preferred;
+        updateChangePreview(preferred);
+      }
+    });
+    load();
+    loadProvider().catch((err) => { providerStatus.textContent = String(err); });
+    restoreActive();
+    setInterval(load, 5000);
+  </script>
+</body>
 </html>

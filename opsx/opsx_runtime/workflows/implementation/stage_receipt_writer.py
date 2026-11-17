@@ -9,6 +9,7 @@ from __future__ import annotations
 from opsx.project_context import resource_path
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,6 +28,9 @@ from workflows.implementation.routing_contract import (
     STAGE_APPLY_RED,
     STAGE_APPLY_SCAFFOLD,
 )
+from workflows.implementation.hop_worktree import (
+    augment_implement_decision_with_off_head_surfaces,
+)
 from workflows.implementation.node_subprocess import run_subprocess_utf8
 from workflows.implementation.slice_receipt import load_stage_receipt
 from workflows.repo_paths import resolve_opsx_repository_root
@@ -39,6 +43,7 @@ class GreenReceiptWriteResult:
     ok: bool
     code: str | None
     path: Path | None
+    detail: str | None = None
 
 
 def _atomic_write_utf8_lf(path: Path, text: str) -> None:
@@ -121,20 +126,108 @@ def _red_executions_from_frozen_red(red: Mapping[str, Any]) -> list[dict[str, An
     return _historical_red_executions_from_frozen_red(red)
 
 
+_FROZEN_PYTEST_NODE_RE = re.compile(r"tests/\S+?\.py(?:::\S+)?")
+
+
+def _pytest_node_id_from_frozen_command(command: str) -> str | None:
+    """Один ``tests/...py`` node из frozen ``poetry run pytest``.
+
+    Несколько целей или не-pytest команда возвращают ``None``: их исполняет
+    прежний Node runner, чтобы не сузить проверку до первого файла.
+    """
+    text = " ".join(str(command or "").replace("\\", "/").split())
+    if not re.search(r"(?:^|\s)pytest(?:\s|$)", text):
+        return None
+    if text.startswith("node "):
+        return None
+    matches = [item.strip("\"'") for item in _FROZEN_PYTEST_NODE_RE.findall(text)]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
+def _green_verify_failure_detail(executions: list[dict[str, Any]]) -> str:
+    """Хвост команд с ненулевым exit для следующего green hop."""
+    parts: list[str] = []
+    for entry in executions:
+        if int(entry.get("exit_code", 1)) == 0:
+            continue
+        command = str(entry.get("command") or "")
+        tail = str(entry.get("relevant_output") or "")[:1500]
+        parts.append(f"exit {entry.get('exit_code')} {command}\n{tail}".strip())
+    return "\n".join(parts)[:4000]
+
+
+def _run_pytest_green_verification(
+    repo_root: Path,
+    commands: list[str],
+    nodes: list[str],
+) -> list[dict[str, Any]]:
+    """Replay frozen pytest тем же интерпретатором, что MCP ``run_pytest``."""
+    from agents.agent_tools.deterministic.pytest_tool import run_repair_hop_pytest_sync
+
+    executions: list[dict[str, Any]] = []
+    for command, node in zip(commands, nodes, strict=True):
+        try:
+            result = run_repair_hop_pytest_sync(
+                repo_root,
+                node,
+                timeout_seconds=600,
+            )
+        except ValueError as exc:
+            executions.append(
+                {
+                    "phase": "green_verify",
+                    "iteration": 0,
+                    "command": command,
+                    "exit_code": 1,
+                    "relevant_output": str(exc)[:4000],
+                    "execution_mechanism": "python_pytest",
+                },
+            )
+            continue
+        executions.append(
+            {
+                "phase": "green_verify",
+                "iteration": 0,
+                "command": command,
+                "exit_code": int(result.get("exit_code", 1)),
+                "relevant_output": str(result.get("tail") or "")[:4000],
+                "execution_mechanism": "python_pytest",
+            },
+        )
+    return executions
+
+
 def _run_green_verification_executions(
     repo_root: Path,
     commands: list[str],
 ) -> list[dict[str, Any]]:
-    """Повторно выполнить frozen test_commands на текущем коде для GREEN."""
+    """Повторно выполнить frozen test_commands на текущем коде для GREEN.
+
+    Команды ``poetry run pytest`` с одним node id идут через
+    ``run_repair_hop_pytest_sync`` — тот же Poetry-интерпретатор, что и
+    hop-tool ``run_pytest``. Отдельный Node spawn не подменяет exit code.
+    """
     repo_root = resolve_opsx_repository_root(repo_root)
+    nodes = [_pytest_node_id_from_frozen_command(command) for command in commands]
+    if commands and all(nodes):
+        return _run_pytest_green_verification(
+            repo_root,
+            commands,
+            [node for node in nodes if node is not None],
+        )
     script = resource_path(repo_root, "opsx_tools", "opsx-run-frozen-commands-cli.mjs")
     if not script.is_file() or not commands:
         return []
     payload = json.dumps({"commands": commands, "phase": "green_verify", "iteration": 0})
+    from agents.agent_tools.deterministic.pytest_tool import frozen_command_subprocess_env
+
     run = run_subprocess_utf8(
         ["node", str(script), "--repo", str(repo_root)],
         input_text=payload,
         timeout=600,
+        base_env=frozen_command_subprocess_env(repo_root),
     )
     if run.returncode != 0 or not run.stdout.strip():
         return []
@@ -177,6 +270,20 @@ def _chat_history_required_false(
     return False
 
 
+def _green_pairing_node_argv(repo_root: Path, script: Path) -> list[str]:
+    """Тот же ``--import`` receipt hook, что у RED/IMPLEMENT materialize.
+
+    Иначе stale top-level ``test_content_identity`` при живом
+    ``operative_red_transition`` и design-bound oracle даёт
+    ``IMPLEMENTATION_AUTHORITY_MISSING`` на любом change.
+    Windows: ``node --import`` принимает file URI, не ``C:\\``.
+    """
+    hook = Path(__file__).resolve().with_name("receipt_cli_identity_hook.mjs")
+    if hook.is_file():
+        return ["node", "--import", hook.as_uri(), str(script), "--repo", str(repo_root)]
+    return ["node", str(script), "--repo", str(repo_root)]
+
+
 def classify_green_predecessor_pairing(
     *,
     repo_root: Path,
@@ -185,12 +292,21 @@ def classify_green_predecessor_pairing(
 ) -> dict[str, Any]:
     """Вызов Node ``classifyGreenPredecessorPairing`` (NORMAL / ADOPTION / ALREADY_SATISFIED_WRITE)."""
     repo_root = resolve_opsx_repository_root(repo_root)
-    script = resource_path(repo_root, "opsx_tools", "opsx-classify-green-pairing-cli.mjs")
+    tooling_root = repo_root
+    if not resource_path(tooling_root, "opsx_tools").is_dir():
+        tooling_root = resolve_opsx_repository_root(
+            Path(__file__).resolve().parents[4],
+        )
+    script = resource_path(
+        tooling_root,
+        "opsx_tools",
+        "opsx-classify-green-pairing-cli.mjs",
+    )
     if not script.is_file():
         return {"ok": False, "code": "PAIRING_CLI_MISSING"}
     payload = json.dumps({"red": red, "implement": implement}, ensure_ascii=False)
     run = run_subprocess_utf8(
-        ["node", str(script), "--repo", str(repo_root)],
+        _green_pairing_node_argv(repo_root, script),
         input_text=payload,
         timeout=120,
     )
@@ -274,10 +390,15 @@ def write_green_receipt_from_hop(
     frozen_commands = _collect_frozen_test_commands(red)
     red_executions = _run_green_verification_executions(repo_root, frozen_commands)
     if not red_executions:
-        return GreenReceiptWriteResult(False, "GREEN_VERIFICATION_MISSING", None)
+        return GreenReceiptWriteResult(False, "GREEN_VERIFICATION_MISSING", None, None)
     red_final_status = _red_final_status_from_executions(red_executions)
     if red_final_status != "PASS":
-        return GreenReceiptWriteResult(False, "RED_EVIDENCE_NOT_PASS", None)
+        return GreenReceiptWriteResult(
+            False,
+            "RED_EVIDENCE_NOT_PASS",
+            None,
+            _green_verify_failure_detail(red_executions),
+        )
 
     branch = str(pairing.get("branch") or "NORMAL")
     json_path = useful_stage_receipt_path(repo_root, change_id, STAGE_APPLY_GREEN, slice_id)
@@ -380,6 +501,7 @@ class StageReceiptWriteResult:
     code: str | None
     path: Path | None
     stage: str | None = None
+    detail: str | None = None
 
 
 _FORBIDDEN_HOP_DECISION_KEYS = frozenset(
@@ -415,6 +537,32 @@ _LEGACY_MODEL_RECEIPT_KEYS = frozenset(
 )
 
 _SUCCESS_HOP_STATUSES = frozenset({"APPLY_COMPLETE", "APPLY_PARTIAL", "NO_CHANGE"})
+
+
+def _record_reject_code(body: Mapping[str, Any]) -> str:
+    """Код отказа CLI плюс первое сообщение валидатора, если оно есть.
+
+    ``SCAFFOLD_VALIDATE_FAILED`` без текста поля не говорит следующему hop,
+    какого digest не хватает в apply_design_identity.
+    """
+    code = str(body.get("code") or "RECORD_REJECTED")
+    if code == "RED_COMMANDS_EMPTY":
+        message = str(body.get("message") or "").strip()
+        if message:
+            return f"{code}: {message[:300]}"
+        return code
+    if "VALIDATE_FAILED" not in code:
+        return code
+    errors = body.get("errors")
+    if not isinstance(errors, list) or not errors:
+        return code
+    first = errors[0]
+    if not isinstance(first, dict):
+        return code
+    message = str(first.get("message") or first.get("code") or "").strip()
+    if not message:
+        return code
+    return f"{code}: {message[:300]}"
 
 
 class StageReceiptWriter:
@@ -582,7 +730,16 @@ class StageReceiptWriter:
                     green.code,
                     green.path,
                     STAGE_APPLY_GREEN,
+                    green.detail,
                 )
+
+        payload_decision = dict(decision)
+        if stage == STAGE_APPLY_IMPLEMENT and hop_status in _SUCCESS_HOP_STATUSES:
+            payload_decision = augment_implement_decision_with_off_head_surfaces(
+                repo_root,
+                change_id,
+                payload_decision,
+            )
 
         tooling_root = repo_root
         if not (resource_path(tooling_root, "opsx_tools")).is_dir():
@@ -597,25 +754,42 @@ class StageReceiptWriter:
             {
                 "repo": str(repo_root),
                 "change_id": change_id,
-                "decision": dict(decision),
+                "decision": payload_decision,
             },
             ensure_ascii=False,
         )
-        run = subprocess.run(
-            ["node", str(script)],
-            input=payload.encode("utf-8"),
-            capture_output=True,
-            text=False,
-            timeout=180,
-            check=False,
-            cwd=str(tooling_root),
-        )
+        # Design schema leaves repository_identity optional; receipt schema
+        # requires a 64-hex inspected_digest. The loader fills that class
+        # inside the shared record CLI without changing an accepted design.
+        hook = Path(__file__).resolve().with_name("receipt_cli_identity_hook.mjs")
+        argv = ["node", str(script)]
+        if hook.is_file():
+            # Windows `node --import C:\...` parses the drive letter as a URL scheme.
+            argv = ["node", "--import", hook.as_uri(), str(script)]
+        try:
+            run = subprocess.run(
+                argv,
+                input=payload.encode("utf-8"),
+                capture_output=True,
+                text=False,
+                timeout=180,
+                check=False,
+                cwd=str(tooling_root),
+            )
+        except subprocess.TimeoutExpired as exc:
+            return StageReceiptWriteResult(
+                False,
+                "RECORD_CLI_TIMEOUT",
+                None,
+                stage,
+                detail=str(exc)[:500],
+            )
         stdout = (run.stdout or b"").decode("utf-8", errors="replace").strip()
         if not stdout:
             code = "RECORD_CLI_FAILED"
             stderr_text = (run.stderr or b"").decode("utf-8", errors="replace").strip()
             if stderr_text:
-                code = stderr_text[:120]
+                code = stderr_text[:500]
             return StageReceiptWriteResult(False, code, None, stage)
         try:
             body = json.loads(stdout.splitlines()[-1])
@@ -624,7 +798,7 @@ class StageReceiptWriter:
         if body.get("ok") is not True:
             return StageReceiptWriteResult(
                 False,
-                str(body.get("code") or "RECORD_REJECTED"),
+                _record_reject_code(body),
                 None,
                 stage,
             )

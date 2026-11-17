@@ -126,4 +126,4 @@ def test_maybe_raise_green_blocked_stage_stop_includes_notes() -> None:
         _maybe_raise_green_blocked_stage_stop(final)
     assert err.value.code == "GREEN_STATUS_BLOCKED"
     assert "run_pytest MCP unavailable" in err.value.evidence
-    assert "run_named_bug_repair_ui.py" in err.value.next_action
+    assert "opsx start" in err.value.next_action

@@ -181,6 +181,148 @@ def git_diff_paths_since(repo_root: Path, head_ref: str) -> list[str]:
     )
 
 
+def _expected_product_surfaces(
+    repo_root: Path,
+    change_id: str,
+    slice_id: str,
+) -> list[str]:
+    """Поверхности продукта слайса из принятого design, без привязки к change."""
+    design_path = apply_design_artifact_path(repo_root, change_id)
+    if not design_path.is_file():
+        return []
+    try:
+        design = json.loads(design_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
+    slices = design.get("slices") if isinstance(design, dict) else None
+    if not isinstance(slices, list):
+        return []
+    surfaces: list[str] = []
+    for row in slices:
+        if not isinstance(row, dict) or str(row.get("slice_id") or "") != slice_id:
+            continue
+        raw = row.get("expected_product_write_surfaces")
+        if not isinstance(raw, list):
+            continue
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                surfaces.append(_posix(item.strip()).rstrip("/"))
+    return surfaces
+
+
+def _files_under_surface(repo_root: Path, surface: str) -> list[str]:
+    """Файл поверхности или файлы внутри каталога поверхности."""
+    rel = _posix(surface).rstrip("/")
+    if not rel or rel.startswith("../") or "/../" in f"/{rel}/":
+        return []
+    abs_path = resource_path(repo_root, rel)
+    try:
+        resolved = abs_path.resolve()
+        resolved.relative_to(repo_root.resolve())
+    except (OSError, ValueError):
+        return []
+    if resolved.is_file():
+        return [rel]
+    if not resolved.is_dir():
+        return []
+    found: list[str] = []
+    for path in resolved.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            child = _posix(path.resolve().relative_to(repo_root.resolve()).as_posix())
+        except ValueError:
+            continue
+        found.append(child)
+    return found
+
+
+def _off_head_product_file(repo_root: Path, rel: str) -> bool:
+    """Файл есть на диске и его blob не совпадает с HEAD (untracked или dirty)."""
+    abs_path = resource_path(repo_root, rel)
+    if not abs_path.is_file():
+        return False
+    try:
+        if abs_path.stat().st_size <= 0:
+            return False
+    except OSError:
+        return False
+    work = run_subprocess_utf8(
+        ["git", "hash-object", "--", rel],
+        cwd=repo_root,
+        timeout=30,
+    )
+    work_oid = (work.stdout or "").strip()
+    if work.returncode != 0 or not work_oid:
+        return False
+    head = run_subprocess_utf8(
+        ["git", "rev-parse", f"HEAD:{rel}"],
+        cwd=repo_root,
+        timeout=30,
+    )
+    if head.returncode != 0:
+        return True
+    return (head.stdout or "").strip() != work_oid
+
+
+def augment_implement_decision_with_off_head_surfaces(
+    repo_root: Path,
+    change_id: str,
+    decision: dict[str, Any],
+) -> dict[str, Any]:
+    """Сделать off-HEAD поверхности слайса видимыми для materialize IMPLEMENT.
+
+    Снимок hop фиксирует байты до агента. Файл, созданный scaffold или прошлым
+    hop и не изменённый в этом hop, не входит в delta, и CLI отвечает
+    ``IMPLEMENT_NO_PRODUCT_DELTA``, хотя продукт уже лежит вне HEAD.
+    Такие пути снимаются со снимка и добавляются в ``hop_files_changed``.
+    Файл, совпадающий с HEAD, не добавляется: пустой hop по-прежнему отказ.
+    """
+    slice_id = str(decision.get("slice_id") or "").strip()
+    if not slice_id:
+        return decision
+    promoted: list[str] = []
+    seen: set[str] = set()
+    for surface in _expected_product_surfaces(repo_root, change_id, slice_id):
+        for rel in _files_under_surface(repo_root, surface):
+            if rel in seen or not _off_head_product_file(repo_root, rel):
+                continue
+            seen.add(rel)
+            promoted.append(rel)
+    if not promoted:
+        return decision
+    updated = dict(decision)
+    baseline = str(updated.get("hop_worktree_baseline") or "")
+    snapshot = parse_hop_worktree_snapshot(baseline)
+    if snapshot is not None:
+        files = snapshot.get("files")
+        if isinstance(files, dict):
+            kept = {
+                _posix(str(path)): sha
+                for path, sha in files.items()
+                if _posix(str(path)) not in seen
+            }
+            snapshot = {**snapshot, "files": kept}
+            updated["hop_worktree_baseline"] = json.dumps(
+                snapshot,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+    claimed_raw = updated.get("hop_files_changed")
+    claimed: list[str] = []
+    if isinstance(claimed_raw, list):
+        claimed = [
+            _posix(str(path))
+            for path in claimed_raw
+            if isinstance(path, str) and str(path).strip()
+        ]
+    for rel in promoted:
+        if rel not in claimed:
+            claimed.append(rel)
+    updated["hop_files_changed"] = claimed
+    return updated
+
+
 def hop_snapshot_changed_paths(
     repo_root: Path,
     baseline: str,

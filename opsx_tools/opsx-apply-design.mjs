@@ -487,6 +487,44 @@ function semanticErrors(artifact, { repoRoot = DEFAULT_ROOT } = {}) {
   return errors;
 }
 
+/** Снять submit-директивы; при ``$recompute_identities`` — пересчёт planning/protected identity. */
+export function prepareApplyDesignSubmitArtifact(artifact, repoRoot = DEFAULT_ROOT) {
+  if (!isObject(artifact)) {
+    return artifact;
+  }
+  let design = { ...artifact };
+  const shouldRecompute = design.$recompute_identities === true;
+  delete design.$recompute_identities;
+  delete design.$from_path;
+  if (!shouldRecompute) {
+    return design;
+  }
+  if (Number(design.schema_version) < 4) {
+    design.schema_version = 4;
+  }
+  const planningInputs = design.planning_identity?.inputs;
+  if (Array.isArray(planningInputs) && planningInputs.length > 0) {
+    const frozen = computeCurrentPlanningIdentity({
+      repoRoot,
+      planningIdentity: design.planning_identity,
+    });
+    design = {
+      ...design,
+      planning_identity: {
+        ...design.planning_identity,
+        inputs: frozen.inputs,
+        planning_digest: frozen.planning_digest,
+        ...(frozen.change_root ? { change_root: frozen.change_root } : {}),
+      },
+    };
+  }
+  const protectedPaths = collectProtectedContextPaths(design);
+  const inspected = design.repository_identity?.inspected_paths || [];
+  const pathSha256 = hashRepoRelativePaths(repoRoot, [...protectedPaths, ...inspected]);
+  const refreshed = refreshApplyDesignProtectedContext(design, pathSha256);
+  return refreshed.artifact;
+}
+
 export function validateApplyDesignArtifact({ artifact, schema, repoRoot = DEFAULT_ROOT }) {
   const errors = [];
   if (!isObject(artifact)) {
@@ -501,6 +539,7 @@ export function validateApplyDesignArtifact({ artifact, schema, repoRoot = DEFAU
       errors: [{ code: "schema_missing", message: "schema missing" }],
     };
   }
+  artifact = prepareApplyDesignSubmitArtifact(artifact, repoRoot);
   validate(artifact, schema, schema, "$", errors);
   for (const e of semanticErrors(artifact, { repoRoot })) errors.push(e);
   return { ok: errors.length === 0, errors, status: artifact.status };
@@ -747,7 +786,14 @@ function main(argv) {
     process.exit(1);
   }
   const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
-  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  let artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  const hadSubmitDirectives =
+    isObject(artifact) &&
+    (artifact.$recompute_identities === true || typeof artifact.$from_path === "string");
+  artifact = prepareApplyDesignSubmitArtifact(artifact, repoRoot);
+  if (hadSubmitDirectives) {
+    writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
+  }
   const result = validateApplyDesignArtifact({ artifact, schema, repoRoot });
   const out = {
     status: result.ok ? "PASS" : "FAIL",

@@ -11,122 +11,22 @@ description: "Owner describes how a LangGraph agent hops; command plans colocate
 argument-hint: "<свободный текст: какой агент, в какой workflow, откуда/куда>; опционально AGENT=, WORKFLOW=, SIMILAR_TO="
 ---
 
-# STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
+# PROJECT TARGET PROFILE — REQUIRED
 
-This command was transferred from a project-specific OPSX realization.
-For stroy-system, product-specific realization MUST resolve through:
+Product-specific execution authority resolves only through:
 
   opsx/project/capabilities.yaml
-  opsx/shared/target-capability-resolution.md
 
-Any inherited donor literal (WB Sky, adv-bot, Poetry, pyproject.toml, app/**,
-tests/**, npm/package.json, src/**, public/**, deploy names) is historical or
-compatibility text only and is NOT execution authority.
+Adapter-specific supplements apply only when that adapter is selected in
+capabilities.yaml (see opsx/adapters/<adapter-id>/).
 
-Before any product-specific read/write/command execution, resolve the
-corresponding TARGET capability. If unresolved, fail closed:
+Donor literals in this command are historical compatibility text, not authority.
+Before product-specific reads, writes, or commands, resolve the required capability.
+If unresolved, fail closed with TARGET_CAPABILITY_UNRESOLVED.
 
-```text
-STATUS: FAIL_CLOSED
-REASON: TARGET_CAPABILITY_UNRESOLVED
-CAPABILITY: <required capability>
-NEXT_ACTION: define/discover capability in opsx/project/capabilities.yaml
-```
+Control-plane paths under tools/temporal and tools/cursor_executor are separate
+from product runtime adoption.
 
-Control-plane paths under `tools/temporal` and `tools/cursor_executor` are
-separate from LangGraph wiring in `opsx/opsx_runtime/workflows/**`.
-
-# TARGET OVERRIDE — HIGHEST PRIORITY
-
-**Contract:** `OPSX-WB-META-WIRE-WORKFLOW-01`
-**Runtime class:** `ACTIVE_WITH_LIMITS`
-
-```text
-IMPLEMENTATION_STATUS: IMPLEMENTED_UNVERIFIED
-SCOPE: LANGGRAPH_OPSX_RUNTIME_ONLY
-AUTONOMOUS_IMPL_TERMINAL: BLOCKED
-NOT_COMMITTED_THIS_RUN: true
-```
-
-### Scope (mandatory)
-
-This command is **only** for **LangGraph / OPSX runtime** workflows:
-
-- `opsx/opsx_runtime/workflows/verify/**`
-- `opsx/opsx_runtime/workflows/repair/**`
-- `opsx/opsx_runtime/workflows/implementation/**`
-- factories such as `build_check_workflow_graph`, `build_gate_repair_graph`,
-  `build_verify_graph`, `build_repair_graph`
-
-It does **not** wire:
-
-- Cursor `/opsx-*` slash orchestrators (→ `/opsx-meta-add-command`)
-- bug-team Task workers without LangGraph (→ `/opsx-meta-add-agent` → worker spec)
-- Temporal obligations without a graph node (document hop separately)
-- Archive verify as **Cursor-only** PHASE_ARCHIVE (no graph hop until
-  `ArchiveVerifyAgent` exists)
-
-### Reads / writes (this invocation)
-
-- **Reads:** projectization, bounded workflow/agent paths, chat transcript hints
-  if Owner cites them.
-- **Writes:** none default (`MODE: READ_ONLY` intake + wiring **plan** only).
-
-### Hard bans
-
-- No `graph.py` / `subgraph.py` edits in this invocation.
-- No pytest / verify / archive runs.
-- No commit, push, PR, deploy.
-- No new agent package here — missing agent → `/opsx-meta-add-agent` first.
-- **Anti-pattern to flag, never recommend:** add_node in parent graph first, define
-  `route_*` elsewhere later (`green_loop.py`, scattered conditionals).
-
-### Lexicon: SDK (Subagent/Task — mandatory)
-
-**`SDK` = Cursor SDK only** in `WIRING_PLAN` and Subagent/Task briefs:
-`cursor_sdk/*`, `GetRun`, stream, **`agent.run` (Cursor SDK transport)**,
-`SDK_*` recovery on live dispatch.
-
-Не называть plan / `implementation_execute_hop_node` / `hop_lane_status` /
-stagnation **SDK hop** — **implementation hop**, **execute hop**, **mutating hop**,
-**OPSX implementation lane**; Cursor live path —
-**mutating hop via Cursor SDK**. SoT:
-`.cursor/commands/opsx-meta-fix-command-defects.md` § Lexicon: SDK.
-
-### Prerequisite gate
-
-Before routing to implementation:
-
-1. **Agent package must exist** (or Owner explicitly wires a **deterministic**
-   node with no Cursor-SDK-backed `agent.run` hop):
-   - Path like `opsx/opsx_runtime/agents/verify/<role>/agent.py` or
-     `agents/repair/<role>/agent.py`, **or**
-   - Owner names an existing `*Agent` already constructed in `build_*_graph`.
-2. If agent missing → `PREREQ_MISSING: AGENT_PACKAGE` →
-   `NEXT_ACTION: /opsx-meta-add-agent` (same mission text) then re-run this command.
-
-### Named references (gold patterns)
-
-| Pattern | File | Use when |
-|---------|------|----------|
-| **Colocated subgraph factory** | `opsx/opsx_runtime/workflows/verify/check_workflow.py` | discovery/repair loop; `route_*` beside handlers and `add_node` |
-| **Thin parent assembly** | `opsx/opsx_runtime/workflows/verify/graph.py` | compiled subgraph + one conditional; avoid fat routing here |
-| **Check receipt dual hook** | `check_workflow_receipt.py` + `register_check_workflow_receipt` | inner `receipt.check` + outer `is_established` — document both in plan |
-| **Gate repair subgraph** | `opsx/opsx_runtime/workflows/verify/gate_repair/subgraph.py` | multi-agent repair chain inside one builder |
-| **Agent role README** | `opsx/opsx_runtime/agents/repair/README.md` | ABCAgent + `prompt/get_prompt.py`; graph only orchestrates |
-| **Prior intake** | `.cursor/commands/opsx-meta-add-agent.md` | agent exists before wire |
-
-### Projectization gate
-
-Read `opsx/projectization.yaml`. If incomplete:
-
-```text
-STATUS: FAIL_CLOSED
-REASON: OPSX_PROJECTIZATION_REQUIRED
-NEXT_ACTION: /opsx-projectize
-```
-
----
 
 # /opsx-meta-wire-workflow-agent
 

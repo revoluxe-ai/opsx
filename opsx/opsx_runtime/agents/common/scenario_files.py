@@ -15,7 +15,9 @@ from pathlib import Path
 from check_workflow_receipt import CheckWorkflowReceipt
 
 _ROW = re.compile(r"^(\s*)-\s+SCENARIO_ID:\s*(.*?)\s*$")
+_ROW_PLAIN = re.compile(r"^\s*SCENARIO_ID:\s*(.*?)\s*$")
 _SCENARIOS_HEADER = re.compile(r"^\s*SCENARIOS:\s*$")
+_INVENTORY_SECTION = re.compile(r"^## SCENARIO_INVENTORY\s*$")
 
 
 def scenario_digest(scenario_id: str) -> str:
@@ -26,6 +28,110 @@ def scenario_digest(scenario_id: str) -> str:
 def scenario_filename(scenario_id: str) -> str:
     """Имя файла плана сценария: ``<sha256>.md``."""
     return scenario_digest(scenario_id) + ".md"
+
+
+def _scenario_id_from_path(path: Path) -> str:
+    """Прочитать ``SCENARIO_ID`` из тела ``scenarios/*.md`` (список или fenced)."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = _ROW.match(line)
+        if match:
+            return match.group(2)
+        match = _ROW_PLAIN.match(line)
+        if match:
+            return match.group(1)
+    raise ValueError(f"SCENARIO_ID missing: {path}")
+
+
+def _scenario_inventory_prefix(change_id: str) -> str:
+    return f"openspec/changes/{change_id}/scenario-coverage/scenarios/"
+
+
+def _rewrite_scenario_inventory(
+    text: str, change_id: str, scenario_ids: list[str],
+) -> str:
+    """Подставить в ``## SCENARIO_INVENTORY`` пути ``sha256(scenario_id)``."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    index = 0
+    in_inventory = False
+    while index < len(lines):
+        line = lines[index]
+        if _INVENTORY_SECTION.match(line.rstrip("\r\n")):
+            in_inventory = True
+            out.append(line)
+            index += 1
+            continue
+        if in_inventory and line.strip() == "```text":
+            out.append(line)
+            prefix = _scenario_inventory_prefix(change_id)
+            for scenario_id in scenario_ids:
+                out.append(f"{prefix}{scenario_filename(scenario_id)}\n")
+            index += 1
+            while index < len(lines) and lines[index].strip() != "```":
+                index += 1
+            if index < len(lines):
+                out.append(lines[index])
+                index += 1
+            in_inventory = False
+            continue
+        if in_inventory and line.startswith("## "):
+            in_inventory = False
+        out.append(line)
+        index += 1
+    result = "".join(out)
+    if not result.endswith("\n"):
+        result += "\n"
+    return result
+
+
+def _annotate_canonical_hash_index(text: str) -> str:
+    """Предупредить, что колонка hash-index — ``content_hash``, не имя файла."""
+    marker = "## CANONICAL_SCENARIO_HASH_INDEX"
+    note = (
+        "\n"
+        "NOT scenario filenames — trailing hex is CONTENT_HASH "
+        "(sha256 of file bytes). Path stem is always sha256(SCENARIO_ID).\n\n"
+    )
+    if marker + note in text:
+        return text
+    if marker in text:
+        return text.replace(marker + "\n", marker + note, 1)
+    return text
+
+
+def reconcile_scenario_filenames(coverage: Path) -> list[str]:
+    """Привести имена ``scenarios/*.md`` и инвентарь к ``sha256(scenario_id)``.
+
+    Ошибочные копии (имя = ``content_hash``) переносятся или удаляются;
+    в ``plan.md`` переписывается блок ``SCENARIO_INVENTORY``.
+
+    Returns:
+        Упорядоченные ``scenario_id`` канонических файлов.
+    """
+    scenarios_dir = coverage / "scenarios"
+    if not scenarios_dir.is_dir():
+        return []
+    change_id, _repo = _coverage_change_and_root(coverage)
+    canonical: dict[str, Path] = {}
+    for path in sorted(scenarios_dir.glob("*.md")):
+        scenario_id = _scenario_id_from_path(path)
+        target = scenarios_dir / scenario_filename(scenario_id)
+        if path == target:
+            canonical[scenario_id] = target
+            continue
+        if target.is_file():
+            path.unlink()
+        else:
+            path.rename(target)
+        canonical[scenario_id] = target
+    scenario_ids = sorted(canonical)
+    plan_path = coverage / "plan.md"
+    if plan_path.is_file():
+        text = plan_path.read_text(encoding="utf-8")
+        text = _rewrite_scenario_inventory(text, change_id, scenario_ids)
+        text = _annotate_canonical_hash_index(text)
+        plan_path.write_text(text, encoding="utf-8")
+    return scenario_ids
 
 
 def scenario_test_relpath(change_id: str, scenario_id: str) -> str:
@@ -238,7 +344,15 @@ def _catalog_ids(coverage: Path, receipt: dict) -> list[str]:
         if not path.is_file() or path.is_symlink():
             raise ValueError(f"COVERAGE_SCENARIO_FILE_MISSING: {rel}")
         text = path.read_text(encoding="utf-8")
-        found = [match.group(2) for line in text.splitlines() if (match := _ROW.match(line))]
+        found: list[str] = []
+        for line in text.splitlines():
+            row = _ROW.match(line)
+            if row:
+                found.append(row.group(2))
+                continue
+            plain = _ROW_PLAIN.match(line)
+            if plain:
+                found.append(plain.group(1))
         if found != [scenario_id]:
             raise ValueError(f"COVERAGE_SCENARIO_FILE_IDENTITY: {scenario_id}")
         if not CheckWorkflowReceipt.matches_file(path, content_hash):

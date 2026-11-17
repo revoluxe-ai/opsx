@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Mapping
 
+from agents.agent_visible_text import sanitize_value_for_agent_view
 from agents.implementation.prompt.stage_receipt_preservation import operative_receipt_from_plan
 from workflows.implementation.slice_receipt_dispatch import (
     SliceReceiptValidationAnswer,
@@ -70,14 +71,20 @@ def graph_dispatch_answer(
         cleaned["unchanged_dispatch_attempt"] = attempt
     machine_errors = state.get("implementation_machine_gate_errors")
     if isinstance(machine_errors, list) and machine_errors:
-        cleaned["machine_gate_errors"] = list(machine_errors)
+        cleaned["machine_gate_errors"] = [
+            sanitize_value_for_agent_view(e)
+            for e in machine_errors
+            if isinstance(e, dict)
+        ]
     else:
         operative = state.get("apply_red_operative_validation")
         if isinstance(operative, dict) and not operative.get("ok"):
             raw_errors = operative.get("errors")
             if isinstance(raw_errors, list) and raw_errors:
                 cleaned["machine_gate_errors"] = [
-                    e for e in raw_errors if isinstance(e, dict)
+                    sanitize_value_for_agent_view(e)
+                    for e in raw_errors
+                    if isinstance(e, dict)
                 ]
     return cleaned
 

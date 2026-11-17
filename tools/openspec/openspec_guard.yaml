@@ -55,7 +55,7 @@ scenarios:
     context_includes:
       - openspec/config.yaml
       - openspec/schemas/**/*
-      - .cursor/skills/openspec-continue-change/SKILL.md
+      - opsx/core/.cursor/skills/openspec-continue-change/SKILL.md
 
   opsx_ff:
     command_surface: .cursor/commands/opsx-ff.md

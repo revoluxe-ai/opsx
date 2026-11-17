@@ -23,7 +23,9 @@ Hop wiring exposes **no** shell, path arguments, or built-in read/edit tools. Us
 
 2. **`read_source`** — args: `source_id` only. Read planning ids such as `planning:tasks_md`, search hits, files under allowed domains (including **other changes** under `changes`), or `prior_design:<change_id>` from the knowledge index.
 
-3. **`submit_apply_design`** — args: `content` (APPLY-DESIGN.json body), `base_digest` (digest from hop prompt / manifest; `""` when no prior artifact). Runtime atomically writes the machine JSON for **this** change only; do not create directories or files any other way.
+3. **`submit_apply_design`** — args: `content` (JSON string or object), `base_digest` (digest from hop prompt / manifest; `""` when no prior artifact). Runtime atomically writes the machine JSON for **this** change only; do not create directories or files any other way. `$from_path` may include extra keys: runtime deep-merges them onto the canonical file, then recomputes digests. That combination is valid. It is not `INVALID_ARGS`.
+
+Do **not** set `artifact_identity.artifact_sha256` or a top-level `artifact_sha256`. `artifact_identity` is `human_path` and `machine_path` only. The review stage binds `apply_design_identity.artifact_sha256` from file bytes. A missing review hash is not a design patch and not `ESCALATE_ARBITER`: if the canon is `APPLY_DESIGN_READY`, return `NO_CHANGE`.
 
 **Required planning for this change** (runtime blocks the hop with `INPUT_SCOPE_INCOMPLETE` if missing — do not call the model): `tasks.md` and at least one of `design.md`, `proposal.md`, `specs/**/spec.md`. Discover them via `changes` + `read_source`, not filesystem shell.
 
@@ -35,9 +37,15 @@ Hop wiring exposes **no** shell, path arguments, or built-in read/edit tools. Us
 
 Typed hop answer JSON (`ApplyDesignAnswer`) still required in the model response. `submit_apply_design` persists APPLY-DESIGN.json for the machine validator; runtime runs Python validation after the hop. **Do not** open `opsx_tools`.
 
+For machine JSON when `status` is `APPLY_DESIGN_READY`, set `next_stage` to **`APPLY_DESIGN_REVIEW`** exactly (validator semantic rule). Other strings (`APPLY_SCAFFOLD`, `scaffold`, …) fail the gate. `submit_apply_design` returns `errors[]` from the validator on `DESIGN_MACHINE_GATE_FAILED` — fix those before resubmitting.
+
+Inline submit without a frozen digest: set `planning_identity.inputs[]` (planning paths) and `"$recompute_identities": true` so runtime fills `planning_digest` and `protected_context_identity` (no shell).
+
+`protected_context_identity` must include `paths[]` and `content_digest` matching frozen protected planning (scenario coverage, specs, etc.), not a bare digest object.
+
 ## Must not
 
-- Name the next stage, slash command, or handoff prompt. Return typed ``status`` only; LangGraph plans the next node
+- In the hop answer narrative, name the LangGraph handoff stage, slash command, or user prompt (the JSON field `next_stage` above is required machine data, not a handoff)
 - Modify production code (`src/**`, `backend/**`, …) or tests (`tests/**`, `backend/tests/**`, …)
 - Author RED tests, run tests, implement behavior, or fix bugs found during research
 - Change approved specs/tasks to fit code
@@ -98,12 +106,20 @@ validator reports a concrete gap.
 `change_id` and `repository_path` come from LangGraph state. Review may run in a clean
 SDK context using durable artifacts + repository only (`chat_history_required: false`).
 
+## Tools (only)
+
+`read` and `edit` only. Built-in `grep`, `glob`, `ls`, and `shell` are not on this hop.
+A repo search outside READ ALLOW exhausts read-scope corrections (`READ_SCOPE_EXHAUSTED`).
+Open files with `read` using paths already named in this prompt or under READ ALLOW
+(`openspec/changes/**`, `openspec/decisions/**`, `openspec/specs/**`, `src/**`, `app/**`, `tests/**`).
+Do not search `opsx/**` or the repository root.
+
 ## Read
 
 - `<changeRoot>/apply-design/APPLY-DESIGN.json` (+ `.md` when useful)
 - Frozen planning under `<changeRoot>` (tasks, design, specs, decisions cited by DESIGN)
-- `openspec/decisions/**` (context-first, bounded)
-- Repository reality: reuse paths, ownership, integration seams (bounded search)
+- `openspec/decisions/**` (context-first, named paths only)
+- Repository reality: reuse paths, ownership, integration seams already cited by DESIGN or opened with `read`
 
 Do not treat conversational history as authority.
 
@@ -300,7 +316,7 @@ Eligible: `SCAFFOLD_READY`; not already durable RED complete for slice; deps hav
 1. Read frozen slice + `cross_slice_contracts` where this slice is dependent; materialize `proof_placement: B_RED` obligations.
 2. Reuse/extend seams in `red_test_targets_or_seams`.
 3. Canonical `tests/scenarios/<change>/test_<sha>.py` files are already authored by `ScenarioTestAuthorAgent` after apply-design — do not rewrite them. Author slice tests and remaining mapped obligations (design targets, slice-owned scenario artifacts, B_RED composition cases) plus minimum cases for `required_behavior` / `invariants`. Missing mapped artifact → stop (not RED complete).
-4. Run **only** bounded per-test commands (adapter: frontend `node --test` with optional `--test-name-pattern`; backend `poetry run python -m unittest …` from `backend/`). Resolve test paths from slice design / RED contract — not from `opsx_tools`. Never whole-suite glob as proof.
+4. Run each bounded test with MCP **`run_pytest`** (`node_id` under `tests/` only). This hop has no shell: do not call `poetry`, `python -m unittest`, or `node --test`. The tool runs that node on the repository Poetry interpreter and forces `POETRY_VIRTUALENVS_PREFER_ACTIVE=false` so the OPSX host virtualenv is not used. A non-zero `run_pytest` exit is RED evidence, not `GREEN_TEST_RUNNER_ENV`. Freeze the same node as `poetry run pytest -q <node_id>` in `test_commands` (runtime replays that string). A missing slice receipt is runtime-owned — do not `BLOCKED` only because the receipt file is absent. Never a whole-suite glob.
 5. Qualify **each** command independently. Valid RED: reaches intended seam and fails on behavioral assertion **or** hits `OPSX_SCAFFOLD_NOT_IMPLEMENTED` at the frozen scaffold seam (`INTENDED_BEHAVIOR_MISSING`). Wrong reason (syntax, fixture, missing import/symbol after scaffold, infra, unrelated) → repair **test/fixture only**, rerun (default ≤3 attempts per command). Scaffold defects → stop; do not fix scaffold from RED.
 
 If required tests **pass** before implementation: do not manufacture failure. When all mapped commands pass with complete evidence → durable **already-satisfied observation** (not behavioral RED proof); implement stage handles adoption — observation alone does not authorize product writes.
@@ -338,6 +354,12 @@ gate**. **Do not re-run that gate** and **do not edit `work_file_fingerprints`.*
 | `false` | Implement slice production work only; return typed hop `status` — runtime records `IMPLEMENTATION.json` after hop (do not edit that JSON). |
 
 Use only the dispatched `slice_id` — not `selectNextImplementableSlice` in the graph loop.
+
+## Tools (only)
+
+`read` and `edit` only. Do not call `grep`, `glob`, `ls`, or `shell`.
+Slice paths are already in this prompt. A search outside READ ALLOW exhausts
+read-scope corrections (`READ_SCOPE_EXHAUSTED`).
 
 ## Read
 
@@ -423,7 +445,9 @@ Predecessor pair for the slice:
 
 LangGraph: use only the dispatched `slice_id`. Upstream drift is in `slice_receipt_validation`.
 
-Run frozen RED via **shell** using exact `test_commands` from on-disk RED.json (not via `opsx_tools`).
+This hop has no shell. Run each frozen RED `test_commands` target with MCP **`run_pytest`** (`node_id` = the `tests/...` node inside the command, not a shell string). The tool uses the repository Poetry interpreter (`POETRY_VIRTUALENVS_PREFER_ACTIVE=false`); do not `BLOCKED` with `GREEN_TEST_RUNNER_ENV` when it returns an exit code. Do not `BLOCKED` only because the slice receipt file is missing — runtime writes it after the hop.
+
+After the hop, runtime replays each single-node `poetry run pytest` command with that same `run_pytest` interpreter. `status=APPLY_COMPLETE` does not prove GREEN. If `machine_gate_errors` or the arbiter directive contains `RED_EVIDENCE_NOT_PASS` or `GREEN_VERIFICATION_MISSING`, the replay failed: fix production in slice scope and rerun those exact node ids until `run_pytest` exits 0. Do not edit frozen tests and do not write `GREEN.json`.
 
 ## Write
 
@@ -435,7 +459,7 @@ bounded production fixes within slice scope
 
 When all slices are GREEN, may write `<changeRoot>/apply-complete/TASK-COMPLETION.json` (derived task completion projection — do not mutate `tasks.md` checkboxes).
 
-GREEN.json must match the hop answer schema. **Do not** open `opsx_tools`; runtime validates GREEN.json after hop (test runs stay your shell work).
+GREEN.json must match the hop answer schema. **Do not** open `opsx_tools`; runtime validates GREEN.json after hop. Live test runs are `run_pytest` only (no shell).
 
 Production fixes: `expected_product_write_surfaces` + frozen `architectural_intent` for **this slice only** — same semantic scope rule as implement (path ≠ later-slice behavior).
 

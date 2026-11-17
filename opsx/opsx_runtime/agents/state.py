@@ -408,6 +408,12 @@ class GraphState(TypedDict, total=False):
     ``1`` — один повтор RED; ``>1`` — PAUSE.
     """
     implementation_red_oracle_retry_count: int
+    """Сколько раз GREEN materialize отказал из‑за replay frozen commands.
+
+    Поле обязано быть в ``GraphState``: LangGraph отбрасывает ключи вне схемы.
+    ``1`` — один повтор APPLY_GREEN с хвостом pytest; ``>1`` — PAUSE.
+    """
+    implementation_green_verify_retry_count: int
     implementation_primitive_command: str | None
     implementation_plan: dict[str, Any]
     implementation_plan_override: dict[str, Any]

@@ -117,6 +117,17 @@ _RED_MATERIALIZE_RETRY_CODES = frozenset(
     {"RED_ORACLE_BEHAVIOR_MARKER_GAP", "RECEIPT_PUBLISH_MISSING"},
 )
 
+_GREEN_VERIFY_RETRY_CODES = frozenset(
+    {"RED_EVIDENCE_NOT_PASS", "GREEN_VERIFICATION_MISSING"},
+)
+
+_GREEN_VERIFY_DIRECTIVE = (
+    "Runtime replay of frozen RED test_commands did not exit 0. "
+    "The model status APPLY_COMPLETE is not evidence. Fix production inside "
+    "this slice's write surfaces and rerun each frozen tests/ node with "
+    "run_pytest until exit 0. Do not edit frozen tests and do not write GREEN.json."
+)
+
 
 def _red_hop_claims_success(
     lane_hop_status: str,
@@ -177,6 +188,47 @@ def _red_first_materialize_refusal_patch(
     merged["implementation_arbiter_target_stage"] = STAGE_APPLY_RED
     merged["implementation_arbiter_directive"] = _RED_ORACLE_DIRECTIVE
     merged["implementation_stage"] = STAGE_APPLY_RED
+    return merged
+
+
+def _green_verify_refusal_patch(
+    state: GraphState,
+    result: dict[str, Any],
+    *,
+    lane_hop_status: str,
+    hop_state: GraphState,
+    recovery_code: str,
+    detail: str,
+) -> dict[str, Any]:
+    """Первый отказ replay GREEN: RUNNING + один повтор hop с хвостом pytest."""
+    retry_count = int(state.get("implementation_green_verify_retry_count") or 0) + 1
+    evidence = (detail or recovery_code).strip()
+    merged = merge_split_apply_hop_result(
+        result,
+        lane_hop_status,
+        hop_state=hop_state,
+    )
+    merged["implementation_receipt_gate"] = "AGENT"
+    merged["implementation_last_hop"] = STAGE_APPLY_GREEN
+    merged["implementation_green_verify_retry_count"] = retry_count
+    merged["implementation_machine_gate_errors"] = [
+        {
+            "code": recovery_code,
+            "field": "red_executions",
+            "message": evidence[:4000],
+        },
+    ]
+    if retry_count > 1:
+        merged["implementation_status"] = RUN_STATUS_PAUSED
+        merged["implementation_recovery_code"] = recovery_code
+        return merged
+    merged["implementation_status"] = RUN_STATUS_RUNNING
+    merged["implementation_stage"] = STAGE_APPLY_GREEN
+    merged["implementation_arbiter_target_stage"] = STAGE_APPLY_GREEN
+    merged["implementation_arbiter_directive"] = (
+        f"{_GREEN_VERIFY_DIRECTIVE} Evidence: {evidence[:2000]}"
+    )
+    merged["implementation_recovery_code"] = recovery_code
     return merged
 
 
@@ -285,6 +337,11 @@ async def run_slice_stage_hop(
         }
         if stage == STAGE_APPLY_RED and int(state.get("implementation_red_oracle_retry_count") or 0) > 0:
             skip_patch["implementation_red_oracle_retry_count"] = 0
+        if stage == STAGE_APPLY_GREEN and int(
+            state.get("implementation_green_verify_retry_count") or 0
+        ) > 0:
+            skip_patch["implementation_green_verify_retry_count"] = 0
+            skip_patch["implementation_machine_gate_errors"] = None
         return skip_patch
 
     watch_paths = await asyncio.to_thread(
@@ -414,6 +471,15 @@ async def run_slice_stage_hop(
                     hop_state=hop_state,
                     recovery_code=recovery,
                 )
+            if stage == STAGE_APPLY_GREEN and refuse_code in _GREEN_VERIFY_RETRY_CODES:
+                return _green_verify_refusal_patch(
+                    state,
+                    result,
+                    lane_hop_status=materialize_hop_status,
+                    hop_state=hop_state,
+                    recovery_code=refuse_code,
+                    detail=str(materialize.detail or ""),
+                )
             raise ImplementationLaneTerminalError(
                 "RECEIPT_MATERIALIZE: "
                 f"{slice_id}/{stage} failed ({materialize.code or 'unknown'})",
@@ -483,4 +549,7 @@ async def run_slice_stage_hop(
             )
         if red_path.is_file():
             merged["implementation_red_oracle_retry_count"] = 0
+    if stage == STAGE_APPLY_GREEN:
+        merged["implementation_green_verify_retry_count"] = 0
+        merged["implementation_machine_gate_errors"] = None
     return merged

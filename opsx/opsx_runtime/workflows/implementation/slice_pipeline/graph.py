@@ -87,6 +87,25 @@ def _should_retry_red_oracle_gap(state: GraphState) -> bool:
     return True
 
 
+def _should_retry_green_verify(state: GraphState) -> bool:
+    """Первый отказ replay frozen commands: один повтор APPLY_GREEN.
+
+    ``stage_hop`` выставляет ``implementation_green_verify_retry_count``.
+    Успешный GREEN или SKIP сбрасывает счётчик, иначе успешный hop снова
+    попал бы в ``retry_green``.
+    """
+    if str(state.get("implementation_last_hop") or "").strip() != STAGE_APPLY_GREEN:
+        return False
+    if str(state.get("implementation_status") or "") != RUN_STATUS_RUNNING:
+        return False
+    if int(state.get("implementation_green_verify_retry_count") or 0) != 1:
+        return False
+    target = str(state.get("implementation_arbiter_target_stage") or "").strip()
+    if target and target != STAGE_APPLY_GREEN:
+        return False
+    return True
+
+
 def route_after_slice_stage(state: GraphState) -> str:
     """PAUSED — END subgraph; FAILED — raise; иначе следующий stage."""
     if state.get("implementation_arbiter_pending"):
@@ -96,6 +115,8 @@ def route_after_slice_stage(state: GraphState) -> str:
     last_hop = str(state.get("implementation_last_hop") or "").strip()
     if _should_retry_red_oracle_gap(state):
         return "retry_red"
+    if _should_retry_green_verify(state):
+        return "retry_green"
     from workflows.implementation.routing import (
         _raise_if_failed_else_end_on_paused,
     )
@@ -188,7 +209,11 @@ def build_apply_slice_lane_graph(
         route_after_slice_stage,
         {"continue": "slice_apply_green", END: END},
     )
-    _ = builder.add_edge("slice_apply_green", END)
+    _ = builder.add_conditional_edges(
+        "slice_apply_green",
+        route_after_slice_stage,
+        {"continue": END, "retry_green": "slice_apply_green", END: END},
+    )
     return builder.compile(checkpointer=checkpointer)
 
 

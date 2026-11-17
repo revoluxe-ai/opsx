@@ -7,23 +7,37 @@
 
 from __future__ import annotations
 
+import importlib
 import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Mapping
 
 from .context import OpsxError
 from .supervisor_classify import FailureClassification
 from .supervisor_qualifier import QualifierVerdict, qualify_failure, verdict_to_dict
 from .supervisor_events import format_opsx_event
-from .supervisor_journal import JournalEntry, SupervisorJournal, supervisor_journal_path
+from .supervisor_journal import (
+    JournalEntry,
+    SupervisorJournal,
+    detect_repeat_repair,
+    supervisor_journal_path,
+)
 from .supervisor_meta import (
     diff_fingerprints,
     git_dirty_fingerprints,
     validate_meta_write_paths,
 )
 from .supervisor_subprocess import kill_process_tree, read_log_tail, run_worker_with_watchdog
+from .supervisor_reliability import (
+    IncidentPhase,
+    classification_enriched,
+    entry_incident_resolved,
+    map_entry_phase,
+    map_fix_verdict_on_executor_failure,
+    workflow_record_identity,
+)
 from .supervisor_timeouts import SupervisorTimeouts
 from .site_status import keep_site_running
 from .storage import read_json, write_json
@@ -117,7 +131,10 @@ def journal_solver_choice(
             entry_id=entry_id,
         )
         return None
+    approach = str(fix_result.get("approach") or fix_result.get("root_cause") or "")[:500]
     what = f"{choice['solver_action']} agent={choice['repair_agent']}"
+    if approach:
+        what = f"{what} approach={approach[:120]}"
     journal.note(
         kind="SOLVER_CHOICE",
         what=what,
@@ -126,6 +143,7 @@ def journal_solver_choice(
         run_id=run_id,
         attempt=attempt,
         entry_id=entry_id,
+        approach=approach,
         **choice,
     )
     return choice
@@ -186,13 +204,22 @@ class WorkflowSupervisor:
         self._deadline = self._started_mono + timeouts.supervisor_timeout_seconds
         self._dirty_at_start = set(git_dirty_fingerprints(self._project.root, self._project.core).keys())
         self._fixed_progress_keys: set[str] = set()
+        self._fixed_causal_signatures: set[str] = set()
         self._seen_fail_progress_keys: set[str] = set()
+        self._seen_causal_signatures: set[str] = set()
+        self._pending_replay: dict[str, Any] | None = None
+        self._pending_replay_identity: str = ""
         self._process: Any | None = None
 
     @staticmethod
     def _progress_key(classification: FailureClassification) -> str:
         """Стабильный ключ no-progress: code + stage (не растущий хвост лога)."""
         return f"{classification.code}|{classification.stage}"
+
+    @staticmethod
+    def _causal_key(classification: Mapping[str, Any]) -> str:
+        """Causal signature для convergence (domain|code|stage|component)."""
+        return str(classification.get("causal_signature") or "")
 
     def _remaining(self) -> float:
         return max(0.0, self._deadline - time.monotonic())
@@ -343,6 +370,9 @@ class WorkflowSupervisor:
             root_cause=str(payload.get("root_cause") or ""),
             message=str(payload.get("message") or ""),
             fix_hop_allowed=bool(payload.get("fix_hop_allowed")),
+            failure_domain=str(payload.get("failure_domain") or "UNKNOWN"),
+            repair_authority=str(payload.get("repair_authority") or "NONE"),
+            causal_signature=str(payload.get("causal_signature") or ""),
         )
         await self._emit(
             "QUALIFY",
@@ -361,6 +391,10 @@ class WorkflowSupervisor:
             stage=verdict.stage,
             fingerprint=verdict.fingerprint,
             fix_hop_allowed=verdict.fix_hop_allowed,
+            failure_domain=verdict.failure_domain,
+            repair_authority=verdict.repair_authority,
+            causal_signature=verdict.causal_signature,
+            incident_phase=IncidentPhase.DIAGNOSED.value,
         )
         return verdict
 
@@ -376,6 +410,8 @@ class WorkflowSupervisor:
         attempt_dir = self._controller_dir / "attempts" / str(attempt)
         attempt_dir.mkdir(parents=True, exist_ok=True)
         before = git_dirty_fingerprints(self._project.root, self._project.core)
+        meta_mod = importlib.import_module("opsx_cli.supervisor_meta")
+        baseline = meta_mod.repair_baseline_identity(self._project.root, self._project.core)
         await self._emit(
             "SOLVE",
             attempt=attempt,
@@ -393,6 +429,19 @@ class WorkflowSupervisor:
         )
         await self._emit("FIX", attempt=attempt, entry_id=entry_id, fingerprint=classification.fingerprint)
         await self._say(f"чиню процесс ({classification.code}), страница этого запуска не закрывается")
+        prior_repairs = self._journal.prior_repairs(
+            self._change_id,
+            classification.code,
+            classification.fingerprint,
+        )
+        cls_payload = asdict(classification)
+        cls_payload.update(
+            classification_enriched(
+                classification,
+                {"error": classification.message},
+                log_tail=read_log_tail(self._log_path),
+            )
+        )
         fix_request = {
             "schema_version": 1,
             "mode": "supervise_fix",
@@ -401,12 +450,14 @@ class WorkflowSupervisor:
             "core_root": str(self._project.core),
             "timeout_seconds": remaining,
             "entry_id": entry_id,
-            "classification": asdict(classification),
+            "classification": cls_payload,
+            "repair_baseline": baseline,
             "log_tail": read_log_tail(self._log_path),
             "log_path": str(self._log_path),
             "journal_path": str(self._journal.path),
             "attempt_dir": str(attempt_dir),
             "prior_dead_ends": self._journal.prior_dead_ends(self._change_id),
+            "prior_repairs": prior_repairs,
         }
         code, hang = await self._run_worker_mode(
             mode="supervise_fix",
@@ -417,20 +468,28 @@ class WorkflowSupervisor:
         )
         fix_result = await read_json(attempt_dir / "fix_result.json", {})
         if hang and not fix_result:
-            fix_result = {"verdict": "CANNOT_FIX", "error": hang}
+            fix_result = {
+                "verdict": "FIX_INTERRUPTED",
+                "error": f"REPAIR_EXECUTOR_UNAVAILABLE: {hang}",
+            }
+        mapped_verdict, mapped_err = map_fix_verdict_on_executor_failure(
+            str(fix_result.get("verdict") or "").upper(),
+            str(fix_result.get("error") or hang or ""),
+        )
+        if mapped_verdict != str(fix_result.get("verdict") or "").upper():
+            fix_result = {**fix_result, "verdict": mapped_verdict, "error": mapped_err}
         after = git_dirty_fingerprints(self._project.root, self._project.core)
-        import importlib
-
         meta_mod = importlib.reload(importlib.import_module("opsx_cli.supervisor_meta"))
         changed, scope_error = meta_mod.select_fix_commit_files(fix_result, before, after)
+        canonical = meta_mod.dedupe_canonical_fingerprints(changed)
         files_changed = [
-            {"repo": fp.repo, "path": fp.path, "sha256": fp.sha256} for fp in changed
+            {"repo": fp.repo, "path": fp.path, "sha256": fp.sha256} for fp in canonical
         ]
         entry = JournalEntry(
             entry_id=entry_id,
             attempt=attempt,
             fingerprint=classification.fingerprint,
-            classification=asdict(classification),
+            classification=cls_payload,
             status="FIX_PENDING",
             created_at=SupervisorJournal.now_iso(),
             fix_report=fix_result,
@@ -446,6 +505,24 @@ class WorkflowSupervisor:
             attempt=attempt,
             entry_id=entry_id,
         )
+        if verdict == "FIXED" and detect_repeat_repair(fix_result, prior_repairs):
+            entry.status = "FIX_REJECTED"
+            entry.error = "repeat repair: same agent, files, and approach as a prior hop"
+            self._journal.append(entry)
+            self._journal.note(
+                kind="REPAIR_REPEAT_REJECTED",
+                what="solver repeated a prior repair approach",
+                why=entry.error,
+                change_id=self._change_id,
+                run_id=self._run_id,
+                attempt=attempt,
+                entry_id=entry_id,
+                code=classification.code,
+                fingerprint=classification.fingerprint,
+            )
+            await write_json(attempt_dir / f"{entry_id}.json", asdict(entry))
+            self._journal_fix_round(attempt=attempt, entry=entry, fix_result=fix_result)
+            return entry
         if verdict == "FIXED" and normalize_solver_choice(fix_result) is None:
             if infer_solver_choice_from_files(fix_result) is None:
                 entry.status = "FIX_REJECTED"
@@ -472,11 +549,9 @@ class WorkflowSupervisor:
             await write_json(attempt_dir / f"{entry_id}.json", asdict(entry))
             self._journal_fix_round(attempt=attempt, entry=entry, fix_result=fix_result)
             return entry
-        import importlib
-
         meta = importlib.reload(importlib.import_module("opsx_cli.supervisor_meta"))
         ok, reason = meta.validate_meta_write_paths(
-            changed,
+            canonical,
             dirty_at_start=self._dirty_at_start,
             core_root=self._project.core,
         )
@@ -519,6 +594,16 @@ class WorkflowSupervisor:
             self._journal_fix_round(attempt=attempt, entry=entry, fix_result=fix_result)
             return entry
         entry.status = "FIXED"
+        patch_phase = map_entry_phase(entry.status, patch_verified=True, committed=False, replay_verified=False)
+        self._note(
+            kind="LIFECYCLE",
+            what=f"incident_phase={patch_phase}",
+            why="named checks passed after META patch",
+            attempt=attempt,
+            entry_id=entry_id,
+            incident_phase=patch_phase,
+            repair_baseline=baseline,
+        )
         self._journal.append(entry)
         await write_json(attempt_dir / f"{entry_id}.json", asdict(entry))
         await self._emit("COMMIT", attempt=attempt, entry_id=entry_id)
@@ -544,10 +629,37 @@ class WorkflowSupervisor:
             entry.status = "COMMIT_FAILED"
             entry.commit_status = str(commit_result.get("status") or "FAILED")
             entry.error = str(commit_result.get("error") or "commit failed")
+            self._note(
+                kind="LIFECYCLE",
+                what="incident_phase=FAIL",
+                why=entry.error or "COMMIT_FAILED",
+                attempt=attempt,
+                entry_id=entry_id,
+                incident_phase=IncidentPhase.FAIL.value,
+            )
         else:
             entry.commit_status = "COMMITTED"
             entry.commit_sha = commit_result.get("commit_sha")
             self._fixed_progress_keys.add(self._progress_key(classification))
+            causal = str(cls_payload.get("causal_signature") or "")
+            self._pending_replay = {
+                "causal_signature": causal,
+                "before_failure_identity": self._pending_replay_identity,
+                "repair_revision": entry.commit_sha,
+                "baseline": baseline,
+                "original_code": classification.code,
+            }
+            self._note(
+                kind="LIFECYCLE",
+                what="incident_phase=COMMITTED",
+                why=f"commit_sha={entry.commit_sha}",
+                attempt=attempt,
+                entry_id=entry_id,
+                incident_phase=IncidentPhase.COMMITTED.value,
+                commit_sha=entry.commit_sha,
+                causal_signature=causal,
+                convergence_predicate="replay_required",
+            )
         self._journal.append(entry)
         await write_json(attempt_dir / f"{entry_id}.json", asdict(entry))
         self._journal_fix_round(attempt=attempt, entry=entry, fix_result=fix_result)
@@ -652,6 +764,22 @@ class WorkflowSupervisor:
                 )
                 record, hang = await self._workflow_attempt(attempt)
                 if record.get("verification_status") == "PASS" and int(record.get("exit_code", 1)) == 0:
+                    if self._pending_replay:
+                        causal = str(self._pending_replay.get("causal_signature") or "")
+                        if causal:
+                            self._fixed_causal_signatures.add(causal)
+                        self._note(
+                            kind="LIFECYCLE",
+                            what="incident_phase=INCIDENT_RESOLVED",
+                            why="workflow replay PASS after committed META repair",
+                            attempt=attempt,
+                            incident_phase=IncidentPhase.INCIDENT_RESOLVED.value,
+                            causal_signature=causal,
+                            after_failure_identity=workflow_record_identity(record),
+                            repair_revision=self._pending_replay.get("repair_revision"),
+                            convergence_verdict="CONVERGED",
+                        )
+                        self._pending_replay = None
                     record.update(
                         status="PASS",
                         workflow_status="SUPERVISED_PASS",
@@ -669,6 +797,7 @@ class WorkflowSupervisor:
                     return record
                 qualifier = await self._run_qualify_pipeline(attempt, record, hang)
                 classification = qualifier.as_classification()
+                self._pending_replay_identity = workflow_record_identity(record)
                 self._note(
                     kind="ATTEMPT_FAIL",
                     what=f"attempt {attempt} did not PASS",
@@ -714,15 +843,48 @@ class WorkflowSupervisor:
                     f"тот же запуск продолжается — solver hop"
                 )
                 progress_key = self._progress_key(classification)
-                if progress_key in self._fixed_progress_keys:
-                    reason = "NO_PROGRESS: повтор того же fingerprint после META fix"
+                causal_key = qualifier.causal_signature or self._causal_key(
+                    classification_enriched(classification, record, log_tail=read_log_tail(self._log_path))
+                )
+                if causal_key and causal_key in self._fixed_causal_signatures:
+                    reason = (
+                        "NO_PROGRESS: повтор нерешённого causal_signature="
+                        f"{causal_key} (code={classification.code}, stage={classification.stage})"
+                    )
                     record = self._supervisor_timeout(reason, record)
                     record["supervisor_stop"] = "NO_PROGRESS"
                     record["site_error"] = False
-                    self._note(kind="STOP", what="same failure after a committed fix", why=reason, attempt=attempt)
+                    self._note(
+                        kind="STOP",
+                        what="same causal finding after committed fix",
+                        why=reason,
+                        attempt=attempt,
+                        progress_key=progress_key,
+                        causal_signature_compared=causal_key,
+                    )
+                    await write_json(self._controller_dir / "status.json", record)
+                    return record
+                if progress_key in self._fixed_progress_keys:
+                    reason = (
+                        "NO_PROGRESS: повтор code|stage после META fix "
+                        f"(compared progress_key={progress_key}, causal_signature={causal_key or 'n/a'})"
+                    )
+                    record = self._supervisor_timeout(reason, record)
+                    record["supervisor_stop"] = "NO_PROGRESS"
+                    record["site_error"] = False
+                    self._note(
+                        kind="STOP",
+                        what="same failure after a committed fix",
+                        why=reason,
+                        attempt=attempt,
+                        progress_key=progress_key,
+                        causal_signature_compared=causal_key,
+                    )
                     await write_json(self._controller_dir / "status.json", record)
                     return record
                 self._seen_fail_progress_keys.add(progress_key)
+                if causal_key:
+                    self._seen_causal_signatures.add(causal_key)
                 try:
                     entry = await self._run_fix_rounds(attempt, classification)
                 except OpsxError as exc:

@@ -7,6 +7,14 @@ from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
 from .supervisor_classify import FailureClassification, FailureOwner, classify_attempt
+from .supervisor_reliability import (
+    FailureDomain,
+    RepairAuthority,
+    classification_enriched,
+    derive_failure_domain,
+    derive_repair_authority,
+    fix_hop_allowed_for_authority,
+)
 
 _RECEIPT_GATE_CODES = frozenset({
     "RECEIPT_NOT_ACCEPTED",
@@ -44,6 +52,9 @@ class QualifierVerdict:
     root_cause: str
     message: str
     fix_hop_allowed: bool
+    failure_domain: str = "UNKNOWN"
+    repair_authority: str = "NONE"
+    causal_signature: str = ""
 
     def as_classification(self) -> FailureClassification:
         """Совместимость с fix-hop, ожидающим ``FailureClassification``."""
@@ -143,18 +154,37 @@ def qualify_failure(
     """Классифицировать отказ workflow и решить, открывать ли solver-hop."""
     row = classify_attempt(record, log_tail=log_tail, hang_reason=hang_reason)
     clean_product = _clean_product_acceptance_failure(record)
+    enriched = classification_enriched(
+        row,
+        record,
+        log_tail=log_tail,
+        hang_reason=hang_reason,
+        clean_product_gap=clean_product,
+    )
+    domain = derive_failure_domain(row, record, log_tail=log_tail, hang_reason=hang_reason)
+    authority = derive_repair_authority(domain, row, clean_product_gap=clean_product)
+    fix_allowed = fix_hop_allowed_for_authority(authority)
+    if _workflow_abnormal_exit(record, hang_reason=hang_reason) and domain not in {
+        FailureDomain.ENVIRONMENT,
+        FailureDomain.EXPECTED_PAUSE,
+        FailureDomain.CONTRACT_CONFLICT,
+    }:
+        fix_allowed = True
+        authority = RepairAuthority.META_REPAIR
+    if clean_product:
+        fix_allowed = True
+        authority = RepairAuthority.META_REPAIR
 
     if row.owner in {FailureOwner.INFRA, FailureOwner.OWNER}:
         owner = row.owner.value
-        fix_allowed = False
     elif hang_reason or row.owner == FailureOwner.HANG or _workflow_abnormal_exit(
         record, hang_reason=hang_reason
     ) or clean_product:
         owner = FailureOwner.HANG.value if hang_reason else FailureOwner.META.value
-        fix_allowed = True
     else:
-        owner = FailureOwner.META.value
-        fix_allowed = True
+        owner = row.owner.value
+        if domain.value == "OPSX_CORE" and row.owner == FailureOwner.PRODUCT:
+            owner = FailureOwner.META.value
 
     root = _root_cause(owner, row, record, clean_product=clean_product)
     return QualifierVerdict(
@@ -165,6 +195,9 @@ def qualify_failure(
         root_cause=root,
         message=row.message,
         fix_hop_allowed=fix_allowed,
+        failure_domain=domain.value,
+        repair_authority=authority.value,
+        causal_signature=str(enriched.get("causal_signature") or ""),
     )
 
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +40,72 @@ class FileFingerprint:
     repo: str
     path: str
     sha256: str
+
+
+CORE_SUBMODULE_PREFIX = "opsx/core/"
+
+# Пути, которые живут только в git checkout ``opsx/core`` (не в product root).
+_CORE_CHECKOUT_REL_PREFIXES: tuple[str, ...] = (
+    "opsx/",
+    "opsx_cli/",
+    "opsx_tools/",
+    ".cursor/",
+    "tests/",
+)
+
+
+def canonical_journal_repo_path(repo: str, path: str) -> tuple[str, str]:
+    """Единая форма ``(repo, relpath)`` для git add и сравнения allowlist staged.
+
+    Fix-hop часто пишет ``opsx/opsx_runtime/...`` без префикса submodule; ошибочно
+    это может оказаться с ``repo=project``. Нормализуем к ``core`` + путь
+    относительно checkout ядра, либо ``project`` + ``opsx/core/...``.
+    """
+    text = path.replace("\\", "/").strip()
+    name = (repo or "").strip() or "core"
+    if text.startswith(CORE_SUBMODULE_PREFIX):
+        if name == "project":
+            return "project", text
+        return "core", text.removeprefix(CORE_SUBMODULE_PREFIX)
+    if name == "project" and any(text.startswith(p) for p in _CORE_CHECKOUT_REL_PREFIXES):
+        return "core", text
+    return name, text
+
+
+def canonical_file_fingerprint(fp: FileFingerprint) -> FileFingerprint:
+    """Нормализовать отпечаток до канонической пары repo/path для журнала и commit."""
+    repo, rel = canonical_journal_repo_path(fp.repo, fp.path)
+    if repo == fp.repo and rel == fp.path:
+        return fp
+    return FileFingerprint(repo=repo, path=rel, sha256=fp.sha256)
+
+
+def dedupe_canonical_fingerprints(files: list[FileFingerprint]) -> list[FileFingerprint]:
+    """Схлопнуть дубликаты после ``canonical_file_fingerprint``."""
+    seen: set[tuple[str, str]] = set()
+    out: list[FileFingerprint] = []
+    for raw in files:
+        fp = canonical_file_fingerprint(raw)
+        key = (fp.repo, fp.path)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(fp)
+    return out
+
+
+def declared_path_allowlist(raw: str) -> set[tuple[str, str]]:
+    """Все канонические ``(repo, relpath)``, соответствующие объявленному пути fix-hop."""
+    text = str(raw).replace("\\", "/").strip()
+    if not text:
+        return set()
+    repo, rel = canonical_journal_repo_path("core", text)
+    allowed = {(repo, rel)}
+    if repo == "core":
+        allowed.add(("project", f"{CORE_SUBMODULE_PREFIX}{rel}"))
+    elif repo == "project" and rel.startswith(CORE_SUBMODULE_PREFIX):
+        allowed.add(("core", rel.removeprefix(CORE_SUBMODULE_PREFIX)))
+    return allowed
 
 
 def _repo_relative(path: Path, roots: list[tuple[str, Path]]) -> tuple[str, str] | None:
@@ -95,6 +163,40 @@ def git_dirty_fingerprints(project_root: Path, core_root: Path) -> dict[str, Fil
     return fingerprints
 
 
+def repair_baseline_identity(project_root: Path, core_root: Path) -> dict[str, str]:
+    """HEAD SHA project/core на старте fix-hop (baseline revision)."""
+    from .supervisor_reliability import git_head_sha
+
+    baseline: dict[str, str] = {}
+    project_sha = git_head_sha(project_root)
+    core_sha = git_head_sha(core_root)
+    if project_sha:
+        baseline["project"] = project_sha
+    if core_sha:
+        baseline["core"] = core_sha
+    return baseline
+
+
+def foreign_dirty_paths(
+    before: dict[str, FileFingerprint],
+    after: dict[str, FileFingerprint],
+    allowed_keys: set[str],
+) -> list[str]:
+    """Dirty-файлы вне allowlist fix_report — блок commit."""
+    foreign: list[str] = []
+    for key, fp in after.items():
+        prev = before.get(key)
+        if prev is not None and prev.sha256 == fp.sha256:
+            continue
+        if key not in before:
+            if key not in allowed_keys:
+                foreign.append(key)
+            continue
+        if before[key].sha256 != fp.sha256 and key not in allowed_keys:
+            foreign.append(key)
+    return foreign
+
+
 def diff_fingerprints(
     before: dict[str, FileFingerprint],
     after: dict[str, FileFingerprint],
@@ -125,7 +227,15 @@ def select_fix_commit_files(
     from_report = fingerprints_for_fix_report_paths(fix_result, after)
     if not from_report:
         return [], "fix report paths not found on disk"
-    return from_report, None
+    allowed_keys: set[str] = set()
+    for fp in from_report:
+        allowed_keys.add(f"{fp.repo}:{fp.path}")
+        canon = canonical_file_fingerprint(fp)
+        allowed_keys.add(f"{canon.repo}:{canon.path}")
+    foreign = foreign_dirty_paths(before, after, allowed_keys)
+    if foreign:
+        return [], f"foreign dirty outside fix report: {', '.join(foreign[:5])}"
+    return dedupe_canonical_fingerprints(from_report), None
 
 
 def fingerprints_for_fix_report_paths(
@@ -159,7 +269,7 @@ def fingerprints_for_fix_report_paths(
             fp = fingerprints.get(key)
             if fp is not None:
                 seen.add(key)
-                found.append(fp)
+                found.append(canonical_file_fingerprint(fp))
                 break
     return found
 
@@ -207,8 +317,8 @@ def validate_meta_write_paths(
         assert rel is not None
         dirty_key = f"{fp.repo}:{fp.path}"
         if dirty_key in dirty_at_start:
-            # Грязные до старта run файлы в META allowlist допустимо
-            # коммитить вместе с fix (типично — незакоммиченный scaffold из прошлого hop).
+            if rel.startswith(("app/", "src/", "tests/scenarios/", "openspec/changes/")):
+                return False, f"META-only forbids product path: {dirty_key}"
             if _glob_match(rel, deny) or not _glob_match(rel, allow):
                 return False, f"touching pre-existing dirty file: {dirty_key}"
         if _glob_match(rel, deny):
@@ -217,6 +327,49 @@ def validate_meta_write_paths(
             return False, f"outside META allowlist: {rel}"
         _ = core_root  # reserved for future symlink checks
     return True, ""
+
+
+def resolve_opsx_runtime_package_root(core_root: Path) -> Path:
+    """Каталог, в котором лежит пакет ``agents`` (``opsx/opsx_runtime``)."""
+    flat = core_root / "opsx" / "opsx_runtime"
+    nested = core_root / "opsx" / "core" / "opsx" / "opsx_runtime"
+    if flat.is_dir():
+        return flat
+    if nested.is_dir():
+        return nested
+    return flat
+
+
+def opsx_named_check_subprocess_env(
+    core_root: Path,
+    base: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Окружение named pytest супервизора: ``PYTHONPATH`` → ``agents``.
+
+    Контроллер и ``run_opsx_pytest`` используют Poetry Python ``opsx/core``, не
+    product ``.venv``; import path задаётся runtime root, а не cwd.
+    """
+    env = dict(base or os.environ)
+    runtime_root = resolve_opsx_runtime_package_root(core_root)
+    prior = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        str(runtime_root) if not prior else str(runtime_root) + os.pathsep + prior
+    )
+    env.setdefault("PYTHONUTF8", "1")
+    return env
+
+
+def resolve_opsx_named_check_interpreter(core_root: Path) -> Path:
+    """Poetry-env ``opsx/core`` для named pytest (LangGraph worker), не product venv."""
+    from .worker_runtime import core_poetry_python
+
+    py = core_poetry_python(core_root)
+    if py is None or not py.is_file():
+        raise ValueError(
+            "opsx/core Poetry interpreter missing; "
+            f"run poetry install in {core_root}"
+        )
+    return py
 
 
 def normalize_opsx_pytest_node_id(node_id: str) -> str:

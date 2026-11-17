@@ -8,6 +8,12 @@ from typing import Any
 
 from agents.process_repair.meta_surface import format_meta_surface_prompt
 from agents.process_repair.schemas import ProcessFixReport
+
+try:
+    from opsx_cli.supervisor_reliability import map_fix_verdict_on_executor_failure
+except ImportError:  # worker PYTHONPATH may omit opsx_cli in some probes
+    def map_fix_verdict_on_executor_failure(verdict: str, error: str) -> tuple[str, str]:
+        return verdict, error
 from runtime_bootstrap import ensure_adapter_factories_registered
 
 # ``run_pytest`` — вход в адаптер: для этого agent_key он ставит MCP ``run_opsx_pytest``.
@@ -126,19 +132,24 @@ async def run_process_supervisor_fix(request: dict[str, Any]) -> dict[str, Any]:
                 return dumped
             except (json.JSONDecodeError, ValueError):
                 pass
+        raw_verdict = "CANNOT_FIX"
+        raw_error = getattr(result, "error", None) or "parse failed"
+        norm_verdict, norm_error = map_fix_verdict_on_executor_failure(raw_verdict, str(raw_error))
         report = ProcessFixReport(
-            verdict="CANNOT_FIX",
+            verdict=norm_verdict,  # type: ignore[arg-type]
             root_cause="adapter returned no valid ProcessFixReport",
-            error=getattr(result, "error", None) or "parse failed",
+            error=norm_error,
         )
         dumped = report.model_dump()
         _emit_fix_line(f"вердикт {dumped['verdict']}: {dumped.get('error')}")
         return dumped
     except Exception as exc:
+        err = f"{type(exc).__name__}: {exc}"
+        norm_verdict, norm_error = map_fix_verdict_on_executor_failure("CANNOT_FIX", err)
         report = ProcessFixReport(
-            verdict="CANNOT_FIX",
+            verdict=norm_verdict,  # type: ignore[arg-type]
             root_cause=str(classification.get("message") or "META defect"),
-            error=f"{type(exc).__name__}: {exc}",
+            error=norm_error,
         )
         dumped = report.model_dump()
         _emit_fix_line(f"вердикт {dumped['verdict']}: {dumped.get('error')}")

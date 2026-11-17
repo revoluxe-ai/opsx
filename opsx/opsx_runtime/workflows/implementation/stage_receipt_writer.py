@@ -766,15 +766,24 @@ class StageReceiptWriter:
         if hook.is_file():
             # Windows `node --import C:\...` parses the drive letter as a URL scheme.
             argv = ["node", "--import", hook.as_uri(), str(script)]
-        run = subprocess.run(
-            argv,
-            input=payload.encode("utf-8"),
-            capture_output=True,
-            text=False,
-            timeout=180,
-            check=False,
-            cwd=str(tooling_root),
-        )
+        try:
+            run = subprocess.run(
+                argv,
+                input=payload.encode("utf-8"),
+                capture_output=True,
+                text=False,
+                timeout=180,
+                check=False,
+                cwd=str(tooling_root),
+            )
+        except subprocess.TimeoutExpired as exc:
+            return StageReceiptWriteResult(
+                False,
+                "RECORD_CLI_TIMEOUT",
+                None,
+                stage,
+                detail=str(exc)[:500],
+            )
         stdout = (run.stdout or b"").decode("utf-8", errors="replace").strip()
         if not stdout:
             code = "RECORD_CLI_FAILED"

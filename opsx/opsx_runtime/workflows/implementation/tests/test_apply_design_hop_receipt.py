@@ -12,7 +12,9 @@ from workflows.artifact_paths import apply_design_artifact_path, apply_design_ho
 from workflows.implementation.apply_design_hop_receipt import (
     DesignSubmissionRecord,
     decide_design_hop,
+    design_hop_effective_status,
     receipt_matches,
+    remember_design_submission,
     write_hop_receipt,
 )
 
@@ -86,6 +88,37 @@ def test_failed_submit_blocks() -> None:
     )
     assert decision.status == "BLOCKED"
     assert decision.code == "INVALID_JSON"
+
+
+def test_rejected_candidate_keeps_accepted_publish() -> None:
+    accepted = DesignSubmissionRecord(
+        ok=True, unchanged=False, sha256="a" * 64, code=None
+    )
+    rejected = DesignSubmissionRecord(
+        ok=False,
+        unchanged=False,
+        sha256=None,
+        code="INVALID_ARGS",
+        message="content must be JSON",
+    )
+    kept, hop = remember_design_submission(accepted, rejected)
+    assert kept is not None and kept.ok
+    assert hop.ok
+    assert hop.sha256 == "a" * 64
+    decision = decide_design_hop(
+        submission=hop,
+        artifact_present=True,
+        gate_ok=True,
+        snapshot_ok=True,
+    )
+    assert decision.status == "APPLY_COMPLETE"
+    assert design_hop_effective_status("ESCALATE_ARBITER", decision.status) == "APPLY_COMPLETE"
+
+
+def test_passing_canon_outranks_arbiter_escalation() -> None:
+    assert design_hop_effective_status("ESCALATE_ARBITER", "NO_CHANGE") == "NO_CHANGE"
+    assert design_hop_effective_status("BLOCKED", "APPLY_COMPLETE") == "APPLY_COMPLETE"
+    assert design_hop_effective_status("ESCALATE_ARBITER", "BLOCKED") == "ESCALATE_ARBITER"
 
 
 def test_successful_submit_blocked_when_snapshot_stale() -> None:

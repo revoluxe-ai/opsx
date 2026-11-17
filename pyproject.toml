@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "opsx-cli"
 version = "0.1.0"
 description = "OPSX project installer, workflow CLI and local control panel"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 readme = "README.md"
-dependencies = []
+dependencies = ["langgraph (>=1.2.22,<2.0.0)"]
 
 [project.optional-dependencies]
 web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]

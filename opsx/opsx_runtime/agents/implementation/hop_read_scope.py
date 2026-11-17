@@ -33,6 +33,32 @@ _SLICE_HOP_AGENT_KEYS = frozenset(
 
 _IMPL_VERIFY_AGENT_KEYS = frozenset({"impl_verify"})
 
+_UNSAFE_DESIGN_PREFIXES: tuple[str, ...] = (
+    "opsx/",
+    ".opsx/",
+    ".cursor/",
+    ".git/",
+    ".github/",
+    "node_modules/",
+    "tools/",
+    ".venv/",
+)
+
+
+def _safe_design_product_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Product surfaces из APPLY-DESIGN; служебные деревья OPSX не расширяют allow."""
+    kept: list[str] = []
+    for path in paths:
+        if any(
+            path == prefix.rstrip("/") or path.startswith(prefix)
+            for prefix in _UNSAFE_DESIGN_PREFIXES
+        ):
+            continue
+        if path.startswith(".env"):
+            continue
+        kept.append(path)
+    return tuple(kept)
+
 
 def is_slice_hop_agent_key(agent_key: str | None) -> bool:
     """Агент относится к slice pipeline (может расширить allow work-путями)."""
@@ -96,7 +122,7 @@ def augment_scope_with_slice_work_paths(
         return scope
     change_id = str(state.get("change_id") or "").strip()
     slice_id = str(state.get("implementation_slice_id") or "").strip()
-    if not change_id or not slice_id:
+    if not change_id:
         return scope
     stage = str(
         state.get("implementation_stage")
@@ -105,7 +131,13 @@ def augment_scope_with_slice_work_paths(
     root = resolve_opsx_repository_root(
         Path(str(state.get("repository_path") or ".")),
     )
+    declared = _safe_design_product_paths(
+        declared_product_paths_from_apply_design(change_id, repo_root=root)
+    )
+    if not slice_id:
+        return _merge_explicit_paths_into_scope(scope, declared)
     work = _work_paths_for_hop(change_id, slice_id, stage, repo_root=root)
+    work = tuple(dict.fromkeys((*work, *declared)))
     work_parent_globs: list[str] = []
     for wp in work:
         if "/" in wp:

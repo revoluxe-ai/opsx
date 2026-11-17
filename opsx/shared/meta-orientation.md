@@ -1,7 +1,7 @@
 # OPSX meta orientation
 
 Authoritative meta router: `.cursor/commands/opsx-meta.md`  
-Top-level PRODUCT/META entry: `.cursor/commands/opsx.md`
+Top-level PRODUCT/META entry: `opsx/opsx.mdc` (приложение `/opsx`)
 
 ## Lanes
 

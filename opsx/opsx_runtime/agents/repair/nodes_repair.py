@@ -70,10 +70,10 @@ class RepairNodes:
                 "Emit kind + chosen_route per Bug Team contract (see CLASSIFIER.md). "
                 "IMPLEMENTATION_BUG → ROUTE_A (code defect in repo). "
                 "NEW_REQUIREMENT → ROUTE_NEW_CHANGE (not a bug; new system requirement; "
-                "needs /opsx-new, not local repair). "
+                "needs NEW_CHANGE stage, not local repair). "
                 "ARCHIVED_PLANNING_BUG → ROUTE_ARCHIVED_DELTA (wrong accepted planning in an "
                 "already archived change; fix only via a new delta/change, not archive edit). "
-                "SPEC_BUG or SPEC_GAP → ROUTE_B (active/unarchived OpenSpec gap; /opsx-update). "
+                "SPEC_BUG or SPEC_GAP → ROUTE_B (active/unarchived OpenSpec gap; planning update stage). "
                 "FALSE_POSITIVE → ROUTE_C (no defect). "
                 "OUT_OF_SCOPE → ROUTE_D (handoff to ROUTE_TARGET_PROCESS_ID). "
                 "INCONCLUSIVE → BLOCKED when evidence is insufficient. "
@@ -299,11 +299,11 @@ class RepairNodes:
         }
 
     def route_opsx_new(self, raw_state: Mapping[str, Any]) -> dict[str, Any]:
-        """Заглушка маршрута NEW_REQUIREMENT → /opsx-new (не реализовано в runtime)."""
+        """Заглушка маршрута NEW_REQUIREMENT → NEW_CHANGE stage (не реализовано в runtime)."""
         _ = as_state(raw_state)
         raise NotImplementedError(
-            "opsx_runtime: exit /opsx-new (new OpenSpec change for a new system "
-            "requirement) is not implemented; run /opsx-new outside bug-repair"
+            "opsx_runtime: exit NEW_CHANGE stage (new OpenSpec change for a new system "
+            "requirement) is not implemented; run NEW_CHANGE stage outside bug-repair"
         )
 
     def route_archived_delta(self, raw_state: Mapping[str, Any]) -> dict[str, Any]:
@@ -315,11 +315,11 @@ class RepairNodes:
         )
 
     def route_opsx_update(self, raw_state: Mapping[str, Any]) -> dict[str, Any]:
-        """Заглушка SPEC_BUG/SPEC_GAP → /opsx-update для активного change."""
+        """Заглушка SPEC_BUG/SPEC_GAP → PLANNING_UPDATE stage для активного change."""
         _ = as_state(raw_state)
         raise NotImplementedError(
-            "opsx_runtime: exit /opsx-update (active change spec bug or spec gap) "
-            "is not implemented; run /opsx-update outside bug-repair"
+            "opsx_runtime: exit PLANNING_UPDATE stage (active change spec bug or spec gap) "
+            "is not implemented; run PLANNING_UPDATE stage outside bug-repair"
         )
 
     def route_out_of_scope(self, raw_state: Mapping[str, Any]) -> dict[str, Any]:

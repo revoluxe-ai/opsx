@@ -1,4 +1,4 @@
-"""Runtime-агент apply-implement hop (команда ``/opsx-apply-implement``) в split-apply pipeline."""
+"""Runtime-агент apply-implement hop (стадия APPLY IMPLEMENT) в split-apply pipeline."""
 
 from __future__ import annotations
 
@@ -18,10 +18,6 @@ from agents.implementation.apply_implement.prompt.get_prompt import get_prompt
 from agents.implementation.apply_implement.schemas import ApplyImplementAnswer
 from agents.implementation.hop_lane_status import merge_split_apply_hop_result
 from agents.implementation.machine_gate_helpers import sdk_terminal
-from agents.repair.helpers import MUTATING
-
-# Slice hop: пути встроены в промпт / work_paths — glob от REPO_ROOT не нужен.
-_APPLY_IMPLEMENT_TOOLS = tuple(t for t in MUTATING if t != "glob")
 from agents.state import GraphState
 from agents.verify.impl_verify.preflight import (
     collect_apply_machine_context,
@@ -30,9 +26,12 @@ from agents.verify.impl_verify.preflight import (
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 from workflows.repair.schemas import FixEvidence
 
-_EXECUTION_ROUTE = "/opsx-apply-implement"
+_EXECUTION_ROUTE = "APPLY_IMPLEMENT"
 _STREAM_AGENT = "apply_implement"
 _PATCH_PREFIX = "apply_implement"
+# Slice restrict_allow не покрывает opsx/**. grep/ls включают discovery и
+# исчерпывают read-scope коррекции. Пути слайса уже в промпте.
+_APPLY_IMPLEMENT_TOOLS = ("read", "edit")
 
 
 class ApplyImplementAgent(ABCAgent):

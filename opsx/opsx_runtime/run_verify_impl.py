@@ -146,7 +146,7 @@ async def execute(
             )
         review_adapter = build_review_adapter(
             timeout_seconds=timeout_seconds,
-            allow_git_shell=True,
+            allow_git_shell=False,
             bridge_runtime=bridge,
         )
         apply_adapter = RepairAdapter(

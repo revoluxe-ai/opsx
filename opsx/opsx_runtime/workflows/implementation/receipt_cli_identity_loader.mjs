@@ -13,7 +13,11 @@
  * planned command stays `RED_COMMANDS_EMPTY` and names the missing field.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 const RECEIPT_CLI = "opsx-record-slice-receipt-decision-cli.mjs";
+const PIPELINE_IDENTITY = "opsx-apply-pipeline-identity.mjs";
 
 const IDENTITY_FIELDS = `      planning_digest: design.planning_identity?.planning_digest,
       inspected_digest: design.repository_identity?.inspected_digest,
@@ -49,10 +53,46 @@ const HELPER = `function receiptDesignHexDigest(raw, entries) {
 
 `;
 
-function sourceText(source) {
+function fileSourceFromUrl(url) {
+  if (typeof url !== "string" || !url.startsWith("file:")) return "";
+  try {
+    return readFileSync(fileURLToPath(url), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function sourceText(source, url) {
+  // nextLoad often omits source for the process entry. Patch the on-disk
+  // module so RED command derivation runs for every change, not only when
+  // the hook payload already contains the file text.
+  const fromDisk = fileSourceFromUrl(url);
+  if (fromDisk) return fromDisk;
   if (typeof source === "string") return source;
   if (source == null) return "";
   return Buffer.from(source).toString("utf8");
+}
+
+/**
+ * Сопоставление loader URL с артефактом: `includes` плюс `fileURLToPath` для entry CLI на Windows.
+ *
+ * @param {unknown} url
+ * @param {string} needle
+ * @returns {boolean}
+ */
+function moduleUrlMatches(url, needle) {
+  if (typeof url !== "string" || !needle) {
+    return false;
+  }
+  if (url.includes(needle)) {
+    return true;
+  }
+  try {
+    // Нормализация Windows-пути — как в receiptDesignHexDigest.
+    return fileURLToPath(url).replace(/\\/g, "/").includes(needle);
+  } catch {
+    return false;
+  }
 }
 
 const RED_MODULE_HELPER = String.raw`
@@ -243,33 +283,154 @@ export function patchRedValidateErrors(source) {
   return source.replace(old, `${old}\n      errors: validateJson.errors || [],`);
 }
 
+const IMPLEMENT_LIVE_FREEZE = `  const testPaths = [...(red.test_paths || []), ...(red.fixture_paths || [])].map(String);
+  const live = computeLiveFrozenTestContentIdentity(repo, {
+    test_paths: testPaths,
+    fixture_paths: red.fixture_paths || [],
+  });
+  if (!live.ok || !live.identity) {
+    return { ok: false, code: live.code || "FROZEN_IDENTITY_FAILED" };
+  }`;
+
+const IMPLEMENT_ALIGNED_FREEZE = `  const live = computeLiveFrozenTestContentIdentity(repo, {
+    test_paths: red.test_paths || [],
+    fixture_paths: red.fixture_paths || [],
+  });
+  if (!live.ok || !live.identity) {
+    return { ok: false, code: live.code || "FROZEN_IDENTITY_FAILED" };
+  }
+  const declaredFreeze = resolveDeclaredFrozenTestContentIdentity(red, repo);
+  const acceptedDeclared = new Set(declaredFreeze.accepted_digests || []);
+  const frozenAligned =
+    declaredFreeze.ok &&
+    declaredFreeze.declared &&
+    acceptedDeclared.has(declaredFreeze.declared)
+      ? declaredFreeze.declared
+      : live.identity;`;
+
+const IMPLEMENT_LIVE_FIELDS = `    frozen_test_content_identity: live.identity,
+    frozen_test_identity_before: live.identity,
+    frozen_test_identity_after: live.identity,`;
+
+const IMPLEMENT_ALIGNED_FIELDS = `    frozen_test_content_identity: frozenAligned,
+    frozen_test_identity_before: frozenAligned,
+    frozen_test_identity_after: frozenAligned,`;
+
+/**
+ * RED stamps test_content_identity with the legacy concat digest.
+ * IMPLEMENT was stamping the canonical live digest, so
+ * frozen_test_content_identity !== red_identity.test_content_identity
+ * on unchanged frozen bytes. Use the declared digest only when it is still
+ * an accepted on-disk variant. A mutated file keeps the live digest and
+ * the existing STALE_RED / FROZEN_BYTES_MISMATCH gates still fail.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchImplementFrozenIdentity(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("const frozenAligned")) return source;
+  if (!source.includes(IMPLEMENT_LIVE_FREEZE) || !source.includes(IMPLEMENT_LIVE_FIELDS)) {
+    return source;
+  }
+  return source
+    .replace(IMPLEMENT_LIVE_FREEZE, IMPLEMENT_ALIGNED_FREEZE)
+    .replace(IMPLEMENT_LIVE_FIELDS, IMPLEMENT_ALIGNED_FIELDS);
+}
+
+const DECLARED_CONST =
+  "  const declared = red?.test_content_identity ? String(red.test_content_identity) : null;";
+const DECLARED_LET =
+  "  let declared = red?.test_content_identity ? String(red.test_content_identity) : null;";
+const PATHS_OK_AND_STATUS = `  const pathsOk =
+    (canonical.ok || legacyAll.ok || legacyTestOnly.ok) && unique.length > 0;
+  const ok = !declared || (pathsOk && matched_variant !== null);`;
+const PATHS_OK_WITH_OPERATIVE = `  const pathsOk =
+    (canonical.ok || legacyAll.ok || legacyTestOnly.ok) && unique.length > 0;
+  const operativeRaw = red?.operative_red_transition?.test_content_identity;
+  const operative =
+    operativeRaw != null && String(operativeRaw).trim() ? String(operativeRaw).trim() : "";
+  if (!matched_variant && operative && pathsOk) {
+    if (canonical.ok && operative === canonical.identity) {
+      declared = operative;
+      matched_variant = "canonical_path_sha256_v1";
+    } else if (legacyAll.ok && operative === legacyAll.digest) {
+      declared = operative;
+      matched_variant = "legacy_concat_all_paths_v1";
+    } else if (legacyTestOnly.ok && operative === legacyTestOnly.digest) {
+      declared = operative;
+      matched_variant = "legacy_concat_test_paths_only_v1";
+    }
+  }
+  const ok = !declared || (pathsOk && matched_variant !== null);`;
+
+/**
+ * RED may store a stale top-level test_content_identity while
+ * operative_red_transition.test_content_identity is still an accepted
+ * digest of the same frozen bytes. IMPLEMENT then stamps one field from
+ * the top-level value and the other from the live digest.
+ * Prefer the transition digest only when the top-level value matches no
+ * on-disk variant and the transition value does. A digest that matches
+ * neither stays unmatched so mutated bytes still fail.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchDeclaredFrozenIdentity(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("const operativeRaw = red?.operative_red_transition")) return source;
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
+  if (!text.includes(DECLARED_CONST) || !text.includes(PATHS_OK_AND_STATUS)) return source;
+  const patched = text
+    .replace(DECLARED_CONST, DECLARED_LET)
+    .replace(PATHS_OK_AND_STATUS, PATHS_OK_WITH_OPERATIVE);
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
+}
+
+/**
+ * Подмешивает derive pytest-команд из `test_path`, когда planned node отсутствует.
+ *
+ * Вызывающий код уже мог передать `repo` в `buildRedTestCommands(slice, repo)` до
+ * смены сигнатуры функции — патч должен срабатывать и без замены call-site.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
 function patchRedCommandDerivation(source) {
   if (source.includes("function fillRedCommandsFromTestModules")) {
     return source;
   }
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
   const fn = "function buildRedTestCommands(slice) {";
   const ret =
     "  return { test_paths: [...testPaths], test_commands: [...new Set(commands)] };";
-  const call = "const { test_paths, test_commands } = buildRedTestCommands(slice);";
+  const callPlain =
+    "const { test_paths, test_commands } = buildRedTestCommands(slice);";
+  const callRepo =
+    "const { test_paths, test_commands } = buildRedTestCommands(slice, repo);";
   const mainRead = `function main() {
   const raw = readFileSync(0, "utf8");`;
+  const hasCall = text.includes(callPlain) || text.includes(callRepo);
   if (
-    !source.includes(fn) ||
-    !source.includes(ret) ||
-    !source.includes(call) ||
-    !source.includes(RED_EMPTY_RETURN) ||
-    !source.includes(mainRead) ||
-    !source.includes("\nmain();")
+    !text.includes(fn) ||
+    !text.includes(ret) ||
+    !hasCall ||
+    !text.includes(RED_EMPTY_RETURN) ||
+    !text.includes(mainRead) ||
+    !text.includes("\nmain();")
   ) {
     return source;
   }
-  return source
+  let patched = text
     .replace(fn, `${RED_MODULE_HELPER}function buildRedTestCommands(slice, repo) {`)
     .replace(
       ret,
       `  fillRedCommandsFromTestModules(repo, testPaths, commands);\n${ret}`,
-    )
-    .replace(call, "const { test_paths, test_commands } = buildRedTestCommands(slice, repo);")
+    );
+  if (text.includes(callPlain)) {
+    patched = patched.replace(callPlain, callRepo);
+  }
+  patched = patched
     .replace(RED_EMPTY_RETURN, RED_EMPTY_RETURN_NAMED)
     .replace(
       mainRead,
@@ -278,20 +439,25 @@ function patchRedCommandDerivation(source) {
   const raw = readFileSync(0, "utf8");`,
     )
     .replace("\nmain();", "\nmain();\nexport { buildRedTestCommands };");
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
 }
 
 export async function load(url, context, nextLoad) {
   if (typeof url !== "string") {
     return nextLoad(url, context);
   }
-  const isReceiptCli = url.includes(RECEIPT_CLI);
-  const isTransitionGate = url.includes("opsx-apply-red-transition-gate.mjs");
-  if (!isReceiptCli && !isTransitionGate) {
+  const isReceiptCli = moduleUrlMatches(url, RECEIPT_CLI);
+  const isTransitionGate = moduleUrlMatches(url, "opsx-apply-red-transition-gate.mjs");
+  const isPipelineIdentity = moduleUrlMatches(url, PIPELINE_IDENTITY);
+  if (!isReceiptCli && !isTransitionGate && !isPipelineIdentity) {
     return nextLoad(url, context);
   }
   const loaded = await nextLoad(url, context);
-  const original = sourceText(loaded.source);
+  const original = sourceText(loaded.source, url);
   let patched = original;
+  if (isPipelineIdentity) {
+    patched = patchDeclaredFrozenIdentity(original);
+  }
   if (isTransitionGate) {
     patched = patchTransitionGateSource(original);
   }
@@ -311,6 +477,7 @@ export async function load(url, context, nextLoad) {
     patched = patchRedCommandDerivation(patched);
     patched = patchRedValidatorSpawn(patched);
     patched = patchRedValidateErrors(patched);
+    patched = patchImplementFrozenIdentity(patched);
   }
   if (patched === original) {
     return loaded;

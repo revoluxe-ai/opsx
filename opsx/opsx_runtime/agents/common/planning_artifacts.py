@@ -52,15 +52,15 @@ def inspect_plan_artifacts(
     # change without specs or planning sources is not silently given a PASS.
     if not specs and not any((change / n).exists() for n in planning):
         return _result("BLOCKED", "PLANNING_INPUTS_MISSING", str(change),
-                       producer="/opsx-continue|/opsx-update")
+                       producer="PLANNING_CONTINUE|PLANNING_UPDATE")
     if specs or any((change / n).exists() for n in planning):
         for name in planning:
             if not (change / name).is_file():
                 return _result("BLOCKED", "PLAN_INPUT_MISSING", name,
-                               producer="/opsx-continue|/opsx-update")
+                               producer="PLANNING_CONTINUE|PLANNING_UPDATE")
         if not specs:
             return _result("BLOCKED", "SPEC_INPUT_MISSING", "specs/*.md",
-                           producer="/opsx-continue|/opsx-update")
+                           producer="PLANNING_CONTINUE|PLANNING_UPDATE")
     for p in specs:
         if p.is_symlink() or not p.is_file():
             return _result("BLOCKED", "SPEC_INPUT_INVALID", str(p))
@@ -70,19 +70,19 @@ def inspect_plan_artifacts(
     for path in (plan, receipt_path):
         if not path.is_file() or path.is_symlink():
             return _result("BLOCKED", "COVERAGE_PLAN_MISSING", str(path),
-                           producer="/opsx-spec-scenario-coverage mode=plan")
+                           producer="SCENARIO_COVERAGE_PLAN")
     try:
         raw = plan.read_bytes()
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         return _result("BLOCKED", "COVERAGE_PLAN_INVALID", str(exc),
-                       producer="/opsx-spec-scenario-coverage mode=plan")
+                       producer="SCENARIO_COVERAGE_PLAN")
     if not isinstance(receipt, dict) or receipt.get("SCENARIO_COVERAGE_RECEIPT") is not True:
         return _result("BLOCKED", "COVERAGE_RECEIPT_INVALID", str(receipt_path),
-                       producer="/opsx-spec-scenario-coverage mode=plan")
+                       producer="SCENARIO_COVERAGE_PLAN")
     if receipt.get("PLAN_STATUS") not in ("ready", "provisional"):
         return _result("BLOCKED", "COVERAGE_PLAN_NOT_READY", str(receipt.get("PLAN_STATUS")),
-                       producer="/opsx-spec-scenario-coverage mode=plan")
+                       producer="SCENARIO_COVERAGE_PLAN")
     if receipt.get("CHANGE_ID") not in (None, change_id):
         return _result("BLOCKED", "COVERAGE_CHANGE_MISMATCH", str(receipt.get("CHANGE_ID")))
     text = raw.decode("utf-8", errors="replace")
@@ -90,30 +90,30 @@ def inspect_plan_artifacts(
         return _result(
             "BLOCKED", "COVERAGE_PLAN_EMBEDDED",
             "Scenario bodies remain in plan.md",
-            producer="/opsx-spec-scenario-coverage mode=plan",
+            producer="SCENARIO_COVERAGE_PLAN",
         )
     try:
         rows = read_scenario_ids(directory, allow_historical=False)
     except ValueError as exc:
         return _result("BLOCKED", "COVERAGE_ROWS_INVALID", str(exc),
-                       producer="/opsx-spec-scenario-coverage mode=plan")
+                       producer="SCENARIO_COVERAGE_PLAN")
     if len(rows) != len(set(rows)) or (specs and not rows):
         return _result("BLOCKED", "COVERAGE_ROWS_INVALID", "Missing/duplicate SCENARIO_ID")
     if rows:
         content_hash = receipt.get("PLAN_CONTENT_HASH")
         if not content_hash or content_hash != expected_plan_content_hash(directory):
             return _result("BLOCKED", "COVERAGE_PLAN_HASH_MISMATCH", str(plan),
-                           producer="/opsx-spec-scenario-coverage mode=plan")
+                           producer="SCENARIO_COVERAGE_PLAN")
         if not receipt.get("PLAN_EVIDENCE_ID"):
             return _result("BLOCKED", "COVERAGE_ID_MISSING", str(receipt_path),
-                           producer="/opsx-spec-scenario-coverage mode=plan")
+                           producer="SCENARIO_COVERAGE_PLAN")
     # Verify every declared planning input on disk; input names are scoped
     # to this change and cannot escape it.
     sources: list[Mapping[str, Any]] = []
     inputs = receipt.get("INPUTS")
     if rows and not isinstance(inputs, dict):
         return _result("BLOCKED", "COVERAGE_INPUTS_MISSING", str(receipt_path),
-                       producer="/opsx-spec-scenario-coverage mode=plan")
+                       producer="SCENARIO_COVERAGE_PLAN")
     if isinstance(inputs, dict):
         for value in inputs.values():
             if isinstance(value, list):
@@ -128,21 +128,21 @@ def inspect_plan_artifacts(
             file_path = (change / rel).resolve()
             if not file_path.is_relative_to(change.resolve()) or not file_path.is_file():
                 return _result("BLOCKED", "COVERAGE_INPUT_MISSING", rel,
-                               producer="/opsx-continue|/opsx-update")
+                               producer="PLANNING_CONTINUE|PLANNING_UPDATE")
             if not CheckWorkflowReceipt.matches_file(file_path, digest):
                 return _result("BLOCKED", "COVERAGE_INPUT_STALE", rel,
-                               producer="/opsx-spec-scenario-coverage mode=plan")
+                               producer="SCENARIO_COVERAGE_PLAN")
 
     matrix_path = scenario_machine_receipt_path(root, change_id, "test_trace_matrix.json")
     if phase == "verify" and rows:
         if not matrix_path.is_file() or matrix_path.is_symlink():
             return _result("BLOCKED", "TRACE_MATRIX_MISSING", str(matrix_path),
-                           producer="/opsx-test → scenario trace materialization")
+                           producer="SCENARIO_TRACE_MATERIALIZE")
         try:
             matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             return _result("BLOCKED", "TRACE_MATRIX_INVALID", str(exc),
-                           producer="/opsx-test → scenario trace materialization")
+                           producer="SCENARIO_TRACE_MATERIALIZE")
         if not isinstance(matrix, dict) or not isinstance(matrix.get("entries"), list):
             return _result("BLOCKED", "TRACE_MATRIX_INVALID", "entries must be an array")
         if matrix.get("change_id") not in (None, change_id):
@@ -151,7 +151,7 @@ def inspect_plan_artifacts(
             return _result("BLOCKED", "TRACE_MATRIX_SCHEMA_UNSUPPORTED", str(matrix.get("schema_version")))
         if matrix.get("plan_evidence_id") != receipt.get("PLAN_EVIDENCE_ID"):
             return _result("BLOCKED", "TRACE_MATRIX_STALE", str(matrix_path),
-                           producer="/opsx-test → scenario trace materialization")
+                           producer="SCENARIO_TRACE_MATERIALIZE")
         found = matrix["entries"]
         actual = [x.get("scenario_id") if isinstance(x, dict) else None for x in found]
         if set(actual) != set(rows) or len(actual) != len(rows):
@@ -171,14 +171,14 @@ def inspect_plan_artifacts(
                     "BLOCKED",
                     "TRACE_TEST_MISSING",
                     entry["test_node_id"],
-                    producer="/opsx-test",
+                    producer="SCENARIO_TEST_AUTHOR",
                 )
             if path.is_symlink():
                 return _result(
                     "BLOCKED",
                     "TRACE_TEST_MISSING",
                     entry["test_node_id"],
-                    producer="/opsx-test",
+                    producer="SCENARIO_TEST_AUTHOR",
                 )
             # Отсутствующий mapped test чинится построчным repair, не блокируем verify.
             if not path.is_file():

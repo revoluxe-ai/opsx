@@ -195,7 +195,8 @@ async def _recover_empty_terminal_conversation(
     return valid_answer
 
 
-REVIEW_TOOLS = frozenset({"read", "grep", "glob", "ls", "shell"})
+# Review hops: read-only discovery only — no shell (§27.0.0.2).
+REVIEW_TOOLS = frozenset({"read", "grep", "glob", "ls"})
 
 
 def _token_counts(usage: Any) -> dict[str, int | None] | None:
@@ -279,9 +280,11 @@ class CursorSDKAdapter(ABCAdapter):
             raise ValueError("model must be a Cursor SDK model selection")
         if not prompt.strip():
             raise ValueError("Prompt must not be empty")
-        permitted_tools = REVIEW_TOOLS if self.allow_git_shell else REVIEW_TOOLS - {"shell"}
+        if "shell" in set(tools):
+            raise ValueError("shell is forbidden for OPSX review agents")
+        permitted_tools = REVIEW_TOOLS
         if set(tools) - permitted_tools:
-            raise ValueError("Bugbot adapter only allows read/grep/glob/ls/shell (shell opt-in)")
+            raise ValueError("Bugbot adapter only allows read/grep/glob/ls")
         if len(tools) != len(set(tools)):
             raise ValueError("Duplicate tool names")
 

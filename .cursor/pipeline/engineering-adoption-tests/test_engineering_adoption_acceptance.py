@@ -298,7 +298,7 @@ def test_continue_preflight_blocks_without_adoption(tmp_path: Path) -> None:
     _write_minimal_policy(root)
     _write_minimal_openspec_tree(root)
     shutil.copytree(REPO_ROOT / "tools/openspec", root / "tools/openspec", dirs_exist_ok=True)
-    skill_dst = root / ".cursor/skills/openspec-continue-change"
+    skill_dst = root / "opsx/core/.cursor/skills/openspec-continue-change"
     skill_dst.mkdir(parents=True, exist_ok=True)
     shutil.copy2(skill_src, skill_dst / "SKILL.md")
     shutil.copy2(

@@ -41,7 +41,7 @@ def _guarded_product_rel_paths(
     *,
     repo_root: Path,
 ) -> list[str]:
-    """Repo-relative пути под ``src/`` или ``tests/``, не openspec."""
+    """Repo-relative пути под ``src/``, ``app/`` или ``tests/``, не openspec."""
     if str(tool_name or "").strip().lower() != "edit":
         return []
     repo = resolve_opsx_repository_root(repo_root)
@@ -52,6 +52,7 @@ def _guarded_product_rel_paths(
             continue
         if (
             rel.startswith("src/")
+            or rel.startswith("app/")
             or rel.startswith("tests/")
             or rel.startswith("migrations/versions/")
         ):
@@ -125,7 +126,7 @@ def product_edit_destructive_correction_prompt(
     correction = (
         "## PRODUCT EDIT REJECTED (destructive)\n\n"
         "Your last edit was rolled back: it emptied or deleted most of a large "
-        "`src/**` or `tests/**` file. Do **not** replace whole files.\n"
+        "`src/**`, `app/**`, or `tests/**` file. Do **not** replace whole files.\n"
         "Use a minimal hunk on the exact failing seam, or set status=BLOCKED with "
         "`remaining_gaps` if you lack authorized scope.\n\n"
         f"Detail: {str(violation.command or violation).strip()}\n"

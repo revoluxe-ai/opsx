@@ -1,4 +1,4 @@
-"""Runtime-агент apply-scaffold hop (команда ``/opsx-apply-scaffold``) в split-apply pipeline."""
+"""Runtime-агент apply-scaffold hop (стадия APPLY SCAFFOLD) в split-apply pipeline."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from workflows.implementation.receipt_loader import load_apply_design
 from workflows.repair.schemas import FixEvidence
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 
-_EXECUTION_ROUTE = "/opsx-apply-scaffold"
+_EXECUTION_ROUTE = "APPLY_SCAFFOLD"
 _STREAM_AGENT = "apply_scaffold"
 _PATCH_PREFIX = "apply_scaffold"
 

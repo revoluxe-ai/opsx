@@ -50,6 +50,7 @@ _GLOBAL_DENY: tuple[str, ...] = (
 # Единый allow-list для всех SDK-агентов (grep/glob/read/shell/edit).
 _GLOBAL_RESTRICT_ALLOW: tuple[str, ...] = (
     "src/**",
+    "app/**",
     "tests/**",
     "openspec/changes/**",
     "openspec/decisions/**",
@@ -436,7 +437,18 @@ def resolve_read_scope(agent_key: str | None) -> ReadScope:
     restrict: tuple[str, ...] = profile or (GLOBAL_READ_SCOPE.restrict_allow or ())
     key = str(agent_key or "").strip()
     write_restrict: tuple[str, ...] | None = None
-    if is_repair_product_hop(key):
+    from agents.process_repair.meta_surface import (
+        PROCESS_SUPERVISOR_FIX_KEY,
+        supervisor_read_globs,
+        supervisor_self_deny_repo_globs,
+        supervisor_write_globs,
+    )
+
+    if key == PROCESS_SUPERVISOR_FIX_KEY:
+        restrict = supervisor_read_globs()
+        write_restrict = supervisor_write_globs()
+        deny = tuple(dict.fromkeys((*deny, *supervisor_self_deny_repo_globs())))
+    elif is_repair_product_hop(key):
         write_restrict = repair_product_write_globs()
     override = AGENT_READ_OVERRIDES.get(key) if key else None
     if override is not None:
@@ -445,6 +457,14 @@ def resolve_read_scope(agent_key: str | None) -> ReadScope:
             restrict = tuple(sorted(set(restrict) | set(override.extra_allow)))
         if override.allow:
             restrict = tuple(override.allow)
+    if key != PROCESS_SUPERVISOR_FIX_KEY:
+        from agents.read_scope_profiles import product_source_root_globs_from_env
+
+        extra_product = product_source_root_globs_from_env()
+        if extra_product:
+            restrict = tuple(dict.fromkeys((*restrict, *extra_product)))
+            if write_restrict is not None:
+                write_restrict = tuple(dict.fromkeys((*write_restrict, *extra_product)))
     return ReadScope(
         allow=(),
         deny=deny,

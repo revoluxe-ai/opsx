@@ -21,7 +21,10 @@ from agents.implementation.apply_design.read_source import execute_read_source
 from agents.implementation.apply_design.submit_content_resolver import (
     resolve_submit_apply_design_content,
 )
-from workflows.implementation.apply_design_hop_receipt import DesignSubmissionRecord
+from workflows.implementation.apply_design_hop_receipt import (
+    DesignSubmissionRecord,
+    remember_design_submission,
+)
 from workflows.implementation.design_machine_validation import (
     apply_design_acceptance_field_gaps,
     evaluate_apply_design_snapshot_from_body_async,
@@ -30,6 +33,7 @@ from workflows.implementation.design_machine_validation import (
 
 _MAX_SEARCH_HITS = 200
 _MAX_FILE_BYTES = 2_000_000
+_MAX_GATE_ERRORS = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +44,7 @@ class DesignPublishOutcome:
     unchanged: bool
     sha256: str | None
     code: str | None
+    errors: list[dict[str, Any]] | None = None
 
 
 class ApplyDesignToolRuntime:
@@ -49,7 +54,36 @@ class ApplyDesignToolRuntime:
         self._manifest = manifest
         self._repo = manifest.repo_root.resolve()
         self.last_submission: DesignSubmissionRecord | None = None
+        self._accepted_submission: DesignSubmissionRecord | None = None
         self._revision_digest = self._read_revision_digest()
+
+    def _note_submission(self, record: DesignSubmissionRecord) -> None:
+        accepted, hop = remember_design_submission(self._accepted_submission, record)
+        self._accepted_submission = accepted
+        self.last_submission = hop
+
+    def _reject(
+        self,
+        code: str,
+        *,
+        field: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        self._note_submission(
+            DesignSubmissionRecord(
+                ok=False,
+                unchanged=False,
+                sha256=None,
+                code=code,
+                message=message,
+            )
+        )
+        out: dict[str, Any] = {"ok": False, "code": code}
+        if field:
+            out["field"] = field
+        if message:
+            out["message"] = message
+        return out
 
     def current_revision_digest(self) -> str:
         """CAS-токен текущей ревизии APPLY-DESIGN (обновляется после publish)."""
@@ -105,15 +139,29 @@ class ApplyDesignToolRuntime:
         if sub is None:
             return {"ok": False, "code": "NO_SUBMISSION_TARGET"}
         content = args.get("content")
-        if not isinstance(content, str):
-            self.last_submission = DesignSubmissionRecord(
-                ok=False, unchanged=False, sha256=None, code="INVALID_ARGS"
+        if isinstance(content, (dict, list)):
+            content = json.dumps(content)
+        if not isinstance(content, str) or not content.strip():
+            return self._reject(
+                "INVALID_ARGS",
+                field="content",
+                message=(
+                    "content must be a JSON string or object. "
+                    "Patch the canon with $from_path set to the canonical "
+                    "APPLY-DESIGN.json path; extra keys are deep-merged. "
+                    "Do not set artifact_identity.artifact_sha256 — review binds "
+                    "that digest from file bytes."
+                ),
             )
-            return {"ok": False, "code": "INVALID_ARGS"}
         base_digest = str(args.get("base_digest") or "")
         if base_digest != self._revision_digest:
-            self.last_submission = DesignSubmissionRecord(
-                ok=False, unchanged=False, sha256=None, code="DESIGN_DIGEST_CONFLICT"
+            self._note_submission(
+                DesignSubmissionRecord(
+                    ok=False,
+                    unchanged=False,
+                    sha256=None,
+                    code="DESIGN_DIGEST_CONFLICT",
+                )
             )
             return {"ok": False, "code": "DESIGN_DIGEST_CONFLICT"}
         target = sub.json_path
@@ -122,8 +170,10 @@ class ApplyDesignToolRuntime:
             existing = await asyncio.to_thread(target.read_bytes)
             if file_digest_bytes(existing) == file_digest_bytes(data):
                 digest = file_digest_bytes(existing)
-                self.last_submission = DesignSubmissionRecord(
-                    ok=True, unchanged=True, sha256=digest, code=None
+                self._note_submission(
+                    DesignSubmissionRecord(
+                        ok=True, unchanged=True, sha256=digest, code=None
+                    )
                 )
                 return {
                     "ok": True,
@@ -132,8 +182,13 @@ class ApplyDesignToolRuntime:
                 }
             on_disk = file_digest_bytes(existing)
             if on_disk != self._revision_digest:
-                self.last_submission = DesignSubmissionRecord(
-                    ok=False, unchanged=False, sha256=None, code="DESIGN_DIGEST_CONFLICT"
+                self._note_submission(
+                    DesignSubmissionRecord(
+                        ok=False,
+                        unchanged=False,
+                        sha256=None,
+                        code="DESIGN_DIGEST_CONFLICT",
+                    )
                 )
                 return {"ok": False, "code": "DESIGN_DIGEST_CONFLICT"}
         resolved = await resolve_submit_apply_design_content(
@@ -143,19 +198,18 @@ class ApplyDesignToolRuntime:
         )
         if not resolved.ok or resolved.content is None or resolved.body is None:
             code = resolved.code or "INVALID_JSON"
-            self.last_submission = DesignSubmissionRecord(
-                ok=False, unchanged=False, sha256=None, code=code
-            )
-            return {"ok": False, "code": code}
+            return self._reject(code, field=resolved.field, message=resolved.message)
         content = resolved.content
         body = resolved.body
         gaps = apply_design_acceptance_field_gaps(body)
         if gaps:
-            self.last_submission = DesignSubmissionRecord(
-                ok=False,
-                unchanged=False,
-                sha256=None,
-                code="DESIGN_INCOMPLETE",
+            self._note_submission(
+                DesignSubmissionRecord(
+                    ok=False,
+                    unchanged=False,
+                    sha256=None,
+                    code="DESIGN_INCOMPLETE",
+                )
             )
             return {
                 "ok": False,
@@ -163,14 +217,22 @@ class ApplyDesignToolRuntime:
                 "missing_fields": gaps,
             }
         publish = await self._publish_validated(sub, target, content, body)
-        self.last_submission = DesignSubmissionRecord(
-            ok=publish.ok,
-            unchanged=publish.unchanged,
-            sha256=publish.sha256,
-            code=publish.code,
+        self._note_submission(
+            DesignSubmissionRecord(
+                ok=publish.ok,
+                unchanged=publish.unchanged,
+                sha256=publish.sha256,
+                code=publish.code,
+            )
         )
         if not publish.ok:
-            return {"ok": False, "code": publish.code or "DESIGN_VALIDATION_FAILED"}
+            out: dict[str, Any] = {
+                "ok": False,
+                "code": publish.code or "DESIGN_VALIDATION_FAILED",
+            }
+            if publish.errors:
+                out["errors"] = publish.errors
+            return out
         self._revision_digest = publish.sha256 or self._revision_digest
         return {
             "ok": True,
@@ -203,12 +265,19 @@ class ApplyDesignToolRuntime:
                 repo_root=self._repo,
             )
             if not gate.ok:
+                capped = list(gate.errors[:_MAX_GATE_ERRORS])
                 return DesignPublishOutcome(
                     ok=False,
                     unchanged=False,
                     sha256=None,
                     code="DESIGN_MACHINE_GATE_FAILED",
+                    errors=capped,
                 )
+            content = await asyncio.to_thread(
+                staging_path.read_text,
+                encoding="utf-8",
+            )
+            body = json.loads(content)
             snapshot = await evaluate_apply_design_snapshot_from_body_async(
                 body,
                 repo_root=self._repo,

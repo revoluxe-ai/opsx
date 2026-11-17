@@ -291,6 +291,34 @@ function isPlannedPytestNode(name) {
   return /^test_[A-Za-z0-9_]+$/.test(node);
 }
 
+/**
+ * Prior on-disk RED executions are reusable when commands match and each row
+ * has a bounded pytest attempt (avoid re-running the full slice suite on hop
+ * materialize when shape already ran in a previous attempt).
+ */
+function priorRedExecutionsReusable(prior, testCommands) {
+  if (!isObject(prior) || !Array.isArray(prior.command_executions)) {
+    return false;
+  }
+  const want = new Set(testCommands.map((c) => String(c)));
+  if (!want.size || prior.command_executions.length !== want.size) {
+    return false;
+  }
+  for (const exec of prior.command_executions) {
+    const cmd = String(exec?.command || "");
+    if (!want.has(cmd)) {
+      return false;
+    }
+    if (typeof exec?.final_exit_code !== "number") {
+      return false;
+    }
+    if (!Array.isArray(exec.attempts) || !exec.attempts.length) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function buildRedTestCommands(slice) {
   const testPaths = new Set();
   const commands = [];
@@ -554,7 +582,7 @@ function writeRedSuccess(repo, changeId, sliceId, decision = {}) {
   }
   const rel = applyReceiptRelPaths(`openspec/changes/${changeId}`, sliceId);
   const outPath = resourcePath(repo, rel.red);
-  const { test_paths, test_commands } = buildRedTestCommands(slice);
+  const { test_paths, test_commands } = buildRedTestCommands(slice, repo);
   if (!test_commands.length) {
     return { ok: false, code: "RED_COMMANDS_EMPTY" };
   }
@@ -601,17 +629,41 @@ function writeRedSuccess(repo, changeId, sliceId, decision = {}) {
   };
   mkdirSync(dirname(outPath), { recursive: true });
   const priorRed = readTextIfExists(outPath);
-  writeFileSync(outPath, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  let priorParsed = null;
+  if (priorRed !== null) {
+    try {
+      priorParsed = JSON.parse(priorRed);
+    } catch {
+      priorParsed = null;
+    }
+  }
+  if (priorParsed && priorRedExecutionsReusable(priorParsed, test_commands)) {
+    body.command_executions = priorParsed.command_executions;
+    body.tests_frozen = Boolean(priorParsed.tests_frozen);
+    if (priorParsed.test_content_identity) {
+      body.test_content_identity = priorParsed.test_content_identity;
+    }
+    if (priorParsed.behavior_obligation_identity) {
+      body.behavior_obligation_identity = priorParsed.behavior_obligation_identity;
+    }
+    writeFileSync(outPath, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  } else {
+    writeFileSync(outPath, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  }
 
   const shapeScript = resolve(
     dirname(fileURLToPath(import.meta.url)),
     "opsx-shape-slice-red-receipt-cli.mjs",
   );
-  const shape = spawnSync(
-    "node",
-    [shapeScript, "--repo", repo, "--change", changeId, "--slice", sliceId],
-    { encoding: "utf8", cwd: repo },
-  );
+  const skipShape =
+    priorParsed && priorRedExecutionsReusable(priorParsed, test_commands);
+  const shape = skipShape
+    ? { status: 0, stdout: `${JSON.stringify({ ok: true, reused: true })}\n` }
+    : spawnSync(
+        "node",
+        [shapeScript, "--repo", repo, "--change", changeId, "--slice", sliceId],
+        { encoding: "utf8", cwd: repo, timeout: 150000 },
+      );
   if (shape.status !== 0) {
     if (priorRed !== null) {
       writeFileSync(outPath, priorRed, "utf8");
@@ -777,18 +829,22 @@ function frozenTestContentIdentityForAdoption(red, repo) {
     red?.test_content_identity != null && String(red.test_content_identity).trim()
       ? String(red.test_content_identity).trim()
       : null;
-  if (red?.tests_frozen === true && declared) {
-    const resolved = resolveDeclaredFrozenTestContentIdentity(red, repo);
-    if (resolved.ok && resolved.declared) {
-      return resolved.declared;
-    }
-    return declared;
+  const operativeRaw = red?.operative_red_transition?.test_content_identity;
+  const operative =
+    operativeRaw != null && String(operativeRaw).trim() ? String(operativeRaw).trim() : "";
+  const resolved = resolveDeclaredFrozenTestContentIdentity(red, repo);
+  const accepted = new Set(resolved.accepted_digests || []);
+  if (operative && accepted.has(operative)) return operative;
+  if (declared && accepted.has(declared)) return declared;
+  if (resolved.ok && resolved.declared && accepted.has(String(resolved.declared))) {
+    return String(resolved.declared);
   }
   const live = computeLiveFrozenTestContentIdentity(repo, {
     test_paths: red?.test_paths || [],
     fixture_paths: red?.fixture_paths || [],
   });
-  return live.identity || declared;
+  if (!declared && !operative) return live.identity || null;
+  return live.identity || declared || operative || null;
 }
 
 function tryMaterializeImplementationAdopted(repo, changeId, sliceId, ctx) {
@@ -896,7 +952,7 @@ function tryMaterializeImplementationAdopted(repo, changeId, sliceId, ctx) {
         machine_path: ctx.rel.red,
         slice_id: sliceId,
         status: ctx.red.status,
-        test_content_identity: ctx.red.test_content_identity,
+        test_content_identity: frozenTestContentIdentity,
         tests_frozen: Boolean(ctx.red.tests_frozen),
         artifact_sha256: fileSha256(resourcePath(repo, ctx.rel.red)),
         observation_only: true,
@@ -1070,13 +1126,19 @@ function writeImplementSuccess(repo, changeId, sliceId, decision = {}) {
   if (!prodOnly.length) {
     return { ok: false, code: "IMPLEMENT_NO_PRODUCT_DELTA" };
   }
-  const testPaths = [...(red.test_paths || []), ...(red.fixture_paths || [])].map(String);
   const live = computeLiveFrozenTestContentIdentity(repo, {
-    test_paths: testPaths,
+    test_paths: red.test_paths || [],
     fixture_paths: red.fixture_paths || [],
   });
-  if (!live.ok || !live.identity) {
-    return { ok: false, code: live.code || "FROZEN_IDENTITY_FAILED" };
+  const freezeDigest = frozenTestContentIdentityForAdoption(red, repo);
+  if (!freezeDigest) {
+    if (!live.ok || !live.identity) {
+      return { ok: false, code: live.code || "FROZEN_IDENTITY_FAILED" };
+    }
+  }
+  const frozenId = freezeDigest || live.identity;
+  if (!frozenId) {
+    return { ok: false, code: "FROZEN_IDENTITY_FAILED" };
   }
   const created = [];
   const modified = [];
@@ -1107,13 +1169,13 @@ function writeImplementSuccess(repo, changeId, sliceId, decision = {}) {
       machine_path: rel.red,
       slice_id: sliceId,
       status: red.status,
-      test_content_identity: red.test_content_identity,
+      test_content_identity: frozenId,
       tests_frozen: Boolean(red.tests_frozen),
       artifact_sha256: fileSha256(redPath),
     },
-    frozen_test_content_identity: live.identity,
-    frozen_test_identity_before: live.identity,
-    frozen_test_identity_after: live.identity,
+    frozen_test_content_identity: frozenId,
+    frozen_test_identity_before: frozenId,
+    frozen_test_identity_after: frozenId,
     expected_product_write_surfaces: [...expected],
     production_paths_modified: modified,
     production_paths_created: created,

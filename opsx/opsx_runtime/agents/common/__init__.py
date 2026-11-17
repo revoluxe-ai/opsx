@@ -1,10 +1,12 @@
-"""Common agents shared by multiple OPSX workflows."""
+"""Common agents shared by multiple OPSX workflows.
+
+``CommonAgentsContainer`` импортируйте из ``agents.common.container`` — не из
+пакета: eager import контейнера тянет apply-hop и ломает загрузку ``contract_prompts``.
+"""
 
 from .commit_agent import CommitAgent
-from .container import CommonAgentsContainer
 
 __all__ = [
     "CommitAgent",
-    "CommonAgentsContainer",
 ]
 

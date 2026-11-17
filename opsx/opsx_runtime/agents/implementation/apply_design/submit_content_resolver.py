@@ -23,15 +23,32 @@ _NODE_PREPARE = r"""
 import { readFileSync, writeFileSync } from "node:fs";
 const {
   collectProtectedContextPaths,
+  computeCurrentPlanningIdentity,
   hashRepoRelativePaths,
   refreshApplyDesignProtectedContext,
 } = await import((await import("node:url")).pathToFileURL((await import("node:path")).resolve(process.env.OPSX_CORE_ROOT || process.cwd(), 'opsx_tools/opsx-apply-pipeline-identity.mjs')).href);
 
 const repo = process.argv[1];
 const staging = process.argv[2];
-const design = JSON.parse(readFileSync(staging, "utf8"));
+let design = JSON.parse(readFileSync(staging, "utf8"));
 if (Number(design.schema_version) < 4) {
   design.schema_version = 4;
+}
+const planningInputs = design.planning_identity?.inputs;
+if (Array.isArray(planningInputs) && planningInputs.length > 0) {
+  const frozen = computeCurrentPlanningIdentity({
+    repoRoot: repo,
+    planningIdentity: design.planning_identity,
+  });
+  design = {
+    ...design,
+    planning_identity: {
+      ...design.planning_identity,
+      inputs: frozen.inputs,
+      planning_digest: frozen.planning_digest,
+      ...(frozen.change_root ? { change_root: frozen.change_root } : {}),
+    },
+  };
 }
 const protectedPaths = collectProtectedContextPaths(design);
 const inspected = design.repository_identity?.inspected_paths || [];
@@ -49,10 +66,26 @@ class SubmitContentResolution:
     content: str | None = None
     body: dict[str, Any] | None = None
     code: str | None = None
+    field: str | None = None
+    message: str | None = None
 
 
-def _failure(code: str) -> SubmitContentResolution:
-    return SubmitContentResolution(ok=False, code=code)
+def _failure(
+    code: str,
+    *,
+    field: str | None = None,
+    message: str | None = None,
+) -> SubmitContentResolution:
+    return SubmitContentResolution(ok=False, code=code, field=field, message=message)
+
+
+_FROM_PATH_MESSAGE = (
+    "Directive submit requires string $from_path set to the canonical "
+    "APPLY-DESIGN.json repo-relative path. Other keys are deep-merged onto "
+    "that file before identity recompute. Do not set artifact_identity.artifact_sha256 "
+    "or a top-level artifact_sha256: the review stage binds artifact_sha256 from "
+    "file bytes. artifact_identity on APPLY-DESIGN is human_path and machine_path only."
+)
 
 
 def _resolve_from_path(repo: Path, raw_path: str, target: Path) -> Path | None:
@@ -80,6 +113,32 @@ def _is_directive_body(body: Mapping[str, Any]) -> bool:
         return False
     non_directive = keys - allowed
     return len(non_directive) == 0
+
+
+def _deep_merge(base: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
+    """Deep-merge patch onto base. Directive keys are not design fields."""
+    merged = dict(base)
+    for key, value in patch.items():
+        if key in {_FROM_PATH_KEY, _RECOMPUTE_IDENTITIES_KEY}:
+            continue
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(current, value)
+            continue
+        merged[key] = value
+    return merged
+
+
+def _strip_authored_artifact_sha256(body: Mapping[str, Any]) -> dict[str, Any]:
+    """Файл не хранит свой sha256: его связывает review с байтов канона."""
+    cleaned = dict(body)
+    cleaned.pop("artifact_sha256", None)
+    identity = cleaned.get("artifact_identity")
+    if isinstance(identity, dict) and "artifact_sha256" in identity:
+        kept = dict(identity)
+        kept.pop("artifact_sha256", None)
+        cleaned["artifact_identity"] = kept
+    return cleaned
 
 
 async def _recompute_identities_on_staging(
@@ -114,22 +173,31 @@ async def resolve_submit_apply_design_content(
     recompute = bool(parsed.get(_RECOMPUTE_IDENTITIES_KEY))
     from_path = parsed.get(_FROM_PATH_KEY)
 
-    if _is_directive_body(parsed):
+    if _FROM_PATH_KEY in parsed or _is_directive_body(parsed):
         if not isinstance(from_path, str) or not from_path.strip():
-            return _failure("INVALID_ARGS")
+            return _failure(
+                "INVALID_ARGS",
+                field="$from_path",
+                message=_FROM_PATH_MESSAGE,
+            )
         source = _resolve_from_path(repo, from_path, target)
         if source is None:
             return _failure("FORBIDDEN_PATH")
-        body = json.loads(await asyncio.to_thread(source.read_text, encoding="utf-8"))
-        if not isinstance(body, dict):
+        loaded = json.loads(await asyncio.to_thread(source.read_text, encoding="utf-8"))
+        if not isinstance(loaded, dict):
             return _failure("INVALID_JSON")
+        patch = {
+            key: value
+            for key, value in parsed.items()
+            if key not in {_FROM_PATH_KEY, _RECOMPUTE_IDENTITIES_KEY}
+        }
+        body = _deep_merge(loaded, patch) if patch else dict(loaded)
+        body = _strip_authored_artifact_sha256(body)
         recompute = True
     else:
-        body = dict(parsed)
-        if _FROM_PATH_KEY in body:
-            return _failure("INVALID_ARGS")
+        body = _strip_authored_artifact_sha256(parsed)
         if _RECOMPUTE_IDENTITIES_KEY in body:
-            body.pop(_RECOMPUTE_IDENTITIES_KEY, None)
+            recompute = recompute or bool(body.pop(_RECOMPUTE_IDENTITIES_KEY))
 
     if recompute:
         import os
@@ -157,5 +225,7 @@ async def resolve_submit_apply_design_content(
             if staging.exists():
                 await asyncio.to_thread(os.unlink, staging)
 
+    body.pop(_RECOMPUTE_IDENTITIES_KEY, None)
+    body.pop(_FROM_PATH_KEY, None)
     normalized = json.dumps(body, indent=2) + "\n"
     return SubmitContentResolution(ok=True, content=normalized, body=body)

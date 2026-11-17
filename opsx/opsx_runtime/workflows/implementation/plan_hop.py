@@ -204,6 +204,71 @@ def continue_after_design_review(
     return merged
 
 
+def _review_rejects_current_design(change_id: str, *, repo_root: Path) -> bool:
+    """Отрицательный review привязан к текущему файлу дизайна — это repair intent."""
+    from workflows.implementation.receipt_loader import (
+        APPLY_DESIGN_REVIEW_PASS,
+        apply_design_file_sha256,
+        load_apply_design_review,
+    )
+
+    review = load_apply_design_review(change_id, repo_root=repo_root)
+    if not isinstance(review, dict):
+        return False
+    if str(review.get("status") or "") == APPLY_DESIGN_REVIEW_PASS:
+        return False
+    current = apply_design_file_sha256(change_id, repo_root=repo_root)
+    bound = (review.get("apply_design_identity") or {}).get("artifact_sha256")
+    return bool(current) and str(bound or "") == str(current)
+
+
+def accepted_design_awaits_review(
+    change_id: str,
+    *,
+    repo_root: Path,
+    design_attempt: int,
+) -> bool:
+    """Принятый design без repair intent: рестарт входит в review, не в design.
+
+    Receipt совпадает с ``APPLY-DESIGN.json``, snapshot и machine gate
+    разрешают reuse. Отрицательный review той же revision или попытка
+    ремонта внутри прогона оставляют design.
+    """
+    if design_attempt > 0:
+        return False
+    if _review_rejects_current_design(change_id, repo_root=repo_root):
+        return False
+    from workflows.implementation.apply_design_hop_receipt import hop_receipt_present_and_valid
+    from workflows.implementation.design_machine_validation import (
+        design_lane_reuse_ok_after_dependent_snapshot,
+        validate_apply_design_machine,
+    )
+
+    if not hop_receipt_present_and_valid(change_id=change_id, repo_root=repo_root):
+        return False
+    gate = validate_apply_design_machine(change_id, repo_root=repo_root)
+    snapshot = evaluate_apply_design_dependent_snapshot(change_id, repo_root=repo_root)
+    return design_lane_reuse_ok_after_dependent_snapshot(
+        snapshot,
+        machine_gate_ok=gate.ok,
+    )
+
+
+def _enter_design_review_patch(step: SuperImplementPlanStep) -> dict[str, Any]:
+    """Вход сразу в review: design receipt уже покрывает текущий файл."""
+    return {
+        "apply_design_lane_complete": False,
+        "implementation_status": RUN_STATUS_RUNNING,
+        "implementation_stage": STAGE_APPLY_DESIGN_REVIEW,
+        "implementation_slice_id": step.next_slice,
+        "implementation_primitive_command": "/opsx-apply-design-review",
+        "implementation_machine_gate_errors": None,
+        "implementation_plan_reject_code": None,
+        "implementation_recovery_code": None,
+        "implementation_force_design_hop": False,
+    }
+
+
 def build_design_lane_plan_patch(
     step: SuperImplementPlanStep,
     *,
@@ -213,10 +278,11 @@ def build_design_lane_plan_patch(
     prev_slice: str,
     design_attempt: int = 0,
 ) -> dict[str, Any]:
-    """Вход в design lane: только первый ``APPLY_DESIGN``.
+    """Вход в design lane.
 
-    Node ``next_stage`` здесь не выбирает review и не открывает слайсы.
-    Review ставится сразу после design hop. Развилка design/слайсы — после review.
+    Принятый design (receipt совпадает, gate и snapshot живые, repair intent нет)
+    открывает ``APPLY_DESIGN_REVIEW``, а не повторный авторинг. Иначе узел
+    входит в ``APPLY_DESIGN``. Слайсы здесь не открываются.
     """
     _ = prev_stage, prev_slice
     attempt = max(0, int(design_attempt))
@@ -229,6 +295,14 @@ def build_design_lane_plan_patch(
         patch["implementation_status"] = RUN_STATUS_PAUSED
         patch["implementation_recovery_code"] = "DESIGN_REVIEW_ATTEMPTS_EXHAUSTED"
         patch["implementation_design_attempt"] = attempt
+        return patch
+    if accepted_design_awaits_review(
+        change_id,
+        repo_root=repo_root,
+        design_attempt=attempt,
+    ):
+        patch.update(_enter_design_review_patch(step))
+        patch["implementation_design_attempt"] = 0
         return patch
     snapshot = evaluate_apply_design_dependent_snapshot(change_id, repo_root=repo_root)
     if not snapshot.ok:

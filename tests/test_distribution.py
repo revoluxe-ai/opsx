@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from unittest.mock import patch
 
 from opsx_cli.context import OpsxError, Project
@@ -48,7 +51,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.origin = self.root / "origin"
         init(self.origin)
         for rel in ["opsx_cli", "opsx/opsx_runtime/run_verify_impl.py",
-                    "opsx_tools/registry/apply_design.schema.json", ".cursor/rules/opsx.mdc"]:
+                    "opsx_tools/registry/apply_design.schema.json"]:
             src, dest = SOURCE / rel, self.origin / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             if src.is_dir():
@@ -80,8 +83,14 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         shutil.rmtree(self.root, onerror=writable)
         self.temp.cleanup()
 
+    def _seed_opsx_context(self, project: Project) -> None:
+        dest_dir = project.root / "opsx"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(SOURCE.parent / "opsx.mdc", dest_dir / "opsx.mdc")
+
     async def installed(self, project=None):
         project = project or self.projects[0]
+        self._seed_opsx_context(project)
         return await install(project, repository=str(self.origin), ref="v1", no_runtime=True)
 
     def version_two(self, broken=False):
@@ -89,7 +98,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         p.write_text("v2 content\n")
         (p.parent / "opsx-two.md").write_text("new command\n")
         if broken:
-            (self.origin / ".cursor/rules/opsx.mdc").unlink()
+            (self.origin / "opsx_cli/cli.py").unlink()
         git(self.origin, "add", ".")
         git(self.origin, "commit", "-m", "v2")
         git(self.origin, "tag", "v2")
@@ -100,7 +109,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "INSTALLED")
         self.assertTrue((project.core / ".git").is_file())
         self.assertIn("opsx/core/opsx_tools/", (project.root / ".cursor/commands/opsx-one.md").read_text(encoding="utf-8"))
-        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text(encoding="utf-8"))
+        self.assertIn("alwaysApply: false", (project.root / "opsx/opsx.mdc").read_text(encoding="utf-8"))
         self.assertFalse((project.root / "AGENTS.md").exists())
         self.assertFalse((project.root / "src").exists())
         self.assertFalse((project.core / "opsx/project").exists())
@@ -232,7 +241,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         result = await uninstall(project)
         self.assertEqual(result["status"], "UNINSTALLED")
         self.assertEqual(project.settings.read_bytes(), settings)
-        self.assertFalse((project.root / ".cursor/rules/opsx.mdc").exists())
+        self.assertFalse((project.root / "opsx/opsx.mdc").exists())
 
     async def test_panel_start_is_idempotent_and_stop_confirms_ownership(self):
         await self.installed()
@@ -250,10 +259,74 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(first["status"], "STARTED")
             self.assertEqual(second["status"], "ALREADY_RUNNING")
             self.assertEqual(first["instance_id"], second["instance_id"])
+            state = json.loads(project.panel_state.read_text())
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+            )
+            home = opener.open(state["url"] + "/").read().decode("utf-8")
+            self.assertIn("Запуск workflow", home)
+            self.assertIn("Implementation", home)
+            self.assertNotIn('href="/repair"', home)
+            self.assertNotIn("Ремонт", home)
+            self.assertIn("workflow-timeout-min", home)
+            self.assertIn("supervisor-timeout-min", home)
+            with self.assertRaises(urllib.error.HTTPError) as missing:
+                opener.open(state["url"] + "/repair")
+            self.assertEqual(missing.exception.code, 404)
             self.assertEqual((await stop_panel(project))["status"], "STOPPED")
             self.assertFalse((await panel_status(project))["running"])
         finally:
             await stop_panel(project)
+
+
+class PanelWorkflowRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_workflow_post_returns_run_id(self):
+        """POST /api/workflows отдаёт run_id и передаёт его в RunService.execute."""
+        import httpx
+        from httpx import ASGITransport
+
+        from opsx_cli.panel import create_app
+
+        project_root = tempfile.mkdtemp()
+        project = Project.at(project_root)
+        await asyncio.to_thread(project.runs.mkdir, parents=True, exist_ok=True)
+        state = {
+            "instance_id": "test",
+            "token": "panel-test-token",
+            "url": "http://127.0.0.1:8765",
+            "project_root": str(project.root),
+        }
+        captured: dict = {}
+
+        async def fake_execute(self, **kwargs):
+            captured.update(kwargs)
+            return {"status": "PASS", "run_id": kwargs.get("run_id")}
+
+        app = create_app(project, state)
+        transport = ASGITransport(app=app)
+        with patch("opsx_cli.panel.RunService.execute", new=fake_execute):
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url=state["url"],
+                headers={"host": "127.0.0.1:8765"},
+                cookies={"opsx_token": state["token"]},
+            ) as client:
+                response = await client.post(
+                    "/api/workflows",
+                    json={
+                        "change_id": "visual",
+                        "workflow_timeout_minutes": 45,
+                        "supervisor_timeout_minutes": 180,
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["change_id"], "visual")
+            self.assertTrue(body.get("run_id"))
+            self.assertEqual(len(body["run_id"]), 32)
+            self.assertEqual(captured.get("mode"), "workflow")
+            self.assertEqual(captured.get("change"), "visual")
+            self.assertEqual(captured.get("run_id"), body["run_id"])
 
 
 class PathTests(unittest.TestCase):

@@ -135,7 +135,7 @@ def test_bug_fix_mission_token_plans_native_resume():
 
 def test_s0_process_only_does_not_claim_batch_clear_or_repair():
     result = evaluate_bug_fix_batch(
-        [{"severity": "High", "location": ".cursor/commands/opsx.md:1", "finding": "contract"}]
+        [{"severity": "High", "location": "opsx/opsx.mdc:1", "finding": "contract"}]
     )
     assert result["STATUS"] == "PARTIAL_COMPLETE"
     assert result["REPAIRED_THIS_BATCH"] == "NO"

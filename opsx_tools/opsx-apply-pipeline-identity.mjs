@@ -1394,6 +1394,18 @@ export function implementFrozenTestIdentityMatchesRedBytes(
   }
   const resolved = resolveDeclaredFrozenTestContentIdentity(effectiveRed, repoRoot);
   const canonical = resolved.canonical;
+  const operativeRaw = effectiveRed?.operative_red_transition?.test_content_identity;
+  const operative =
+    operativeRaw != null && String(operativeRaw).trim() ? String(operativeRaw).trim() : "";
+  const acceptedNow = new Set(resolved.accepted_digests || []);
+  if (operative && acceptedNow.has(operative) && implFrozen === operative) {
+    return {
+      ok: true,
+      variant: "operative_red_transition",
+      legacy_digest: legacy.digest,
+      canonical_digest: canonical,
+    };
+  }
   if (
     resolved.legacy_test_paths_only &&
     implFrozen === resolved.legacy_test_paths_only &&
@@ -1411,8 +1423,8 @@ export function implementFrozenTestIdentityMatchesRedBytes(
   if (
     canonical &&
     implFrozen === canonical &&
-    (resolved.declared === canonical ||
-      resolved.matched_variant === "canonical_path_sha256_v1")
+    (resolved.matched_variant === "canonical_path_sha256_v1" ||
+      resolved.matched_variant === "legacy_concat_all_paths_v1")
   ) {
     return {
       ok: true,

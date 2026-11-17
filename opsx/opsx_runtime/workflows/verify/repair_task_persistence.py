@@ -173,7 +173,7 @@ def _maybe_owner_retry_reset(
             ),
             owner="verify",
             next_action=(
-                "перезапустить run_named_bug_repair_ui.py после META "
+                "opsx stop; opsx start после META "
                 "и повторить POST /repair change_id=visual"
             ),
         )

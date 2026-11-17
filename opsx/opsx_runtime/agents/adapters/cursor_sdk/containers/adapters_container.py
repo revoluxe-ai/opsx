@@ -23,7 +23,7 @@ def build_cursor_sdk_adapter_bundle(
     timeout_seconds: float,
     bridge: CursorBridgeRuntime,
     *,
-    allow_git_shell_review: bool = True,
+    allow_git_shell_review: bool = False,
 ) -> CursorSdkAdapterBundle:
     """Создать пару адаптеров, разделяющих ``bridge_runtime``."""
     ensure_cursor_sdk_importable(repo_root=repo_root)
@@ -50,7 +50,7 @@ class AdaptersContainer(containers.DeclarativeContainer):
 
     repo_root = providers.Object(Path())
     timeout_seconds = providers.Object(60.0)
-    allow_git_shell_review = providers.Object(True)
+    allow_git_shell_review = providers.Object(False)
 
     bundle = providers.Factory(
         build_cursor_sdk_adapter_bundle,

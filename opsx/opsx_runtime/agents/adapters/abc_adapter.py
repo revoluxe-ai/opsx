@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from agents.config import ReadScope, ReadScopeViolation, resolve_effective_read_scope
+from agents.product_package_scope import merge_declared_product_packages
 from agents.response_schema import response_schema_section
 
 _LOGGER = logging.getLogger(__name__)
@@ -242,7 +243,11 @@ class ABCAdapter(ABC):
         """Compatibility transport facade; validation is owned by ABCAgent."""
         from agents.abc_agent import ABCAgent
 
-        read_scope = resolve_effective_read_scope(agent_key, state)
+        read_scope = merge_declared_product_packages(
+            resolve_effective_read_scope(agent_key, state),
+            state,
+            agent_key=agent_key,
+        )
         return await ABCAgent.execute_validated(
             self, state, prompt=prompt, tools=tools,
             resume_agent_id=resume_agent_id, payload_model=payload_model,

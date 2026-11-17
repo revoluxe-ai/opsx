@@ -126,7 +126,7 @@ async def execute(
     thread_id = run_dir.name
     adapter = build_review_adapter(
         timeout_seconds=timeout_seconds,
-        allow_git_shell=True,
+        allow_git_shell=False,
     )
     meta: dict[str, Any] = {
         "thread_id": thread_id,
@@ -174,7 +174,7 @@ async def execute(
             source, store_scope=f"bugbot:{thread_id}"
         ) as bridge:
             adapter = build_review_adapter(
-                timeout_seconds=timeout_seconds, allow_git_shell=True,
+                timeout_seconds=timeout_seconds, allow_git_shell=False,
                 bridge_runtime=bridge,
             )
             state = await _run_bugbot_workflow(

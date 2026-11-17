@@ -1,4 +1,4 @@
-"""Runtime-агент apply-red hop (команда ``/opsx-apply-red``) в split-apply pipeline."""
+"""Runtime-агент apply-red hop (стадия APPLY RED) в split-apply pipeline."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from agents.verify.impl_verify.preflight import (
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 from workflows.repair.schemas import FixEvidence
 
-_EXECUTION_ROUTE = "/opsx-apply-red"
+_EXECUTION_ROUTE = "APPLY_RED"
 _STREAM_AGENT = "apply_red"
 _PATCH_PREFIX = "apply_red"
 def _format_machine_errors(errors: list[dict[str, Any]]) -> str:

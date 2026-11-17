@@ -1,0 +1,1 @@
+"""Verify-hop prompt loaders (contract_prompts, без slash-команд)."""

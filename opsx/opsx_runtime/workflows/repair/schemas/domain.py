@@ -154,15 +154,15 @@ class RedEvidence(StrictModel):
 
 
 FixExecutionRoute = Literal[
-    "/opsx-fix-bug",
-    "/opsx-apply",
-    "/opsx-apply-design",
-    "/opsx-apply-design-review",
-    "/opsx-apply-scaffold",
-    "/opsx-apply-red",
-    "/opsx-apply-implement",
-    "/opsx-apply-green",
     "LOCAL_REPAIR",
+    "VERIFY_APPLY",
+    "APPLY_DESIGN",
+    "APPLY_DESIGN_REVIEW",
+    "APPLY_SCAFFOLD",
+    "APPLY_RED",
+    "APPLY_IMPLEMENT",
+    "APPLY_GREEN",
+    "FIX_BUG",
 ]
 
 

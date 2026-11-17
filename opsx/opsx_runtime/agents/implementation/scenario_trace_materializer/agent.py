@@ -224,7 +224,7 @@ def materialize_trace(repo_root: Path, change_id: str) -> dict[str, Any]:
                 "status": "BLOCKED",
                 "reason": "TRACE_MAPPING_AMBIGUOUS_OR_MISSING",
                 "unresolved": unresolved,
-                "handoff": "/opsx-test (explicit scenario-to-test evidence, then re-run)",
+                "handoff": "SCENARIO_TEST_AUTHOR stage (explicit scenario-to-test evidence, then re-run)",
             }
         scope_digest = compute_trace_work_scope_digest(root, change_id)
         if not scope_digest:

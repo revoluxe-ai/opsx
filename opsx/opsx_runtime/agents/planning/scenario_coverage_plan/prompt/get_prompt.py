@@ -75,4 +75,8 @@ async def get_prompt(
         "In your JSON answer, set status to PLAN_READY | PLAN_PARTIAL | BLOCKED and "
         "`scenario_count` to the number of scenario files you wrote.\n"
         "Do not embed SCENARIO_ID bodies inside plan.md (machine gate COVERAGE_PLAN_EMBEDDED).\n"
+        "Scenario file names MUST be sha256(UTF-8 SCENARIO_ID).hex + \".md\" only — "
+        "never sha256(file bytes) (content_hash).\n"
+        "Hash-index columns in plan.md that show content_hash are NOT file paths; "
+        "do not create scenarios/<content_hash>.md or duplicate files for the same SCENARIO_ID.\n"
     )

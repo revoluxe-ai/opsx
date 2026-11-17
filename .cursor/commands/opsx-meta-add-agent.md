@@ -50,7 +50,7 @@ NOT_COMMITTED_THIS_RUN: true
 - `.cursor/commands/opsx-meta-design-command.md`
 - `.cursor/commands/opsx-meta-fix-command-defects.md`
 - `.cursor/commands/opsx-meta-consult.md`
-- `.cursor/skills/opsx-static-check-infra/SKILL.md`
+- `opsx/core/.cursor/skills/opsx-static-check-infra/SKILL.md`
 - `opsx/opsx_runtime/agents/repair/README.md`
 
 ### Projectization gate
@@ -156,7 +156,7 @@ OWNER_CONSTRAINTS: …
 | `PIPELINE_WORKER` | Роль bug-team / supervisor Task hop | `.cursor/pipeline/bug-team/REGISTRY.md`, `workers/*.md` |
 | `CURSOR_ORCHESTRATOR` | Поведение лучше выразить как `/opsx-*` | `.cursor/commands/`, `/opsx-meta-add-command` |
 | `STATIC_CHECK_PACK` | Новый check, не отдельный «агент» | `.cursor/static-check/`, skill infra |
-| `CURSOR_SKILL` | Только skill без runtime/worker | `.cursor/skills/`, skill `create-skill` |
+| `CURSOR_SKILL` | Только skill без runtime/worker | `opsx/core/.cursor/skills/`, skill `create-skill` |
 | `DEPLOYED_BDK` | Хостинговый Agent SDK бот вне репо | `agent-sdk-create-agent` skill |
 | `EXTEND_EXISTING` | Доработка уже в `HEAD` | `/opsx-meta-fix-command-defects` |
 

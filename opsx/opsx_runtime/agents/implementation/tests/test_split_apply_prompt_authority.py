@@ -25,6 +25,8 @@ class SplitApplyPromptAuthorityTests(unittest.TestCase):
         self.assertIn("Dispatched slice", prompt)
         self.assertIn("SLICE-001", prompt)
         self.assertIn("only routing signal", prompt)
+        self.assertNotIn("/opsx-", prompt)
+        self.assertNotIn(".cursor/commands", prompt)
         self.assertNotIn("Answer JSON schema:", prompt)
         self.assertNotIn("ApplyRedAnswer", prompt)
 

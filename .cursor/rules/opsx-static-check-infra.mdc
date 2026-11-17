@@ -3,7 +3,7 @@ description: Invariants for /opsx-static-check workers and packs
 globs:
   - .cursor/static-check/**/*
   - .cursor/commands/opsx-static-check.md
-  - .cursor/skills/opsx-static-check-infra/**/*
+  - opsx/core/.cursor/skills/opsx-static-check-infra/**/*
 alwaysApply: false
 ---
 

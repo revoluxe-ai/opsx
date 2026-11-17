@@ -28,6 +28,7 @@ LIFECYCLE_COVERAGE:
 SCENARIO_INVENTORY:
   - openspec/changes/<CHANGE_ID>/scenario-coverage/scenarios/<sha256(scenario_id)>.md
   # one repo-relative path per authored scenario file (hash = sha256 of SCENARIO_ID utf-8)
+  # content_hash (sha256 of file body) must NEVER appear as the filename stem
 
 SCENARIO_COVERAGE_PLAN:
   SCHEMA_VERSION: 1
@@ -47,4 +48,4 @@ GENERATED_FROM:
   DESIGN_REVISION: openspec/changes/<CHANGE_ID>/design.md
   OWNER_CONTRACT_REVISION: openspec/changes/<CHANGE_ID>/owner-contract.md
   SPEC: openspec/changes/<CHANGE_ID>/specs/.../spec.md
-  PRODUCER: /opsx-spec-scenario-coverage mode=plan
+  PRODUCER: SCENARIO_COVERAGE_PLAN

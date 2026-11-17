@@ -36,6 +36,7 @@ from workflows.implementation.apply_design_canon_reuse import (
 )
 from workflows.implementation.apply_design_hop_receipt import (
     decide_design_hop,
+    design_hop_effective_status,
     load_design_bytes,
     maybe_recover_design_hop_receipt,
     write_hop_receipt,
@@ -48,7 +49,7 @@ from workflows.implementation.design_machine_validation import (
 from workflows.repair.schemas import FixEvidence
 from workflows.repo_paths import normalize_workspace_path, resolve_opsx_repository_root  # noqa: E402
 
-_EXECUTION_ROUTE = "/opsx-apply-design"
+_EXECUTION_ROUTE = "APPLY_DESIGN"
 _STREAM_AGENT = "apply_design"
 _PATCH_PREFIX = "apply_design"
 _MACHINE_REPAIR_LIMIT = 1
@@ -253,9 +254,7 @@ class ApplyDesignAgent(ABCAgent):
             gate_ok=design_gate.ok,
             snapshot_ok=snapshot.ok,
         )
-        effective_status = (
-            "ESCALATE_ARBITER" if answer.status == "ESCALATE_ARBITER" else decision.status
-        )
+        effective_status = design_hop_effective_status(answer.status, decision.status)
         if (
             decision.status == "BLOCKED"
             and answer.status != "ESCALATE_ARBITER"
@@ -318,8 +317,9 @@ class ApplyDesignAgent(ABCAgent):
                     gate_ok=design_gate.ok,
                     snapshot_ok=snapshot.ok,
                 )
-                if answer.status != "ESCALATE_ARBITER":
-                    effective_status = decision.status
+                effective_status = design_hop_effective_status(
+                    answer.status, decision.status
+                )
         submit_fail_code: str | None = None
         if tool_runtime.last_submission is not None and not tool_runtime.last_submission.ok:
             submit_fail_code = tool_runtime.last_submission.code
@@ -403,7 +403,13 @@ class ApplyDesignAgent(ABCAgent):
         if effective_status == "BLOCKED":
             errors = list(design_gate.errors)
             if decision.code and not errors:
-                errors = [{"code": decision.code, "message": decision.code}]
+                detail = decision.code
+                if (
+                    tool_runtime.last_submission is not None
+                    and tool_runtime.last_submission.message
+                ):
+                    detail = tool_runtime.last_submission.message
+                errors = [{"code": decision.code, "message": detail}]
             patch["implementation_machine_gate_errors"] = errors
             patch["implementation_plan_reject_code"] = decision.code or "DESIGN_MACHINE_GATE_FAILED"
             patch.update(

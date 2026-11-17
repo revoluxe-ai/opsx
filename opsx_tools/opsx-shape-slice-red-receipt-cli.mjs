@@ -32,6 +32,27 @@ function parseArgs(argv) {
   return out;
 }
 
+function executionsAlreadyComplete(red, commands) {
+  const execs = Array.isArray(red.command_executions) ? red.command_executions : [];
+  const want = new Set(commands.map((c) => String(c)));
+  if (!want.size || execs.length !== want.size) {
+    return false;
+  }
+  for (const exec of execs) {
+    const cmd = String(exec?.command || "");
+    if (!want.has(cmd)) {
+      return false;
+    }
+    if (typeof exec?.final_exit_code !== "number") {
+      return false;
+    }
+    if (!Array.isArray(exec.attempts) || !exec.attempts.length) {
+      return false;
+    }
+  }
+  return Boolean(red.tests_frozen) && Boolean(red.test_content_identity);
+}
+
 function artifactSha256(repo, relPath) {
   const abs = resourcePath(repo, relPath);
   return createHash("sha256").update(readFileSync(abs)).digest("hex");
@@ -70,6 +91,18 @@ function main() {
   const testContentId = identity.ok ? identity.digest : null;
   const status = String(red.status || "");
   const commands = Array.isArray(red.test_commands) ? red.test_commands.map(String) : [];
+  if (executionsAlreadyComplete(red, commands)) {
+    process.stdout.write(
+      `${JSON.stringify({
+        ok: true,
+        path: redRel,
+        test_content_identity: red.test_content_identity,
+        obligation_digest: red.behavior_obligation_identity?.obligation_digest,
+        reused_executions: true,
+      })}\n`,
+    );
+    process.exit(0);
+  }
   const commandExecutions = [];
   for (const command of commands) {
     const live = runFrozenRedCommand(command, { cwd: repo, timeoutMs: 120000 });

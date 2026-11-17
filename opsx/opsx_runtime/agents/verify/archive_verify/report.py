@@ -36,7 +36,7 @@ def format_verify_archive_report(
         "",
         "## Итоговый вердикт",
         (
-            "GO — можно переходить к /opsx-archive (при отсутствии иных blockers)."
+            "GO — можно переходить к archive stage (при отсутствии иных blockers)."
             if answer.verdict == "GO"
             else "NO_GO — archive запрещён до устранения blockers."
         ),

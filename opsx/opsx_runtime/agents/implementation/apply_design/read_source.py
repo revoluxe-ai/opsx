@@ -44,11 +44,31 @@ class ReadSourceFailure:
     """Структурированный отказ чтения."""
 
     code: ReadSourceFailureCode
+    field: str | None = None
+    message: str | None = None
 
 
 def failure_payload(failure: ReadSourceFailure) -> dict[str, Any]:
-    """Сериализовать отказ для callback модели."""
-    return {"ok": False, "code": failure.code.value}
+    """Сериализовать отказ для callback модели.
+
+    ``INVALID_ARGS`` всегда называет поле и как его заполнить. Код без текста
+    не годится: следующий вызов повторит тот же аргумент.
+    """
+    out: dict[str, Any] = {"ok": False, "code": failure.code.value}
+    if failure.field:
+        out["field"] = failure.field
+    if failure.message:
+        out["message"] = failure.message
+    elif failure.code == ReadSourceFailureCode.INVALID_ARGS:
+        out["field"] = failure.field or "args"
+        out["message"] = (
+            "field="
+            + out["field"]
+            + ". read_source requires source_id. "
+            "cursor is an integer offset, 0 on the first page. "
+            "When cursor > 0, set expected_revision to source_revision from that first page."
+        )
+    return out
 
 
 def classify_domain_source(
@@ -95,7 +115,14 @@ def resolve_read_source(
     """Сопоставить ``source_id`` hop manifest с одним файлом или отказом."""
     sid = source_id.strip()
     if not sid:
-        return ReadSourceFailure(ReadSourceFailureCode.INVALID_ARGS)
+        return ReadSourceFailure(
+            ReadSourceFailureCode.INVALID_ARGS,
+            field="source_id",
+            message=(
+                "source_id is required. Pass a non-empty source_id from the hop "
+                "manifest (planning alias, prior design id, or domain:relative-path)."
+            ),
+        )
     repo = manifest.repo_root.resolve()
 
     if sid in manifest.prior_designs:
@@ -194,9 +221,21 @@ async def execute_read_source(
     try:
         cursor = int(cursor_raw)
     except (TypeError, ValueError):
-        return failure_payload(ReadSourceFailure(ReadSourceFailureCode.INVALID_ARGS))
+        return failure_payload(
+            ReadSourceFailure(
+                ReadSourceFailureCode.INVALID_ARGS,
+                field="cursor",
+                message="cursor must be an integer byte offset. Use 0 for the first page.",
+            )
+        )
     if cursor < 0:
-        return failure_payload(ReadSourceFailure(ReadSourceFailureCode.INVALID_ARGS))
+        return failure_payload(
+            ReadSourceFailure(
+                ReadSourceFailureCode.INVALID_ARGS,
+                field="cursor",
+                message="cursor must be >= 0. Use 0 for the first page, then next_cursor.",
+            )
+        )
 
     expected_revision = str(args.get("expected_revision") or "").strip()
 
@@ -209,7 +248,16 @@ async def execute_read_source(
     if cursor > 0 and expected_revision and expected_revision != revision:
         return failure_payload(ReadSourceFailure(ReadSourceFailureCode.SOURCE_REVISION_CONFLICT))
     if cursor > 0 and not expected_revision:
-        return failure_payload(ReadSourceFailure(ReadSourceFailureCode.INVALID_ARGS))
+        return failure_payload(
+            ReadSourceFailure(
+                ReadSourceFailureCode.INVALID_ARGS,
+                field="expected_revision",
+                message=(
+                    "When cursor > 0, set expected_revision to source_revision "
+                    "returned by the first page of this source_id."
+                ),
+            )
+        )
 
     return build_paged_read_ok(
         source_id=resolved.source_id,

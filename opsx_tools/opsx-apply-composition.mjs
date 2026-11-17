@@ -415,9 +415,9 @@ export function missingDogfoodFailureClassCoverage(design) {
       missing.push(cls);
       continue;
     }
-    // Heuristic: if text mentions neither pattern half, flag as uncovered.
-    const pairs = needles[cls] || [];
-    const hit = pairs.every((res) => res.some((re) => re.test(blob)));
+    // Heuristic: each failure class needs both regex halves to match the design blob.
+    const patterns = needles[cls] || [];
+    const hit = patterns.every((re) => re.test(blob));
     if (!hit) missing.push(cls);
   }
   return missing;

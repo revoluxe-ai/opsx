@@ -28,7 +28,28 @@ command contracts, bug-case lifecycle или test modes.
 
 ```text
 CONTRACT_VERSION=OPSX_SUPERVISOR_ORCHESTRATION_V2
+RUNTIME_CONTRACT=opsx/core/opsx/contract_prompts/process_supervisor/SUPERVISOR.md
+RUNTIME_CONTRACT_LOADER=opsx/core/opsx/contract_prompts/process_supervisor/loader.py
 ```
+
+## Runtime contract (SUPERVISOR.md — load via loader, not `.cursor/commands`)
+
+Супервизор **может** создать и подключить нового OPSX runtime-агента **только**
+по существующему паттерну и **только** в рамках `opsx/opsx.mdc` §27.0.0.2.
+Запрещено изобретать новую форму агента, новую tool-surface, новый write-path
+или новый prompt-канал. «Создать и подключить» = скопировать образец (контракт
+промпта, runner-hook, allowlist), зарегистрировать как соседние роли, текст —
+только через OPSX prompt-loader (`get_prompt`, `opsx/contract_prompts/**`).
+
+**Shell запрещён** для OPSX runtime-агентов при создании/подключении: не выдавать
+терминал, pytest CLI, poetry, node, bash или PowerShell. Tool-list — фиксированный
+набор именованных функций паттерна-образца; копия **наследует** его и **никогда**
+не получает `shell`.
+
+Runtime-агенту **нельзя** передавать имя slash-команды или текст из
+`.cursor/commands`. Супервизор **не** правит продукт / `openspec/changes/**`
+руками — только META allowlist и hops OPSX. Полный чеклист и пути образцов —
+`opsx/opsx.mdc` §27.0.0.2 и `SUPERVISOR.md`.
 
 Твоя функция:
 
@@ -267,6 +288,11 @@ COMMAND_EDITING=FORBIDDEN
 COMMAND_CONTRACT_EXTENSION=FORBIDDEN
 PIPELINE_EDITING=FORBIDDEN
 ```
+
+Исключение только для **runtime agent create/connect** по §27.0.0.2 /
+`SUPERVISOR.md`: один downstream META-owner по задокументированному образцу;
+без новой slash-команды, без `shell` на агенте, без command-link в prompt
+runtime-hop.
 
 Если подходящей разрешённой команды нет:
 

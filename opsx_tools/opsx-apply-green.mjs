@@ -822,7 +822,14 @@ function resolvePoetryProjectPython(cwd, childEnv, hostRoots) {
  * Находит pytest-capable Python: OPSX_PYTEST_PYTHON, Poetry-env проекта,
  * repo venv, sibling stroy-system. venv процесса OPSX не выбирается.
  */
+let _pytestLauncherCacheCwd = null;
+let _pytestLauncherCacheValue = null;
+
 function resolveRepoPytestLauncher(cwd) {
+  const key = resolve(String(cwd || DEFAULT_ROOT));
+  if (_pytestLauncherCacheCwd === key) {
+    return _pytestLauncherCacheValue;
+  }
   const childEnv = productPytestChildEnv(process.env);
   const hostRoots = [];
   if (process.env.VIRTUAL_ENV) hostRoots.push(process.env.VIRTUAL_ENV);
@@ -833,10 +840,16 @@ function resolveRepoPytestLauncher(cwd) {
     !isHostPython(fromEnv, hostRoots) &&
     pythonLauncherImportsPytest(fromEnv, cwd, childEnv)
   ) {
+    _pytestLauncherCacheCwd = key;
+    _pytestLauncherCacheValue = fromEnv;
     return fromEnv;
   }
   const poetryPython = resolvePoetryProjectPython(cwd, childEnv, hostRoots);
-  if (poetryPython) return poetryPython;
+  if (poetryPython) {
+    _pytestLauncherCacheCwd = key;
+    _pytestLauncherCacheValue = poetryPython;
+    return poetryPython;
+  }
   const candidates = [
     resolve(cwd, ".venv_win/Scripts/python.exe"),
     resolve(cwd, ".venv/Scripts/python.exe"),
@@ -849,6 +862,8 @@ function resolveRepoPytestLauncher(cwd) {
       !isHostPython(py, hostRoots) &&
       pythonLauncherImportsPytest(py, cwd, childEnv)
     ) {
+      _pytestLauncherCacheCwd = key;
+      _pytestLauncherCacheValue = py;
       return py;
     }
   }
@@ -858,10 +873,14 @@ function resolveRepoPytestLauncher(cwd) {
       "C:\\Program Files\\Python313\\python.exe",
     ]) {
       if (existsSync(launcher) && pythonLauncherImportsPytest(launcher, cwd, childEnv)) {
+        _pytestLauncherCacheCwd = key;
+        _pytestLauncherCacheValue = launcher;
         return launcher;
       }
     }
   }
+  _pytestLauncherCacheCwd = key;
+  _pytestLauncherCacheValue = null;
   return null;
 }
 

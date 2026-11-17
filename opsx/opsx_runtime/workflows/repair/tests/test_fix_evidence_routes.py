@@ -13,18 +13,18 @@ class FixEvidenceRouteTests(unittest.TestCase):
             status="FIXED",
             summary="ok",
             files_changed=["openspec/changes/x/a.json"],
-            execution_route="/opsx-apply-design",
+            execution_route="APPLY_DESIGN",
         )
-        self.assertEqual(fix.execution_route, "/opsx-apply-design")
+        self.assertEqual(fix.execution_route, "APPLY_DESIGN")
 
     def test_apply_design_review_route(self) -> None:
         fix = FixEvidence(
             status="FIXED",
             summary="ok",
             files_changed=["openspec/changes/x/apply-design-review/APPLY-DESIGN-REVIEW.json"],
-            execution_route="/opsx-apply-design-review",
+            execution_route="APPLY_DESIGN_REVIEW",
         )
-        self.assertEqual(fix.execution_route, "/opsx-apply-design-review")
+        self.assertEqual(fix.execution_route, "APPLY_DESIGN_REVIEW")
 
 
 if __name__ == "__main__":

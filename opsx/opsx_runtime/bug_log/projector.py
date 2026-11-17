@@ -62,6 +62,7 @@ class BugJournalProjector:
             _write_ndjson(resource_path(self.root, "by-bug", bug_id, "timeline.ndjson"), rows)
         manifest = self._manifest(events, by_change, by_bug)
         manifest_path = resource_path(self.root, "ANALYSIS_MANIFEST.json")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",

@@ -11,4 +11,4 @@
 - На стадиях до `infra_tests` infra-тесты не запускаются: статус `DEFERRED`.
 - Skip в infra-прогоне — это FAIL (`SKIP_AS_PASS`), не успех.
 - Подключение к PostgreSQL при `STROY_TIER=active` — `TIER_VIOLATION`.
-- Выражения берутся из `opsx/opsx_runtime/agents/common/test_tier_policy.py` (`ACTIVE_EXPR`, `INFRA_EXPR`). Второй список маркеров не заводить.
+- Выражения ворот уже заданы здесь и являются авторитетом hop: active — `not requires_postgres`, infra — `requires_postgres`. Не открывай модуль политики и не заводи второй список маркеров.

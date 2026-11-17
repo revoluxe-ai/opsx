@@ -295,6 +295,8 @@ def hop_uses_scoped_read_tool(
         return normalized <= _REPAIR_HOP_SCOPED_TOOLS and "read" in normalized
     if key in (
         "apply",
+        "apply_design_review",
+        "apply_implement",
         "scenario_test_repair",
         "scenario_test_author",
         "test_harness_repair",

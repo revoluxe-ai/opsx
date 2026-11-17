@@ -20,7 +20,7 @@ The agent consumes the same source values as the existing Apply hop:
 - `gaps_for_prompt` — that same ledger, without selection/relabeling;
 - `load_change_artifact_bundle(change_id, repo_root=...)`;
 - `collect_apply_machine_context(change_id, repo_root=...)`;
-- authoritative `.cursor/commands/opsx-apply.md`, as contextual constraints.
+- authoritative ``verify_apply_hop`` / ``scenario_test_repair_constraints`` contract_prompts fragments.
 
 The repository can be passed explicitly through
 `ScenarioTestRepairAgent(adapter).run(state, repository_path=repo_path)`.

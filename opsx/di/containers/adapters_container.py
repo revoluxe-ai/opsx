@@ -25,7 +25,7 @@ def _build_verify_impl_adapters(
     timeout_seconds: float,
     bridge: CursorBridgeRuntime,
     *,
-    allow_git_shell_review: bool = True,
+    allow_git_shell_review: bool = False,
 ) -> VerifyImplAdapters:
     """Обёртка colocated bundle для composition root ``opsx.di``."""
     bundle = build_cursor_sdk_adapter_bundle(
@@ -47,7 +47,7 @@ class AdaptersContainer(containers.DeclarativeContainer):
 
     repo_root = providers.Object(Path())
     timeout_seconds = providers.Object(60.0)
-    allow_git_shell_review = providers.Object(True)
+    allow_git_shell_review = providers.Object(False)
 
     bundle = providers.Factory(
         _build_verify_impl_adapters,

@@ -106,6 +106,32 @@ def test_review_repairs_return_design_until_third() -> None:
     assert capped["implementation_machine_gate_errors"] == [{"code": "X"}]
 
 
+def test_accepted_design_receipt_enters_review_on_restart(monkeypatch) -> None:
+    """Рестарт с валидным design receipt не пишет дизайн заново."""
+    from workflows.implementation.plan_hop import build_design_lane_plan_patch
+    from workflows.implementation.routing_contract import SuperImplementPlanStep
+
+    monkeypatch.setattr(
+        "workflows.implementation.plan_hop.accepted_design_awaits_review",
+        lambda *args, **kwargs: True,
+    )
+    step = SuperImplementPlanStep(
+        status=RUN_STATUS_RUNNING,
+        live_execution_authorized=True,
+        next_stage=STAGE_APPLY_DESIGN,
+        raw={},
+    )
+    patch = build_design_lane_plan_patch(
+        step,
+        change_id="new-tariffs",
+        repo_root=__import__("pathlib").Path("."),
+        prev_stage="",
+        prev_slice="",
+    )
+    assert patch["implementation_stage"] == STAGE_APPLY_DESIGN_REVIEW
+    assert patch["implementation_primitive_command"] == "/opsx-apply-design-review"
+
+
 def test_graph_registers_every_router_target() -> None:
     """Каждый узел, который вернёт роутер после hop, есть в карте переходов графа."""
     from workflows.implementation.design_pipeline.graph import (

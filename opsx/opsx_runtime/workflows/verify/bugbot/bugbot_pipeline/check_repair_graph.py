@@ -55,8 +55,8 @@ def _maybe_raise_green_blocked_stage_stop(final: RepairState) -> None:
             evidence=evidence,
             owner="verify",
             next_action=(
-                "перезапустить run_named_bug_repair_ui.py после META "
-                "и повторить POST /repair change_id=visual"
+                "opsx stop; opsx start после META "
+                "и повторить opsx repair --bug '…' change_id=visual"
             ),
         )
 

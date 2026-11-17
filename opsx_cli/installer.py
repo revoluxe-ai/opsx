@@ -15,6 +15,14 @@ from .authority import assert_portable_managed_content, neutralize_command_autho
 from .context import CORE_RELATIVE, DEFAULT_REPOSITORY, OpsxError, Project
 from .process import git, run
 from .storage import read_json, write_bytes, write_json
+from .worker_runtime import (
+    core_poetry_python,
+    ensure_core_poetry_runtime,
+    interpreter_imports_langgraph,
+    is_legacy_managed_runtime_pin,
+    is_repository_product_venv,
+    resolve_pinned_interpreter,
+)
 
 
 def _digest(data: bytes) -> str:
@@ -32,16 +40,29 @@ def _render(text: str) -> str:
     )
     expression = "|".join(re.escape(p) for p in sorted(prefixes, key=len, reverse=True))
     text = re.sub(r"(?<![\w/])(" + expression + r")", CORE_RELATIVE + r"/\1", text)
-    # Only the manual entry rule is installed as a rule. Its supporting rules
-    # remain explicit resources and do not become always-on project guidance.
-    text = re.sub(r"(?<![\w/])\.cursor/rules/(?!opsx\.mdc\b)",
+    text = re.sub(r"(?<![\w/])\.cursor/rules/",
                   CORE_RELATIVE + "/.cursor/rules/", text)
     return text
 
 
+OPSX_CONTEXT_RELATIVE = "opsx/opsx.mdc"
+
+
+def _opsx_context_source(core: Path) -> Path:
+    """Источник @opsx контекста: `opsx/opsx.mdc` рядом с submodule `opsx/core`."""
+    source = core.parent / "opsx.mdc"
+    if not source.is_file():
+        raise OpsxError(
+            "OPSX_CONTEXT_MISSING",
+            f"Required @opsx context missing beside core checkout: {source}",
+        )
+    return source
+
+
 def _managed_payloads(core: Path) -> dict[str, bytes]:
-    paths = sorted((core / ".cursor/commands").glob("*.md"))
-    paths += [core / ".cursor/rules/opsx.mdc"]
+    paths = sorted(
+        p for p in (core / ".cursor/commands").glob("*.md") if p.name != "opsx.md"
+    )
     result = {}
     for source in paths:
         if not source.is_file():
@@ -50,16 +71,23 @@ def _managed_payloads(core: Path) -> dict[str, bytes]:
         body = neutralize_command_authority(_render(source.read_text(encoding="utf-8")))
         assert_portable_managed_content(relative, body)
         result[relative] = body.encode("utf-8")
-    if ".cursor/rules/opsx.mdc" not in result:
-        raise OpsxError("OPSX_CONTEXT_MISSING", "The required @opsx context is missing.")
+    context_source = _opsx_context_source(core)
+    context_body = neutralize_command_authority(_render(context_source.read_text(encoding="utf-8")))
+    assert_portable_managed_content(OPSX_CONTEXT_RELATIVE, context_body)
+    result[OPSX_CONTEXT_RELATIVE] = context_body.encode("utf-8")
     return result
 
 
 def _validate_core(core: Path) -> None:
-    for relative in ("pyproject.toml", "opsx_cli/cli.py", "opsx/opsx_runtime/run_verify_impl.py",
-                     "opsx_tools/registry/apply_design.schema.json", ".cursor/rules/opsx.mdc"):
+    for relative in (
+        "pyproject.toml",
+        "opsx_cli/cli.py",
+        "opsx/opsx_runtime/run_verify_impl.py",
+        "opsx_tools/registry/apply_design.schema.json",
+    ):
         if not (core / relative).is_file():
             raise OpsxError("CORE_INCOMPLETE", f"Required core file missing: {relative}")
+    _opsx_context_source(core)
 
 
 async def _check_git_project(project: Project) -> None:
@@ -151,27 +179,24 @@ async def _defaults(project: Project) -> None:
 
 
 async def _prepare_runtime(project: Project, sha: str, python: str | None) -> str:
-    directory = project.runs / "environments" / sha
-    executable = directory / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    lockfile = project.core / "requirements-runtime.lock"
-    lock_digest = await asyncio.to_thread(lambda: hashlib.sha256(lockfile.read_bytes()).hexdigest())
-    ready_file = directory / ".opsx-runtime.json"
-    if not await asyncio.to_thread(executable.exists):
-        await run([python or sys.executable, "-m", "venv", directory], cwd=project.root, timeout=120)
+    """Закрепить OPSX runtime за Poetry env ``opsx/core`` (без pip в ``opsx/runs``)."""
+    del sha, python  # Poetry pin не привязан к core_sha snapshot.
     from .settings import instance_layer
+
     settings = instance_layer(await read_json(project.settings, {}))
     if "cursor" in (settings.get("adapter") or {}).get("extras", []):
-        await run([executable, "-c", "import sys; sys.exit('The selected Cursor adapter requires Python 3.12 or later.' if sys.version_info < (3,12) else 0)"],
-                  cwd=project.root, timeout=30)
-    marker = await read_json(ready_file, {})
-    if marker.get("requirements_sha256") != lock_digest:
-        await run([executable, "-m", "pip", "install", "--no-input", "--disable-pip-version-check",
-                   "--timeout", "20", "--retries", "1", "--require-hashes", "-r", lockfile],
-                  cwd=project.root, timeout=900)
-    await run([executable, "-c", "import langgraph,fastapi,uvicorn,pydantic,dependency_injector,yaml"],
-              cwd=project.root, timeout=30)
-    await write_json(ready_file, {"requirements_sha256": lock_digest})
-    return executable.relative_to(project.root).as_posix()
+        py = core_poetry_python(project.core)
+        if py is not None:
+            await run(
+                [
+                    str(py),
+                    "-c",
+                    "import sys; sys.exit('The selected Cursor adapter requires Python 3.12 or later.' if sys.version_info < (3,12) else 0)",
+                ],
+                cwd=project.root,
+                timeout=30,
+            )
+    return await ensure_core_poetry_runtime(project)
 
 
 async def install(
@@ -217,10 +242,37 @@ async def _install_locked(
         await _assert_managed_clean(project, existing)
         await asyncio.to_thread(_validate_core, project.core)
         await _defaults(project)
-        if not no_runtime and (not existing.get("runtime_python") or not await asyncio.to_thread((project.root / existing["runtime_python"]).is_file)):
-            interpreter = await _prepare_runtime(project, existing["core_sha"], python)
-            existing = {**existing, "runtime_python": interpreter}
-            await write_json(project.installation, existing)
+        if not no_runtime:
+            runtime_pin = existing.get("runtime_python")
+            pin_text = (
+                str(runtime_pin).strip()
+                if isinstance(runtime_pin, str) and runtime_pin.strip()
+                else ""
+            )
+            pin_path = (
+                await asyncio.to_thread(resolve_pinned_interpreter, project, pin_text)
+                if pin_text
+                else None
+            )
+            poetry_py = await asyncio.to_thread(core_poetry_python, project.core)
+            needs_prepare = (
+                not pin_text
+                or is_legacy_managed_runtime_pin(pin_text)
+                or pin_path is None
+                or await asyncio.to_thread(
+                    is_repository_product_venv, project, pin_path
+                )
+                or not await asyncio.to_thread(
+                    interpreter_imports_langgraph, str(pin_path)
+                )
+                or poetry_py is None
+                or os.path.normcase(str(pin_path))
+                != os.path.normcase(str(poetry_py))
+            )
+            if needs_prepare:
+                interpreter = await _prepare_runtime(project, existing["core_sha"], python)
+                existing = {**existing, "runtime_python": interpreter}
+                await write_json(project.installation, existing)
         return {"status": "ALREADY_INSTALLED", **existing}
     pending_path = project.runs / "installation-pending.json"
     pending = await read_json(pending_path)
@@ -347,7 +399,51 @@ async def doctor(project: Project) -> dict:
         except OpsxError as exc:
             add("cursor_integration", False, str(exc))
         interpreter = metadata.get("runtime_python")
-        add("runtime_environment", bool(interpreter) and await asyncio.to_thread((project.root / interpreter).is_file) if interpreter else False)
+        pinned = (
+            await asyncio.to_thread(
+                resolve_pinned_interpreter, project, str(interpreter)
+            )
+            if interpreter
+            else None
+        )
+        add(
+            "runtime_environment",
+            pinned is not None,
+            str(pinned or interpreter or ""),
+        )
+        from .worker_runtime import resolve_worker_interpreter
+
+        try:
+            worker_python = await asyncio.to_thread(
+                resolve_worker_interpreter, project, metadata
+            )
+            add("worker_langgraph", True, worker_python)
+            from .storage import read_json as _read_json
+            from .worker_runtime import (
+                interpreter_imports_cursor_sdk,
+                poetry_cursor_extra_requested,
+            )
+
+            settings = await _read_json(project.settings, {})
+            if await asyncio.to_thread(
+                poetry_cursor_extra_requested, project, settings
+            ):
+                add(
+                    "worker_cursor_sdk",
+                    await asyncio.to_thread(
+                        interpreter_imports_cursor_sdk, worker_python
+                    ),
+                    worker_python,
+                )
+        except OpsxError as exc:
+            add("worker_langgraph", False, str(exc))
+        from .service import resolve_panel_interpreter
+
+        try:
+            panel_python = await resolve_panel_interpreter(project, metadata or {})
+            add("panel_web_deps", True, panel_python)
+        except OpsxError as exc:
+            add("panel_web_deps", False, str(exc))
         settings = await read_json(project.settings, {})
         capability = project.root / settings.get("capabilities", "opsx/project/capabilities.yaml")
         add("capability_profile", await asyncio.to_thread(capability.is_file))
@@ -356,5 +452,8 @@ async def doctor(project: Project) -> dict:
             add("project_adoption", "status: NEEDS_ADOPTION" not in body,
                 "Resolve this project's capabilities through /opsx-adopt.")
         add("node", bool(shutil.which("node")), "Required for existing machine gates")
-        add("manual_opsx_context", await asyncio.to_thread((project.root / ".cursor/rules/opsx.mdc").is_file))
+        add(
+            "manual_opsx_context",
+            await asyncio.to_thread((project.root / OPSX_CONTEXT_RELATIVE).is_file),
+        )
     return {"status": "PASS" if checks and all(c["ok"] for c in checks) else "NOT_READY", "checks": checks}

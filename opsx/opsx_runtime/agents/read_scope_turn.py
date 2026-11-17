@@ -106,7 +106,7 @@ def _slice_apply_correction_block(scope: ReadScope, state: Mapping[str, Any]) ->
         "- **Запрещено** читать или grep/glob каталог `opsx_tools` — runtime Python "
         "валидирует stage receipts и пишет digests.",
         "- Не считай sha256 вручную: без `python -c`, `node -e`, обхода identity.",
-        "- Рабочие пути: `src/**`, `tests/**`, `openspec/changes|decisions|specs/**`, "
+        "- Рабочие пути: `src/**`, `app/**`, `tests/**`, `openspec/changes|decisions|specs/**`, "
         "`migrations/**`, `pyproject.toml`, `poetry.lock`.",
         "- RED/GREEN: shell только для `test_commands` из slice/RED.json и bounded "
         "product edits в scope стадии.",

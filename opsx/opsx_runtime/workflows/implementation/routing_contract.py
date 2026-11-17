@@ -35,6 +35,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
+from agents.agent_visible_text import strip_slash_commands_from_text
+from workflows.implementation.gate_error_text import (
+    expand_tautological_error_text,
+    format_gate_error_line,
+)
+
 ImplementationPlanStatus = Literal["RUNNING", "PAUSED", "FAILED", "APPLY_COMPLETE"]
 
 RUN_STATUS_RUNNING = "RUNNING"
@@ -230,7 +236,9 @@ def implementation_lane_error_detail(state: Mapping[str, Any]) -> str:
     Returns:
         Одна строка с причиной. Пустая строка, если конкретного текста нет.
     """
-    direct = str(state.get("error") or "").strip()
+    direct = strip_slash_commands_from_text(
+        expand_tautological_error_text(str(state.get("error") or "")),
+    )
     if direct:
         return direct
     errors = state.get("implementation_machine_gate_errors")
@@ -239,14 +247,9 @@ def implementation_lane_error_detail(state: Mapping[str, Any]) -> str:
         for entry in errors[:15]:
             if not isinstance(entry, dict):
                 continue
-            code = str(entry.get("code") or "").strip() or "?"
-            message = str(entry.get("message") or "").strip()
-            if message:
-                lines.append(f"{code}: {message}")
-            elif code != "?":
-                lines.append(code)
+            lines.append(format_gate_error_line(entry))
         if lines:
-            return "; ".join(lines)
+            return strip_slash_commands_from_text("; ".join(lines))
     for key, value in state.items():
         if not (
             isinstance(key, str)
@@ -260,9 +263,9 @@ def implementation_lane_error_detail(state: Mapping[str, Any]) -> str:
             continue
         text = "; ".join(str(item).strip() for item in gaps[:10] if str(item).strip())
         if text:
-            return f"remaining_gaps: {text}"
+            return strip_slash_commands_from_text(f"remaining_gaps: {text}")
     reject = str(state.get("implementation_plan_reject_code") or "").strip()
-    return reject
+    return strip_slash_commands_from_text(reject)
 
 
 def format_current_implementation_procedure(

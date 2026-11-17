@@ -39,6 +39,7 @@ import {
   isDurableRedProven,
   implementFrozenTestIdentityMatchesRedBytes,
   isRedEvidenceComplete,
+  resolveDeclaredFrozenTestContentIdentity,
   selectNextImplementableSlice,
 } from "./opsx-apply-pipeline-identity.mjs";
 import {
@@ -1149,7 +1150,25 @@ function implementFrozenTestAuthorityErrors(artifact, repoRoot = DEFAULT_ROOT, d
   return errors;
 }
 
-function semanticErrors(artifact) {
+/**
+ * Legacy concat and canonical path-sha are the same frozen bytes.
+ * Equality of the two receipt fields is required unless both digests are
+ * those accepted variants. A mutated file matches neither the stored RED
+ * digest nor this pair.
+ */
+function frozenEchoesAcceptedRedVariant(artifact, repoRoot, frozen, echoed) {
+  const red = loadLinkedRed(repoRoot, artifact);
+  if (!isObject(red)) return false;
+  const resolved = resolveDeclaredFrozenTestContentIdentity(red, repoRoot);
+  const accepted = new Set(resolved.accepted_digests || []);
+  // Top-level RED test_content_identity may be stale or a test-paths-only
+  // variant while operative_red_transition holds the canonical digest.
+  // The pair is valid when each field is still a digest of the current
+  // frozen bytes. A mutated file matches none of those digests.
+  return accepted.has(String(frozen)) && accepted.has(String(echoed));
+}
+
+function semanticErrors(artifact, repoRoot = DEFAULT_ROOT) {
   const errors = [];
   if (!isObject(artifact)) return errors;
   if (FORBIDDEN_SUCCESS_STATUSES.includes(artifact.status)) {
@@ -1216,10 +1235,14 @@ function semanticErrors(artifact) {
       });
     }
     if (artifact.red_identity && frozen && artifact.red_identity.test_content_identity !== frozen) {
-      errors.push({
-        code: "STALE_RED",
-        message: "frozen_test_content_identity must equal red_identity.test_content_identity",
-      });
+      const echoed = artifact.red_identity.test_content_identity;
+      if (!frozenEchoesAcceptedRedVariant(artifact, repoRoot, frozen, echoed)) {
+        errors.push({
+          code: "STALE_RED",
+          message:
+            "frozen_test_content_identity must equal red_identity.test_content_identity. Copy one accepted on-disk digest into both fields. Prefer operative_red_transition.test_content_identity when that stamp is still the legacy concat or canonical path sha256 of the frozen files; otherwise copy RED test_content_identity when it is still one of those variants. A stale top-level digest in only one field fails.",
+        });
+      }
     }
     const written = [
       ...(artifact.production_paths_modified || []),
@@ -1375,7 +1398,7 @@ export function validateApplyImplementArtifact({
     };
   }
   validate(artifact, schema, schema, "$", errors);
-  for (const e of semanticErrors(artifact)) errors.push(e);
+  for (const e of semanticErrors(artifact, repoRoot)) errors.push(e);
   for (const e of implementFrozenTestAuthorityErrors(artifact, repoRoot, design)) {
     errors.push(e);
   }

@@ -53,3 +53,45 @@ A full migration requires shared cross-runtime exclusivity, a production
 PostgreSQL checkpointer for distributed workers, deployment supervision,
 end-to-end live acceptance, monitoring and a rollout/rollback policy.
 The current verification lane has no Owner GO approval; that remains true.
+
+## ChatGPT-plan Codex read-only provider (experimental)
+
+Codex app-server with host-side OPSX tool_call_guard can replace Cursor for the read-only next-check model hop:
+
+    python -m tools.langgraph_runtime.cli run --change CHANGE --provider codex --codex-model gpt-6-luna --execute
+
+Prerequisites: install the official Codex CLI and authenticate using
+codex login (Sign in with ChatGPT). The adapter enforces the ChatGPT login
+status, strips API-key environment variables, uses gpt-6-luna at reasoning
+effort low, and never falls back to a different model or billable API key.
+
+Important: verification_executor remains BLOCKED for Codex with
+CODEX_WRITE_AUTHORITY_UNPROVEN. Codex built-in tools do not expose the OPSX
+per-tool scope guard. The adapter proxies authorized read/grep/glob/ls via
+app-server dynamicTools and the existing OPSX tool_call_guard. Native shell
+and patch are disabled, attempted calls fail the turn. Windows SDK/OS write
+isolation and crash-safe recovery are not proved. Do not enable mutating hops or claim
+live end-to-end verification from this V0 bridge.
+
+Use a unique run id for a new verification cycle; existing checkpoints are
+provider-independent only when the stored authority/revision contract agrees.
+Do not resume an in-flight Cursor dispatch with Codex. An uncommitted OPSX
+change or an expired Codex session must FAIL/PAUSE rather than switch provider.
+
+
+## OPSX provider selection
+
+The existing Cursor SDK remains the default provider. Opt in explicitly:
+
+    OPSX_ADAPTER_MODULE=agents.adapters.codex_app_server
+
+For the durable verification LangGraph CLI use \`--provider codex\`; the
+provider and model are checkpoint-bound. The Codex adapter accepts the same
+\`_run_turn(state, prompt, tools, tool_call_guard, read_scope, agent_key)\`
+contract as Cursor.
+
+Codex read/grep/glob/ls calls pass through the existing OPSX guard. An
+\`edit\` gateway prototype has before/after guard callbacks and rollback,
+but production edit hops are blocked with CODEX_WRITE_ISOLATION_NOT_PROVEN
+until OS isolation and durable crash recovery are independently proved.
+Never use native shell/patch as a workaround.

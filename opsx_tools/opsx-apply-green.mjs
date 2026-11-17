@@ -13,7 +13,7 @@ import { resourcePath } from "./opsx-repo-root.mjs";
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, posix, resolve } from "node:path";
+import { delimiter, dirname, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRepoRootFromToolFile } from "./opsx-repo-root.mjs";
 import {
@@ -670,23 +670,173 @@ export function finalizeAdjacentCheckDisposition({
  * so Soft-prod `@/` imports resolve under Node ESM. The frozen command string
  * stays exact (`node --test …`); only the subprocess argv gains the loader.
  */
-function pythonLauncherImportsPytest(launcher, cwd) {
+const HOST_VENV_ENV_KEYS = new Set([
+  "virtual_env",
+  "virtual_env_prompt",
+  "poetry_active",
+  "_old_virtual_path",
+  "_old_virtual_prompt",
+  "_old_virtual_pythonhome",
+]);
+
+function envKey(env, name) {
+  const folded = name.toLowerCase();
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === folded) return key;
+  }
+  return null;
+}
+
+/**
+ * Окружение product pytest: без VIRTUAL_ENV хоста OPSX.
+ * Poetry иначе выбирает opsx-cli, где пакета pytest нет.
+ */
+export function productPytestChildEnv(base = process.env) {
+  const env = { ...base };
+  const pathKey = envKey(env, "PATH") || "PATH";
+  const virtualKey = envKey(env, "VIRTUAL_ENV");
+  const host = virtualKey ? String(env[virtualKey] || "").trim() : "";
+  for (const key of Object.keys(env)) {
+    if (HOST_VENV_ENV_KEYS.has(key.toLowerCase())) delete env[key];
+  }
+  env.POETRY_VIRTUALENVS_PREFER_ACTIVE = "false";
+  env.POETRY_VIRTUALENVS_PREFER_ACTIVE_PYTHON = "false";
+  if (!env.PYTHONUTF8) env.PYTHONUTF8 = "1";
+  if (host) {
+    const binName = process.platform === "win32" ? "Scripts" : "bin";
+    const hostBin = resolve(host, binName).toLowerCase();
+    const parts = String(env[pathKey] || "")
+      .split(delimiter)
+      .filter((part) => part && resolve(part).toLowerCase() !== hostBin);
+    env[pathKey] = parts.join(delimiter);
+  }
+  return env;
+}
+
+export function parsePoetryEnvList(stdout) {
+  const found = [];
+  for (const raw of String(stdout || "").split(/\r?\n/)) {
+    const text = raw.trim().replace(/^"|"$/g, "");
+    if (!text || /^no virtualenv/i.test(text)) continue;
+    const activated = /\(activated\)/i.test(text);
+    const pathText = text.split(" (")[0].trim();
+    if (!/[\\/]/.test(pathText) && !/^[a-zA-Z]:/.test(pathText)) continue;
+    found.push({ path: pathText, activated });
+  }
+  return found;
+}
+
+function normRoot(value) {
+  return resolve(String(value || ""))
+    .replace(/[\\/]+$/, "")
+    .toLowerCase();
+}
+
+/**
+ * Первый не-хостовый env, чей python импортирует pytest.
+ * Активированный opsx-cli в списке Poetry пропускается.
+ */
+export function selectImportableProjectPython(
+  entries,
+  { hostRoots = [], pythonFor, importsPytest },
+) {
+  const hosts = new Set((hostRoots || []).filter(Boolean).map(normRoot));
+  const nonHost = (entries || []).filter(
+    (entry) => entry && entry.path && !hosts.has(normRoot(entry.path)),
+  );
+  const ordered = [
+    ...nonHost.filter((entry) => entry.activated),
+    ...nonHost.filter((entry) => !entry.activated),
+  ];
+  for (const entry of ordered) {
+    const python = pythonFor(entry.path);
+    if (!python) continue;
+    if (importsPytest(python)) return python;
+  }
+  return null;
+}
+
+function venvPythonExecutable(root) {
+  const candidate =
+    process.platform === "win32"
+      ? resolve(root, "Scripts", "python.exe")
+      : resolve(root, "bin", "python");
+  return existsSync(candidate) ? candidate : null;
+}
+
+function isHostPython(python, hostRoots) {
+  const parent = dirname(python);
+  const leaf = parent.split(/[\\/]/).pop().toLowerCase();
+  const base = leaf === "scripts" || leaf === "bin" ? dirname(parent) : parent;
+  const hosts = new Set((hostRoots || []).filter(Boolean).map(normRoot));
+  return hosts.has(normRoot(base)) || hosts.has(normRoot(python));
+}
+
+function poetryStdoutPath(stdout) {
+  const lines = String(stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+  return lines.length ? lines[lines.length - 1] : "";
+}
+
+function pythonLauncherImportsPytest(launcher, cwd, env = undefined) {
   const probe = spawnSync(launcher, ["-c", "import pytest"], {
     cwd,
     encoding: "utf8",
     timeout: 30000,
+    env,
   });
   return probe.status === 0;
 }
 
+function resolvePoetryProjectPython(cwd, childEnv, hostRoots) {
+  const entries = [];
+  const info = spawnSync("poetry", ["env", "info", "-p"], {
+    cwd,
+    encoding: "utf8",
+    timeout: 60000,
+    env: childEnv,
+  });
+  if (info.status === 0) {
+    const root = poetryStdoutPath(info.stdout);
+    if (root) entries.push({ path: root, activated: false });
+  }
+  const listed = spawnSync("poetry", ["env", "list", "--full-path"], {
+    cwd,
+    encoding: "utf8",
+    timeout: 60000,
+    env: childEnv,
+  });
+  if (listed.status === 0) {
+    entries.push(...parsePoetryEnvList(listed.stdout));
+  }
+  return selectImportableProjectPython(entries, {
+    hostRoots,
+    pythonFor: venvPythonExecutable,
+    importsPytest: (python) => pythonLauncherImportsPytest(python, cwd, childEnv),
+  });
+}
+
 /**
- * Находит pytest-capable Python: env OPSX_PYTEST_PYTHON, repo venv, sibling stroy-system.
+ * Находит pytest-capable Python: OPSX_PYTEST_PYTHON, Poetry-env проекта,
+ * repo venv, sibling stroy-system. venv процесса OPSX не выбирается.
  */
 function resolveRepoPytestLauncher(cwd) {
+  const childEnv = productPytestChildEnv(process.env);
+  const hostRoots = [];
+  if (process.env.VIRTUAL_ENV) hostRoots.push(process.env.VIRTUAL_ENV);
   const fromEnv = process.env.OPSX_PYTEST_PYTHON;
-  if (fromEnv && existsSync(fromEnv) && pythonLauncherImportsPytest(fromEnv, cwd)) {
+  if (
+    fromEnv &&
+    existsSync(fromEnv) &&
+    !isHostPython(fromEnv, hostRoots) &&
+    pythonLauncherImportsPytest(fromEnv, cwd, childEnv)
+  ) {
     return fromEnv;
   }
+  const poetryPython = resolvePoetryProjectPython(cwd, childEnv, hostRoots);
+  if (poetryPython) return poetryPython;
   const candidates = [
     resolve(cwd, ".venv_win/Scripts/python.exe"),
     resolve(cwd, ".venv/Scripts/python.exe"),
@@ -694,7 +844,11 @@ function resolveRepoPytestLauncher(cwd) {
     resolve(cwd, "../stroy-system/.venv/Scripts/python.exe"),
   ];
   for (const py of candidates) {
-    if (existsSync(py) && pythonLauncherImportsPytest(py, cwd)) {
+    if (
+      existsSync(py) &&
+      !isHostPython(py, hostRoots) &&
+      pythonLauncherImportsPytest(py, cwd, childEnv)
+    ) {
       return py;
     }
   }
@@ -703,7 +857,7 @@ function resolveRepoPytestLauncher(cwd) {
       "C:\\Program Files\\Python312\\python.exe",
       "C:\\Program Files\\Python313\\python.exe",
     ]) {
-      if (existsSync(launcher) && pythonLauncherImportsPytest(launcher, cwd)) {
+      if (existsSync(launcher) && pythonLauncherImportsPytest(launcher, cwd, childEnv)) {
         return launcher;
       }
     }
@@ -716,6 +870,7 @@ function poetryPytestHealthy(cwd) {
     cwd,
     encoding: "utf8",
     timeout: 45000,
+    env: productPytestChildEnv(process.env),
   });
   return probe.status === 0;
 }
@@ -760,7 +915,9 @@ export function runFrozenRedCommand(command, { cwd = DEFAULT_ROOT, timeoutMs = 3
       execution_mechanism: "none",
     };
   }
-  const env = { ...process.env, NODE_DISABLE_COLORS: "1", PY_COLORS: "0" };
+  const env = productPytestChildEnv(process.env);
+  env.NODE_DISABLE_COLORS = "1";
+  env.PY_COLORS = "0";
   delete env.NODE_TEST_CONTEXT;
   delete env.NODE_CHANNEL_FD;
   delete env.NODE_UNIQUE_ID;

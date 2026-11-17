@@ -118,7 +118,16 @@ def validate_red_operative(
         cmd = ["node", "--import", hook.as_uri(), str(script), red_arg]
     else:
         cmd = ["node", str(script), red_arg]
-    proc = run_subprocess_utf8(cmd, cwd=repo_root, timeout=timeout_sec)
+    from agents.agent_tools.deterministic.pytest_tool import (
+        frozen_command_subprocess_env,
+    )
+
+    proc = run_subprocess_utf8(
+        cmd,
+        cwd=repo_root,
+        timeout=timeout_sec,
+        base_env=frozen_command_subprocess_env(repo_root),
+    )
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""
     status: str | None = None

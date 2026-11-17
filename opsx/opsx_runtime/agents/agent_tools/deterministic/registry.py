@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from agents.adapters.agent_capability_options import AgentCustomToolSpec
+from agents.agent_tools.deterministic.opsx_pytest_tool import (
+    PROCESS_SUPERVISOR_AGENT_KEYS,
+    build_run_opsx_pytest_custom_tool,
+)
 from agents.agent_tools.deterministic.pytest_tool import build_run_pytest_custom_tool
 
 # Agent hops, которым runtime может выдать MCP ``run_pytest`` (без shell).
@@ -19,6 +23,7 @@ RUN_PYTEST_AGENT_KEYS: frozenset[str] = frozenset(
         "apply_green",
         "BOUNDED_HUNTER",
         "GREEN_VERIFIER",
+        *PROCESS_SUPERVISOR_AGENT_KEYS,
     },
 )
 
@@ -34,6 +39,9 @@ def build_deterministic_custom_tools(
     repo_root: Path,
 ) -> Mapping[str, AgentCustomToolSpec]:
     """Собрать custom tools для hop по allowlist (без shell)."""
+    key = str(agent_key or "").strip()
+    if key in PROCESS_SUPERVISOR_AGENT_KEYS:
+        return build_run_opsx_pytest_custom_tool(core_root=repo_root)
     if not hop_includes_run_pytest_tool(agent_key):
         return {}
     return build_run_pytest_custom_tool(repo_root=repo_root)

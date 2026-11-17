@@ -272,6 +272,62 @@ class SupervisorFixRoundJournalTests(unittest.TestCase):
         self.assertIn("planning_digest", why)
 
 
+class SupervisorNamedCheckPytestEnvTests(unittest.TestCase):
+    def test_named_check_subprocess_imports_agents_package(self) -> None:
+        import subprocess
+        from pathlib import Path
+
+        from opsx_cli.supervisor_meta import (
+            opsx_named_check_subprocess_env,
+            resolve_opsx_named_check_interpreter,
+            resolve_opsx_runtime_package_root,
+        )
+
+        core = Path(__file__).resolve().parents[1]
+        runtime = resolve_opsx_runtime_package_root(core)
+        self.assertTrue((runtime / "agents").is_dir(), msg=str(runtime))
+        env = opsx_named_check_subprocess_env(core)
+        py = resolve_opsx_named_check_interpreter(core)
+        completed = subprocess.run(
+            [str(py), "-c", "import agents; print(agents.__name__)"],
+            cwd=core,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            msg=(completed.stdout or "") + (completed.stderr or ""),
+        )
+
+
+class SupervisorRerunFixChecksTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rerun_fix_checks_collects_opsx_runtime_agent_tests(self) -> None:
+        """Контроллерный перезапуск checks_run: Poetry opsx/core + PYTHONPATH на agents."""
+        from opsx_cli.service import RunService
+
+        repo_root = Path(__file__).resolve().parents[3]
+        service = RunService(Project.at(repo_root))
+        node_id = (
+            "opsx/opsx_runtime/agents/tests/implementation/scenario_test_author/"
+            "test_authoring_parent_reconcile.py"
+        )
+        results = await service.rerun_fix_checks(
+            {"checks_run": [{"node_id": node_id}]},
+            timeout_seconds=120.0,
+        )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["node_id"], node_id)
+        self.assertEqual(
+            results[0].get("exit_code"),
+            0,
+            msg=results[0].get("tail") or results[0].get("error"),
+        )
+
+
 class ResolveOpsxPytestTargetTests(unittest.TestCase):
     def test_named_check_resolves_under_core_opsx_tree(self) -> None:
         from pathlib import Path
@@ -504,6 +560,18 @@ class SupervisorMetaValidationTests(unittest.TestCase):
         self.assertEqual(len(got), 1)
         self.assertEqual(got[0].sha256, "abc")
 
+    def test_canonical_journal_repo_path_maps_fix_hop_to_core(self) -> None:
+        from opsx_cli.supervisor_meta import canonical_journal_repo_path
+
+        rel = "opsx/opsx_runtime/workflows/implementation/receipt_cli_identity_hook.mjs"
+        self.assertEqual(canonical_journal_repo_path("project", rel), ("core", rel))
+        prefixed = f"opsx/core/{rel}"
+        self.assertEqual(canonical_journal_repo_path("project", prefixed), ("project", prefixed))
+        self.assertEqual(
+            canonical_journal_repo_path("core", prefixed),
+            ("core", rel),
+        )
+
     def test_select_fix_commit_files_ignores_unrelated_dirty_hop(self) -> None:
         from opsx_cli.supervisor_meta import select_fix_commit_files
 
@@ -519,9 +587,9 @@ class SupervisorMetaValidationTests(unittest.TestCase):
         }
         fix = {"verdict": "FIXED", "files_changed": [meta]}
         selected, err = select_fix_commit_files(fix, before, after)
-        self.assertIsNone(err)
-        self.assertEqual(len(selected), 1)
-        self.assertEqual(selected[0].path, meta)
+        self.assertIsNotNone(err)
+        self.assertIn("foreign dirty", err or "")
+        self.assertEqual(selected, [])
 
 
 class SupervisorLoopTests(unittest.IsolatedAsyncioTestCase):
@@ -605,9 +673,12 @@ class SupervisorLoopTests(unittest.IsolatedAsyncioTestCase):
             supervisor._fixed_progress_keys.add(supervisor._progress_key(classification))
             return committed
 
+        qual = qualify_failure(fail_record, log_tail="READ_SCOPE_VIOLATION")
+
         with patch.object(supervisor, "_workflow_attempt", side_effect=attempt):
-            with patch.object(supervisor, "_run_fix_pipeline", side_effect=fake_fix):
-                result = await supervisor.run()
+            with patch.object(supervisor, "_run_qualify_pipeline", AsyncMock(return_value=qual)):
+                with patch.object(supervisor, "_run_fix_pipeline", side_effect=fake_fix):
+                    result = await supervisor.run()
         self.assertEqual(result.get("supervisor_stop"), "NO_PROGRESS")
         self.assertEqual(calls, 2)
 
@@ -637,6 +708,185 @@ class SupervisorLoopTests(unittest.IsolatedAsyncioTestCase):
             entry = await supervisor._run_fix_rounds(1, cls)
         self.assertEqual(entry.status, "FIXED")
         self.assertEqual(len(calls), 3)
+
+
+class SupervisorPanelJournalExportTests(unittest.TestCase):
+    def test_panel_serves_journal_download(self) -> None:
+        import secrets
+
+        from fastapi.testclient import TestClient
+
+        from opsx_cli.context import Project
+        from opsx_cli.panel import create_app
+
+        state = {
+            "token": secrets.token_hex(16),
+            "url": "http://127.0.0.1:8765",
+            "instance_id": "test",
+            "active_run_id": None,
+        }
+        client = TestClient(create_app(Project.at("."), state), base_url="http://127.0.0.1:8765")
+        response = client.get(
+            "/api/journal-export",
+            headers={"X-OPSX-Token": state["token"]},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("content-type", "").split(";")[0], "application/zip")
+        disposition = response.headers.get("content-disposition", "")
+        self.assertIn("attachment", disposition)
+        self.assertIn("supervisor-journal-export.zip", disposition)
+        self.assertTrue(response.content[:2] == b"PK", "journal export must be a zip archive")
+        import io
+        import zipfile
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+        self.assertEqual(names, ["supervisor-journal-export.sqlite"])
+
+
+class SupervisorJournalExportTests(unittest.TestCase):
+    def test_export_does_not_truncate_live_journal(self) -> None:
+        import tempfile
+
+        from opsx_cli.supervisor_journal import (
+            SupervisorJournal,
+            export_supervisor_journal,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            supervisor = root / "opsx" / "runs" / "supervisor" / "run_a"
+            supervisor.mkdir(parents=True)
+            live = supervisor / "journal.sqlite"
+            journal = SupervisorJournal(live)
+            journal.append_row({"record": "analysis", "kind": "SOLVE", "what": "hop"})
+            before = journal.list_entries()
+            export_path = export_supervisor_journal(root, run_id="run_a")
+            after = journal.list_entries()
+            journal.append_row({"record": "analysis", "kind": "PASS", "what": "after export"})
+            self.assertEqual(len(before), 1)
+            self.assertEqual(len(after), 1)
+            self.assertEqual(len(journal.list_entries()), 2)
+            exported = SupervisorJournal(export_path).list_entries()
+            self.assertEqual(len(exported), 1)
+            self.assertEqual(exported[0].get("kind"), "SOLVE")
+
+
+class SupervisorRepairHistoryTests(unittest.IsolatedAsyncioTestCase):
+    def test_prior_repairs_scoped_by_change_and_code(self) -> None:
+        import tempfile
+
+        from opsx_cli.supervisor_journal import JournalEntry, SupervisorJournal
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sup = root / "opsx" / "runs" / "supervisor"
+            j1 = SupervisorJournal(sup / "r1" / "journal.sqlite")
+            j1.append(JournalEntry(
+                entry_id="e1", attempt=1, fingerprint="fp1",
+                classification={"code": "APPLY_BLOCKED", "fingerprint": "fp1"},
+                status="FIX_REJECTED", created_at="",
+                change_id="chg",
+                fix_report={
+                    "verdict": "FIXED",
+                    "repair_agent": "apply_design",
+                    "approach": "add receipt field",
+                    "files_changed": ["opsx/opsx_runtime/agents/x.py"],
+                },
+                files_changed=[{"repo": "core", "path": "opsx/opsx_runtime/agents/x.py", "sha256": "a"}],
+                error="checks failed",
+            ))
+            rows = j1.prior_repairs("chg", "APPLY_BLOCKED", "fp1")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["repair_agent"], "apply_design")
+            self.assertEqual(j1.prior_repairs("other", "APPLY_BLOCKED", "fp1"), [])
+
+    def test_repeat_repair_detected(self) -> None:
+        from opsx_cli.supervisor_journal import detect_repeat_repair, repair_approach_key
+
+        prior = [{
+            "repair_agent": "apply_design",
+            "files": ["opsx/opsx_runtime/agents/x.py"],
+            "approach": "add receipt field",
+            "approach_key": repair_approach_key({
+                "repair_agent": "apply_design",
+                "approach": "add receipt field",
+                "files_changed": ["opsx/opsx_runtime/agents/x.py"],
+            }),
+        }]
+        fix = {
+            "verdict": "FIXED",
+            "solver_action": "REPAIR_AGENT",
+            "repair_agent": "apply_design",
+            "approach": "add receipt field",
+            "files_changed": ["opsx/opsx_runtime/agents/x.py"],
+        }
+        self.assertTrue(detect_repeat_repair(fix, prior))
+
+    async def test_repeat_repair_rejected_in_fix_pipeline(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import AsyncMock, patch
+
+        from opsx_cli.context import Project
+        from opsx_cli.service import RunService
+        from opsx_cli.supervisor import WorkflowSupervisor
+        from opsx_cli.supervisor_classify import classify_attempt
+        from opsx_cli.supervisor_journal import JournalEntry, SupervisorJournal
+        from opsx_cli.supervisor_timeouts import SupervisorTimeouts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "opsx" / "project").mkdir(parents=True)
+            (root / "opsx" / "core").mkdir(parents=True)
+            sup = root / "opsx" / "runs" / "supervisor" / "seed"
+            sup.mkdir(parents=True)
+            prior_journal = SupervisorJournal(sup / "journal.sqlite")
+            prior_journal.append(JournalEntry(
+                entry_id="old", attempt=1, fingerprint="fp",
+                classification={"code": "APPLY_BLOCKED", "fingerprint": "fp"},
+                status="FIX_REJECTED", created_at="", change_id="chg",
+                fix_report={
+                    "verdict": "FIXED",
+                    "repair_agent": "apply_design",
+                    "approach": "same tweak",
+                    "files_changed": ["opsx/opsx_runtime/agents/x.py"],
+                },
+                files_changed=[{"repo": "core", "path": "opsx/opsx_runtime/agents/x.py", "sha256": "a"}],
+            ))
+            service = RunService(Project.at(root))
+            supervisor = WorkflowSupervisor(
+                service,
+                timeouts=SupervisorTimeouts.from_minutes(
+                    workflow_timeout_minutes=1,
+                    supervisor_timeout_minutes=5,
+                    max_attempts=3,
+                ),
+                change_id="chg",
+                run_id="live",
+            )
+            cls = classify_attempt({"error": "APPLY_BLOCKED"}, log_tail="")
+            same_fix = {
+                "verdict": "FIXED",
+                "solver_action": "REPAIR_AGENT",
+                "repair_agent": "apply_design",
+                "approach": "same tweak",
+                "files_changed": ["opsx/opsx_runtime/agents/x.py"],
+            }
+            async def read_json_side_effect(path: object, default: object = None) -> object:
+                if "fix_result.json" in str(path):
+                    return same_fix
+                return default if default is not None else {}
+
+            with patch.object(supervisor, "_remaining", return_value=600.0):
+                with patch.object(supervisor, "_run_worker_mode", AsyncMock(return_value=(0, None))):
+                    with patch("opsx_cli.supervisor.read_json", AsyncMock(side_effect=read_json_side_effect)):
+                        with patch("opsx_cli.supervisor.write_json", AsyncMock()):
+                            with patch("opsx_cli.supervisor.git_dirty_fingerprints", return_value={}):
+                                entry = await supervisor._run_fix_pipeline(1, cls)
+            self.assertEqual(entry.status, "FIX_REJECTED")
+            kinds = [r.get("kind") for r in supervisor._journal.list_entries()]
+            self.assertIn("REPAIR_REPEAT_REJECTED", kinds)
 
 
 if __name__ == "__main__":

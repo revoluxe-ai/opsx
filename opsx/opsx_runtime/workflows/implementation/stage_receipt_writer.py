@@ -27,6 +27,9 @@ from workflows.implementation.routing_contract import (
     STAGE_APPLY_RED,
     STAGE_APPLY_SCAFFOLD,
 )
+from workflows.implementation.hop_worktree import (
+    augment_implement_decision_with_off_head_surfaces,
+)
 from workflows.implementation.node_subprocess import run_subprocess_utf8
 from workflows.implementation.slice_receipt import load_stage_receipt
 from workflows.repo_paths import resolve_opsx_repository_root
@@ -417,6 +420,32 @@ _LEGACY_MODEL_RECEIPT_KEYS = frozenset(
 _SUCCESS_HOP_STATUSES = frozenset({"APPLY_COMPLETE", "APPLY_PARTIAL", "NO_CHANGE"})
 
 
+def _record_reject_code(body: Mapping[str, Any]) -> str:
+    """Код отказа CLI плюс первое сообщение валидатора, если оно есть.
+
+    ``SCAFFOLD_VALIDATE_FAILED`` без текста поля не говорит следующему hop,
+    какого digest не хватает в apply_design_identity.
+    """
+    code = str(body.get("code") or "RECORD_REJECTED")
+    if code == "RED_COMMANDS_EMPTY":
+        message = str(body.get("message") or "").strip()
+        if message:
+            return f"{code}: {message[:300]}"
+        return code
+    if "VALIDATE_FAILED" not in code:
+        return code
+    errors = body.get("errors")
+    if not isinstance(errors, list) or not errors:
+        return code
+    first = errors[0]
+    if not isinstance(first, dict):
+        return code
+    message = str(first.get("message") or first.get("code") or "").strip()
+    if not message:
+        return code
+    return f"{code}: {message[:300]}"
+
+
 class StageReceiptWriter:
     """Единственный владелец детерминированной записи slice stage receipts."""
 
@@ -584,6 +613,14 @@ class StageReceiptWriter:
                     STAGE_APPLY_GREEN,
                 )
 
+        payload_decision = dict(decision)
+        if stage == STAGE_APPLY_IMPLEMENT and hop_status in _SUCCESS_HOP_STATUSES:
+            payload_decision = augment_implement_decision_with_off_head_surfaces(
+                repo_root,
+                change_id,
+                payload_decision,
+            )
+
         tooling_root = repo_root
         if not (resource_path(tooling_root, "opsx_tools")).is_dir():
             tooling_root = resolve_opsx_repository_root(
@@ -597,12 +634,20 @@ class StageReceiptWriter:
             {
                 "repo": str(repo_root),
                 "change_id": change_id,
-                "decision": dict(decision),
+                "decision": payload_decision,
             },
             ensure_ascii=False,
         )
+        # Design schema leaves repository_identity optional; receipt schema
+        # requires a 64-hex inspected_digest. The loader fills that class
+        # inside the shared record CLI without changing an accepted design.
+        hook = Path(__file__).resolve().with_name("receipt_cli_identity_hook.mjs")
+        argv = ["node", str(script)]
+        if hook.is_file():
+            # Windows `node --import C:\...` parses the drive letter as a URL scheme.
+            argv = ["node", "--import", hook.as_uri(), str(script)]
         run = subprocess.run(
-            ["node", str(script)],
+            argv,
             input=payload.encode("utf-8"),
             capture_output=True,
             text=False,
@@ -615,7 +660,7 @@ class StageReceiptWriter:
             code = "RECORD_CLI_FAILED"
             stderr_text = (run.stderr or b"").decode("utf-8", errors="replace").strip()
             if stderr_text:
-                code = stderr_text[:120]
+                code = stderr_text[:500]
             return StageReceiptWriteResult(False, code, None, stage)
         try:
             body = json.loads(stdout.splitlines()[-1])
@@ -624,7 +669,7 @@ class StageReceiptWriter:
         if body.get("ok") is not True:
             return StageReceiptWriteResult(
                 False,
-                str(body.get("code") or "RECORD_REJECTED"),
+                _record_reject_code(body),
                 None,
                 stage,
             )

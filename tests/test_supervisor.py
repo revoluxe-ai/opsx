@@ -605,9 +605,16 @@ class SupervisorLoopTests(unittest.IsolatedAsyncioTestCase):
             supervisor._fixed_progress_keys.add(supervisor._progress_key(classification))
             return committed
 
+        from opsx_cli.supervisor_qualifier import QualifierVerdict
+        classified = QualifierVerdict(
+            owner="META", code="READ_SCOPE_VIOLATION", stage="UNKNOWN_STAGE",
+            fingerprint="same-finding", root_cause="read scope violated",
+            message="read scope violated", fix_hop_allowed=True,
+        )
         with patch.object(supervisor, "_workflow_attempt", side_effect=attempt):
-            with patch.object(supervisor, "_run_fix_pipeline", side_effect=fake_fix):
-                result = await supervisor.run()
+            with patch.object(supervisor, "_run_qualify_pipeline", new=AsyncMock(return_value=classified)):
+                with patch.object(supervisor, "_run_fix_pipeline", side_effect=fake_fix):
+                    result = await supervisor.run()
         self.assertEqual(result.get("supervisor_stop"), "NO_PROGRESS")
         self.assertEqual(calls, 2)
 

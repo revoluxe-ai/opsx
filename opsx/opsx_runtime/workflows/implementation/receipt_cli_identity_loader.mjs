@@ -11,6 +11,12 @@
  * get one `poetry run pytest -q <path>::<node>` per top-level `def test_*`
  * in that module. Explicit node commands are left as-is. No nodes and no
  * planned command stays `RED_COMMANDS_EMPTY` and names the missing field.
+ *
+ * Prior RED executions are reusable only when the declared
+ * `test_content_identity` is still an accepted digest of the frozen files
+ * on disk. A stale digest must not be copied forward: that skips shape and
+ * fails RED validate with `test_content_identity does not match on-disk
+ * frozen tests` for every change whose tests moved after the last stamp.
  */
 
 import { readFileSync } from "node:fs";
@@ -186,7 +192,8 @@ const FILL_RED_ORACLE_FN = `export function fillRedOracleFromDesignBinding(oracl
 `;
 
 const PRODUCT_SENTINEL_BLOCK = `  const productException =
-    /(?:NotImplementedError|RuntimeError):\\s*OPSX_SCAFFOLD_NOT_IMPLEMENTED/.test(text);
+    /(?:NotImplementedError|RuntimeError):\\s*OPSX_SCAFFOLD_NOT_IMPLEMENTED/.test(text) ||
+    /(?:NotImplementedError|RuntimeError)\\(\\s*['"]OPSX_SCAFFOLD_NOT_IMPLEMENTED['"]\\s*\\)/.test(text);
   const productModuleFrame =
     /(?:^|[\\s'"(])(?:app|src)[\\\\/][\\w./\\\\-]+\\.py/.test(text);
   const legacyStroyFrame =
@@ -257,18 +264,108 @@ export function patchTransitionGateSource(source) {
  * @param {string} source
  * @returns {string}
  */
+function receiptHookLiteral() {
+  return JSON.stringify(new URL("./receipt_cli_identity_hook.mjs", import.meta.url).href);
+}
+
+/**
+ * Nested `node opsx-apply-red.mjs` must load the same provenance hook.
+ * `process.execArgv` often has no `--import` entry, so the child kept the
+ * on-disk gate and downgraded app/ and src/ scaffold sentinels to
+ * SCAFFOLD_DEFECT while the receipt said INTENDED_BEHAVIOR_MISSING.
+ * @param {string} source
+ * @returns {string}
+ */
 export function patchRedValidatorSpawn(source) {
   const old = 'const validateRun = spawnSync("node", [redValidator, outPath], {';
   if (typeof source !== "string" || !source.includes(old) || source.includes("redValidatorNodeArgs")) {
     return source;
   }
-  const neu = `const redValidatorNodeArgs = [redValidator, outPath];
-  const redImportFlag = process.execArgv.indexOf("--import");
-  if (redImportFlag >= 0 && process.execArgv[redImportFlag + 1]) {
-    redValidatorNodeArgs.unshift("--import", process.execArgv[redImportFlag + 1]);
-  }
+  const hook = receiptHookLiteral();
+  const neu = `const redValidatorNodeArgs = ["--import", ${hook}, redValidator, outPath];
   const validateRun = spawnSync("node", redValidatorNodeArgs, {`;
   return source.replace(old, neu);
+}
+
+const SHAPE_SPAWN_OLD =
+  '[shapeScript, "--repo", repo, "--change", changeId, "--slice", sliceId],';
+
+/**
+ * Shape stamps command_executions before the transition gate re-runs them.
+ * It has to load the same hook or the two classifiers diverge.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchShapeCliSpawn(source) {
+  if (typeof source !== "string" || !source.includes(SHAPE_SPAWN_OLD)) return source;
+  const hook = receiptHookLiteral();
+  const neu = `["--import", ${hook}, shapeScript, "--repo", repo, "--change", changeId, "--slice", sliceId],`;
+  return source.replace(SHAPE_SPAWN_OLD, neu);
+}
+
+const SHAPE_IMPORT = 'import { runFrozenRedCommand } from "./opsx-apply-green.mjs";';
+const SHAPE_IMPORT_WITH_GATE = `import { runFrozenRedCommand } from "./opsx-apply-green.mjs";
+import { classifyCommandExecutionFromOutputWithGate } from "./opsx-apply-red-transition-gate.mjs";`;
+
+const SHAPE_CLASS_OLD = `    const live = runFrozenRedCommand(command, { cwd: repo, timeoutMs: 120000 });
+    const pass = live.exit_code === 0;
+    const classification =
+      status === ALREADY_SATISFIED
+        ? pass
+          ? "ALREADY_SATISFIED"
+          : "INTENDED_BEHAVIOR_MISSING"
+        : pass
+          ? "ALREADY_SATISFIED"
+          : RED_PROVEN_CLASSIFICATION;
+    commandExecutions.push({
+      command,
+      final_exit_code: live.exit_code,
+      final_classification: classification,
+      red_qualified: !pass && classification === RED_PROVEN_CLASSIFICATION,
+      pass_qualified: pass && classification === ALREADY_SATISFIED,`;
+
+const SHAPE_CLASS_NEW = String.raw`    const live = runFrozenRedCommand(command, { cwd: repo, timeoutMs: 120000 });
+    const testPathMatch = String(command).match(/(\S+test_\S+\.py)(?:::|\s|$)/);
+    const testPath = testPathMatch ? testPathMatch[1] : "";
+    let testSource = "";
+    if (testPath) {
+      try {
+        const abs = resourcePath(repo, testPath);
+        if (abs) testSource = readFileSync(abs, "utf8");
+      } catch {
+        testSource = "";
+      }
+    }
+    const liveClass = classifyCommandExecutionFromOutputWithGate({
+      output: live.relevant_output,
+      exitCode: live.exit_code,
+      testSource,
+    });
+    const classification = String(liveClass.classification || "");
+    commandExecutions.push({
+      command,
+      final_exit_code: live.exit_code,
+      final_classification: classification,
+      red_qualified: liveClass.red_qualified === true,
+      pass_qualified: liveClass.pass_qualified === true,`;
+
+/**
+ * Shape must not label every non-zero exit INTENDED_BEHAVIOR_MISSING.
+ * The transition gate reclassifies the same command; a blanket stamp
+ * fails RED validate with classification mismatch for any other class.
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchShapeRedClassification(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("classifyCommandExecutionFromOutputWithGate")) return source;
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
+  if (!text.includes(SHAPE_IMPORT) || !text.includes(SHAPE_CLASS_OLD)) return source;
+  const patched = text
+    .replace(SHAPE_IMPORT, SHAPE_IMPORT_WITH_GATE)
+    .replace(SHAPE_CLASS_OLD, SHAPE_CLASS_NEW);
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
 }
 
 /**
@@ -442,6 +539,91 @@ function patchRedCommandDerivation(source) {
   return crlf ? patched.replace(/\n/g, "\r\n") : patched;
 }
 
+const PRIOR_RED_REUSE_FN = "function priorRedExecutionsReusable(prior, testCommands) {";
+const PRIOR_RED_REUSE_TAIL = `    if (!Array.isArray(exec.attempts) || !exec.attempts.length) {
+      return false;
+    }
+  }
+  return true;
+}`;
+const PRIOR_RED_REUSE_TAIL_ALIGNED = `    if (!Array.isArray(exec.attempts) || !exec.attempts.length) {
+      return false;
+    }
+  }
+  const declared =
+    prior.test_content_identity != null && String(prior.test_content_identity).trim()
+      ? String(prior.test_content_identity).trim()
+      : "";
+  if (!repo || !receiptPaths || !declared) return false;
+  const resolved = resolveDeclaredFrozenTestContentIdentity(
+    {
+      test_paths: receiptPaths.test_paths || [],
+      fixture_paths: receiptPaths.fixture_paths || [],
+      test_content_identity: declared,
+    },
+    repo,
+  );
+  const accepted = new Set(resolved.accepted_digests || []);
+  if (!accepted.has(declared)) return false;
+  return true;
+}`;
+const PRIOR_RED_REUSE_CALL = "priorRedExecutionsReusable(priorParsed, test_commands)";
+const PRIOR_RED_REUSE_CALL_WITH_PATHS =
+  "priorRedExecutionsReusable(priorParsed, test_commands, repo, body)";
+
+/**
+ * Reuse of prior RED pytest rows must not keep a digest of older test bytes.
+ *
+ * `writeRedSuccess` copies `test_content_identity` and skips shape when
+ * commands still match. After the frozen modules change, that declared
+ * digest is not an accepted on-disk variant and RED validate fails for any
+ * change. Require the declared digest to be in `accepted_digests` of the
+ * paths about to be written; otherwise shape re-runs and stamps the live
+ * digest. An operative stamp is not copied, so only the top-level digest
+ * counts.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+export function patchPriorRedFrozenIdentityReuse(source) {
+  if (typeof source !== "string") return source;
+  if (source.includes("if (!accepted.has(declared)) return false;")) return source;
+  const crlf = source.includes("\r\n");
+  const text = source.replace(/\r\n/g, "\n");
+  if (!text.includes(PRIOR_RED_REUSE_FN) || !text.includes(PRIOR_RED_REUSE_TAIL)) {
+    return source;
+  }
+  if (!text.includes(PRIOR_RED_REUSE_CALL)) return source;
+  let patched = text
+    .replace(
+      PRIOR_RED_REUSE_FN,
+      "function priorRedExecutionsReusable(prior, testCommands, repo, receiptPaths) {",
+    )
+    .replace(PRIOR_RED_REUSE_TAIL, PRIOR_RED_REUSE_TAIL_ALIGNED);
+  if (!patched.includes(PRIOR_RED_REUSE_CALL_WITH_PATHS)) {
+    patched = patched.replaceAll(PRIOR_RED_REUSE_CALL, PRIOR_RED_REUSE_CALL_WITH_PATHS);
+  }
+  if (
+    patched.includes("export { buildRedTestCommands };") &&
+    !patched.includes("priorRedExecutionsReusable }") &&
+    !patched.includes("priorRedExecutionsReusable,")
+  ) {
+    patched = patched.replace(
+      "export { buildRedTestCommands };",
+      "export { buildRedTestCommands, priorRedExecutionsReusable };",
+    );
+  } else if (
+    !patched.includes("export { priorRedExecutionsReusable };") &&
+    !patched.includes("priorRedExecutionsReusable,")
+  ) {
+    patched = patched.replace(
+      "\nmain();",
+      "\nmain();\nexport { priorRedExecutionsReusable };",
+    );
+  }
+  return crlf ? patched.replace(/\n/g, "\r\n") : patched;
+}
+
 export async function load(url, context, nextLoad) {
   if (typeof url !== "string") {
     return nextLoad(url, context);
@@ -449,7 +631,8 @@ export async function load(url, context, nextLoad) {
   const isReceiptCli = moduleUrlMatches(url, RECEIPT_CLI);
   const isTransitionGate = moduleUrlMatches(url, "opsx-apply-red-transition-gate.mjs");
   const isPipelineIdentity = moduleUrlMatches(url, PIPELINE_IDENTITY);
-  if (!isReceiptCli && !isTransitionGate && !isPipelineIdentity) {
+  const isShapeCli = moduleUrlMatches(url, "opsx-shape-slice-red-receipt-cli.mjs");
+  if (!isReceiptCli && !isTransitionGate && !isPipelineIdentity && !isShapeCli) {
     return nextLoad(url, context);
   }
   const loaded = await nextLoad(url, context);
@@ -460,6 +643,9 @@ export async function load(url, context, nextLoad) {
   }
   if (isTransitionGate) {
     patched = patchTransitionGateSource(original);
+  }
+  if (isShapeCli) {
+    patched = patchShapeRedClassification(original);
   }
   if (isReceiptCli) {
     if (
@@ -475,6 +661,8 @@ export async function load(url, context, nextLoad) {
         .replace(IDENTITY_FIELDS, IDENTITY_FIELDS_FILLED);
     }
     patched = patchRedCommandDerivation(patched);
+    patched = patchPriorRedFrozenIdentityReuse(patched);
+    patched = patchShapeCliSpawn(patched);
     patched = patchRedValidatorSpawn(patched);
     patched = patchRedValidateErrors(patched);
     patched = patchImplementFrozenIdentity(patched);

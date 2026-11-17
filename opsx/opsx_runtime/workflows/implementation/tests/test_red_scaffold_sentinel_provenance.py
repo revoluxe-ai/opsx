@@ -9,19 +9,25 @@ from pathlib import Path
 import pytest
 
 _HOOK = Path(__file__).resolve().parents[1] / "receipt_cli_identity_hook.mjs"
-_GATE = (
-    Path(__file__).resolve().parents[5]
-    / "opsx_tools"
-    / "opsx-apply-red-transition-gate.mjs"
-)
+_LOADER = Path(__file__).resolve().parents[1] / "receipt_cli_identity_loader.mjs"
+_TOOLS = Path(__file__).resolve().parents[5] / "opsx_tools"
+_GATE = _TOOLS / "opsx-apply-red-transition-gate.mjs"
+_SHAPE = _TOOLS / "opsx-shape-slice-red-receipt-cli.mjs"
 
 _CHECKER = r"""
 const gateUrl = process.argv[2];
+const loaderUrl = process.argv[3];
+const shapeCliPath = process.argv[4];
 const {
   fillRedOracleFromDesignBinding,
   sentinelHasScaffoldProvenance,
   classifyCommandExecutionFromOutputWithGate,
 } = await import(gateUrl);
+const {
+  patchRedValidatorSpawn,
+  patchShapeCliSpawn,
+  patchShapeRedClassification,
+} = await import(loaderUrl);
 
 const output = [
   "app\\modules\\billing\\managed_articles.py:24: in managed_article_count",
@@ -108,6 +114,80 @@ if (already.spec !== null || already.behavior !== null) {
   console.log(JSON.stringify({ case: "already", already }));
   process.exit(7);
 }
+const validatorSpawn = patchRedValidatorSpawn(
+  'const validateRun = spawnSync("node", [redValidator, outPath], {',
+);
+if (
+  !validatorSpawn.includes("--import") ||
+  !validatorSpawn.includes("receipt_cli_identity_hook.mjs") ||
+  validatorSpawn.includes("execArgv")
+) {
+  console.log(JSON.stringify({ case: "validator_spawn", validatorSpawn }));
+  process.exit(8);
+}
+const shapeSpawn = patchShapeCliSpawn(
+  '[shapeScript, "--repo", repo, "--change", changeId, "--slice", sliceId],',
+);
+if (
+  !shapeSpawn.includes("--import") ||
+  !shapeSpawn.includes("receipt_cli_identity_hook.mjs") ||
+  shapeSpawn.includes('[shapeScript, "--repo"')
+) {
+  console.log(JSON.stringify({ case: "shape_spawn", shapeSpawn }));
+  process.exit(9);
+}
+const pricerOut = [
+  "app\\modules\\billing\\pricer\\managed_article_tariffs.py:26: in flat_monthly_for_managed_count",
+  '    raise RuntimeError("OPSX_SCAFFOLD_NOT_IMPLEMENTED")',
+  "E   RuntimeError: OPSX_SCAFFOLD_NOT_IMPLEMENTED",
+].join("\n");
+const pricerCaller = "monthly = flat_monthly_for_managed_count(7)\nassert monthly == authoritative_expected\n";
+const pricer = classifyCommandExecutionFromOutputWithGate({
+  output: pricerOut,
+  exitCode: 1,
+  testSource: pricerCaller,
+});
+if (pricer.red_qualified !== true || pricer.classification !== "INTENDED_BEHAVIOR_MISSING") {
+  console.log(JSON.stringify({ case: "pricer", pricer }));
+  process.exit(10);
+}
+const shapeSource = [
+  'import { runFrozenRedCommand } from "./opsx-apply-green.mjs";',
+  "    const live = runFrozenRedCommand(command, { cwd: repo, timeoutMs: 120000 });",
+  "    const pass = live.exit_code === 0;",
+  "    const classification =",
+  "      status === ALREADY_SATISFIED",
+  "        ? pass",
+  '          ? "ALREADY_SATISFIED"',
+  '          : "INTENDED_BEHAVIOR_MISSING"',
+  "        : pass",
+  '          ? "ALREADY_SATISFIED"',
+  "          : RED_PROVEN_CLASSIFICATION;",
+  "    commandExecutions.push({",
+  "      command,",
+  "      final_exit_code: live.exit_code,",
+  "      final_classification: classification,",
+  "      red_qualified: !pass && classification === RED_PROVEN_CLASSIFICATION,",
+  "      pass_qualified: pass && classification === ALREADY_SATISFIED,",
+].join("\n");
+const shaped = patchShapeRedClassification(shapeSource);
+if (
+  !shaped.includes("classifyCommandExecutionFromOutputWithGate") ||
+  shaped.includes('!pass && classification === RED_PROVEN_CLASSIFICATION')
+) {
+  console.log(JSON.stringify({ case: "shape_class", shaped }));
+  process.exit(11);
+}
+const { readFileSync } = await import("node:fs");
+const onDiskShape = readFileSync(shapeCliPath, "utf8");
+const patchedShape = patchShapeRedClassification(onDiskShape);
+if (
+  patchedShape === onDiskShape ||
+  !patchedShape.includes("liveClass.red_qualified === true")
+) {
+  console.log(JSON.stringify({ case: "shape_disk", changed: patchedShape !== onDiskShape }));
+  process.exit(12);
+}
 console.log(JSON.stringify({ ok: true }));
 """
 
@@ -123,11 +203,21 @@ def test_design_binding_oracle_and_app_scaffold_sentinel(tmp_path: Path) -> None
     ``ALREADY_SATISFIED`` still requires an explicit behavior marker.
     """
     assert _HOOK.is_file()
+    assert _LOADER.is_file()
     assert _GATE.is_file()
+    assert _SHAPE.is_file()
     checker = tmp_path / "check_red_sentinel.mjs"
     _ = checker.write_text(_CHECKER, encoding="utf-8")
     run = subprocess.run(
-        ["node", "--import", _HOOK.as_uri(), str(checker), _GATE.as_uri()],
+        [
+            "node",
+            "--import",
+            _HOOK.as_uri(),
+            str(checker),
+            _GATE.as_uri(),
+            _LOADER.as_uri(),
+            str(_SHAPE),
+        ],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -103,6 +103,23 @@ def _repo_relative_arg(path: Path, repo_root: Path) -> str:
         return str(path)
 
 
+def _stage_schema_path(script_rel: str, repo_root: Path) -> Path:
+    """Схема ``opsx_tools/registry`` в core, не в каталоге продукта.
+
+    ``OPSX_PROJECT_ROOT`` указывает на потребительский checkout. CLI без
+    ``--schema`` берёт корень из этой переменной и не находит
+    ``opsx_tools/registry``. POST-gate тогда видит ``missing_path`` и
+    отвергает уже записанный receipt как ``RECEIPT_NOT_ACCEPTED``.
+    """
+    stem = Path(script_rel).name
+    if stem.endswith(".mjs"):
+        stem = stem[: -len(".mjs")]
+    if stem.startswith("opsx-"):
+        stem = stem[len("opsx-") :]
+    schema_name = stem.replace("-", "_") + ".schema.json"
+    return resource_path(repo_root, "opsx_tools", "registry", schema_name)
+
+
 def _run_stage_validator(
     *,
     script_rel: str,
@@ -117,6 +134,26 @@ def _run_stage_validator(
     if not script.is_file():
         msg = f"{script_rel} missing: {script}"
         raise RuntimeError(msg)
+    schema = _stage_schema_path(script_rel, repo_root)
+    if not schema.is_file():
+        return StageOperativeValidation(
+            ok=False,
+            receipt_path=receipt_json,
+            exit_code=2,
+            status="FAIL",
+            errors=[
+                {
+                    "code": "missing_path",
+                    "message": (
+                        f"stage schema not found: {schema}. "
+                        "Expected opsx_tools/registry/"
+                        f"{schema.name} under OPSX_CORE_ROOT."
+                    ),
+                }
+            ],
+            raw_stdout="",
+            raw_stderr="",
+        )
     receipt_json = receipt_json.resolve()
     if not receipt_json.is_file():
         return StageOperativeValidation(
@@ -128,7 +165,13 @@ def _run_stage_validator(
             raw_stdout="",
             raw_stderr="",
         )
-    cmd = ["node", str(script), _repo_relative_arg(receipt_json, repo_root)]
+    cmd = [
+        "node",
+        str(script),
+        "--schema",
+        str(schema),
+        _repo_relative_arg(receipt_json, repo_root),
+    ]
     proc = run_subprocess_utf8(cmd, cwd=repo_root, timeout=timeout_sec)
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""

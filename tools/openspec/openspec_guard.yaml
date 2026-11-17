@@ -12,6 +12,7 @@ artifact_limits:
 planning_artifact_limits:
   path_names:
     - design.md
+  - architecture.md
     - proposal.md
     - plan.md
   warn_bytes: 56000

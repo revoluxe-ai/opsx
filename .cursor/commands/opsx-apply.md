@@ -42,6 +42,14 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
+2.5. **Mandatory Architecture acceptance (hard stop)**
+
+   Run `python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change "<name>"`
+   and require `status: READY` (current reviewed `architecture.md`
+   plus revision/input-bound receipt) BEFORE reading apply instructions or
+   writing product code. Stock OpenSpec `status: done` cannot override this.
+   If BLOCKED: STOP, route to Architecture review/repair, never self-attest.
+
 3. **Get apply instructions**
 
    ```bash
@@ -83,7 +91,7 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
    Read every file path listed under `contextFiles` from the apply instructions output.
    The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
+   - **spec-driven**: owner contract, proposal, specs, **reviewed architecture.md**, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
    Do not copy `context` or `operationGuidance` verbatim into implementation

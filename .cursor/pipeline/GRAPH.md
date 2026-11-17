@@ -21,8 +21,8 @@
 ### Core change lifecycle
 - change_idea: need named change / description
 - change_scaffolded: change dir exists; first artifact pending (`/opsx-new`)
-- artifacts_in_progress: `/opsx-continue` filling artifacts
-- apply_ready: applyRequires done (`/opsx-ff` or continue complete)
+- artifacts_in_progress: `/opsx-continue` filling artifacts\n- architecture_review_pending: required architecture.md written, independent review missing or stale; no design READY\n- architecture_ready: architecture.md independently reviewed, digest-bound to current Owner/proposal/specs/decisions
+- apply_ready: OpenSpec applyRequires done AND mandatory independently reviewed architecture.md current (Architecture Stage Gate), after /opsx-continue or /opsx-ff
 - scope_bounded: scope split "now vs later" agreed; deferred parks prepared for update handoff
 - implementing: `/opsx-apply` in progress
 - impl_done: tasks complete; soft-recommend pyright then external-call then conditional performance-review when production `.py`, then antipattern-gate, then static-check / verify
@@ -151,10 +151,30 @@
 - next_typical: /opsx-continue
 - known_flaws: none recorded
 
+### /opsx-architecture
+- purpose: produce a mandatory architecture.md after Owner/proposal/specs, before technical design
+- input_state: artifacts_in_progress | planning_revise
+- output_state: architecture_review_pending
+- artifacts_read: reviewed Owner Contract, proposal, specs, decisions, repository facts
+- artifacts_written: architecture.md (planning only, no product code)
+- decision_owner: architect within reviewed Owner scope
+- next_typical: /opsx-architecture-review
+- known_flaws: stock OpenSpec status does not represent this companion stage
+
+### /opsx-architecture-review
+- purpose: independent review and revision-bound acceptance of architecture.md
+- input_state: architecture_review_pending
+- output_state: architecture_ready | planning_revise
+- artifacts_read: architecture.md, Owner/proposal/specs/decisions, repository evidence
+- artifacts_written: architecture-evidence/ARCHITECTURE-REVIEW.json only after independent review
+- decision_owner: reviewer separate from architecture author; ambiguity routes to Owner
+- next_typical: /opsx-continue (technical design) | /opsx-update (repair)
+- known_flaws: review identity in V1 is attested, not cryptographically authenticated
+
 ### /opsx-continue
-- purpose: create next planning artifact for an existing change
+- purpose: create next planning artifact for an existing change; mandatory architecture.md before design
 - input_state: change_scaffolded | artifacts_in_progress
-- output_state: artifacts_in_progress | apply_ready
+- output_state: artifacts_in_progress | architecture_review_pending | architecture_ready | apply_ready
 - artifacts_read: change artifacts / openspec status
 - artifacts_written: next ready artifact
 - decision_owner: operator
@@ -162,11 +182,11 @@
 - known_flaws: none recorded
 
 ### /opsx-ff
-- purpose: fast-forward all applyRequires artifacts
+- purpose: fast-forward planning with mandatory Architecture review pause
 - input_state: change_idea | change_scaffolded
-- output_state: apply_ready
+- output_state: architecture_review_pending | apply_ready
 - artifacts_read: openspec status/instructions
-- artifacts_written: all applyRequires artifacts
+- artifacts_written: all applyRequires artifacts plus mandatory architecture.md (independent review cannot be self-issued)
 - decision_owner: operator
 - next_typical: /opsx-apply
 - known_flaws: none recorded
@@ -185,7 +205,7 @@
 - purpose: implement tasks from an OpenSpec change; bug-episode path requires RED+Owner GO
 - input_state: apply_ready | implementing | verify_fail | task_delta_changed | production_go_ready
 - output_state: implementing | impl_done | fix_implementing
-- artifacts_read: tasks.md, design, decisions (context-first); RED evidence when bug-episode
+- artifacts_read: tasks.md, reviewed architecture.md, design, decisions (context-first); RED evidence when bug-episode
 - artifacts_written: production/code per tasks (after gate); ROUTE-TRACE.jsonl
 - decision_owner: implementer + architecture decisions + Owner GO when bug-episode
 - next_typical: /opsx-apply-green (split-apply) | /opsx-post-implement-test-contract-recovery (TEST_CONTRACT_REBASELINE_REQUIRED) | /opsx-pyright-strict-coverage (when production .py changed) | /opsx-external-call-coverage | /opsx-performance-review (when trigger applies) | /opsx-antipattern-gate | /opsx-static-check | /opsx-verify | /opsx-test verify (bug-episode PRIMARY) | /opsx-bug-team handback (SECONDARY) | /opsx-project-bug-hunt

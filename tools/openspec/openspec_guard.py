@@ -784,6 +784,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL {error.code}: {error}", file=sys.stderr)
         return 1
 
+    # The mandatory Architecture stage is separate from dependency/library evidence.
+    # Planning commands can create upstream artifacts; once design/tasks exist,
+    # their architecture review must be current. Apply always requires it.
+    if args.change and args.scenario in (
+        "opsx_continue", "opsx_ff", "opsx_update", "opsx_apply", "opsx_sync", "opsx_verify_archive"
+    ):
+        stage_script = Path(__file__).with_name("architecture_stage_gate.py")
+        mode = "check" if args.scenario in ("opsx_apply", "opsx_sync", "opsx_verify_archive") else "check-if-design"
+        proc = subprocess.run(
+            [sys.executable, str(stage_script), mode,
+             "--root", str(root), "--change", args.change],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+        if proc.returncode != 0:
+            reason = (proc.stdout or proc.stderr or "mandatory architecture gate failed").strip()
+            findings.append(Finding(Level.FAIL, "ARCHITECTURE_STAGE_BLOCKED",
+                                    reason[:1200]))
+
     if (
         guard_stage == "planning_readiness"
         and args.change

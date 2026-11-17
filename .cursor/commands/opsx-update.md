@@ -24,6 +24,17 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
 This workflow revises artifacts that already exist; `/opsx-continue` is what creates the ones that do not.
 
+**Mandatory Architecture stage:** independently reviewed `architecture.md`
+precedes Technical Design regardless of stock schema. Treat it as an OPSX
+companion artifact (it is not returned in OpenSpec `artifactPaths`).
+Read it and its `architecture-evidence/ARCHITECTURE-REVIEW.json` alongside
+planning inputs. Do not edit it except with confirmed planning scope.
+Any change to Owner Contract, proposal, specs, decisions or architecture
+invalidates the digest-bound review; re-review before marking design/tasks
+READY. Execute `architecture_stage_gate.py check --change <name> --root .`
+before reporting a coherent planning package. If review missing/stale,
+return `ARCHITECTURE_STAGE_BLOCKED`; do not silently regenerate approval.
+
 **Steps**
 
 1. **Select the change**

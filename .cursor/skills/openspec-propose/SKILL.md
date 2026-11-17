@@ -10,6 +10,11 @@ metadata:
   generatedBy: "1.16.0"
 ---
 
+## Mandatory OPSX Architecture boundary
+
+When this skill is selected for an OPSX-managed Change, follow `.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md` (Core source). This requirement overrides stock OpenSpec artifact progression, not unrelated projects without OPSX. Do not produce a complete OPSX package without mandatory architecture.md and independent review; pause between architecture and design if evidence is absent. The consumer-side read-only gate is `python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change <change>`. The reviewer attestation is a separate action, not a side effect of skill use.
+
+
 Propose a new change - create the change and generate all artifacts in one step.
 
 **Planning boundary**: This workflow creates planning artifacts only. The user request that selected or triggered this workflow authorizes planning only, even if it asks to build or fix something. Do not edit project code. After the planning artifacts are complete, stop. Do not start implementation in the same response, even if the initial request asks for it. Wait for a new user request after the artifacts are presented; then start the apply workflow.

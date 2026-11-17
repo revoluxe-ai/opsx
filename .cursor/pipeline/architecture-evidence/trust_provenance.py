@@ -333,7 +333,12 @@ def record_independent_review_attestation(
         raise ValueError("review proof fixture missing")
 
     attestation_path = (change_root / REVIEW_ATTESTATION_PATH).resolve()
-    if REVIEW_ATTESTATION_PATH.as_posix() not in str(attestation_path.relative_to(change_root.resolve())):
+    try:
+        relative_attestation = attestation_path.relative_to(change_root.resolve())
+    except ValueError as exc:
+        raise ValueError("attestation path escape") from exc
+    # Compare Path components, not POSIX text against Windows backslashes.
+    if relative_attestation.parts != REVIEW_ATTESTATION_PATH.parts:
         raise ValueError("attestation path escape")
 
     payload: dict[str, Any] = {

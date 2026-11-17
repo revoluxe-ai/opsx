@@ -96,7 +96,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "INSTALLED")
         self.assertTrue((project.core / ".git").is_file())
         self.assertIn("opsx/core/opsx_tools/", (project.root / ".cursor/commands/opsx-one.md").read_text())
-        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text())
+        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text(encoding="utf-8"))
         self.assertFalse((project.root / "AGENTS.md").exists())
         self.assertFalse((project.root / "src").exists())
         self.assertFalse((project.core / "opsx/project").exists())

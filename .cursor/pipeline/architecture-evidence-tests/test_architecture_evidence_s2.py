@@ -26,6 +26,14 @@ def _load_module(name: str, path: Path) -> ModuleType:
 
 
 GATE = _load_module("planning_gate", AE_DIR / "planning_gate.py")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dependency_evidence_layer(monkeypatch):
+    # This module tests S2 dependency evidence; the mandatory Architecture
+    # review gate has its own integration tests in tests/test_architecture_stage.py.
+    monkeypatch.setattr(GATE, "_require_architecture_stage", lambda *_: None)
+
 ORACLE = _load_module("architecture_evidence", AE_DIR / "architecture_evidence.py")
 DOC = _load_module("doc_verification", AE_DIR / "doc_verification.py")
 
@@ -62,7 +70,7 @@ def _write_change(
 
 
 def _mirror_schema(repo: Path) -> None:
-    src = REPO_ROOT / "opsx/registry/architecture_evidence.schema.json"
+    src = REPO_ROOT / "opsx_tools/registry/architecture_evidence.schema.json"
     dest = repo / "opsx/registry/architecture_evidence.schema.json"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(src.read_bytes())

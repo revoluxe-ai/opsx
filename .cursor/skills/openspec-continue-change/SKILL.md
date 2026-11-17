@@ -10,6 +10,11 @@ metadata:
   generatedBy: "1.6.0"
 ---
 
+## Mandatory OPSX Architecture boundary
+
+When this skill is selected for an OPSX-managed Change, follow `.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md` (Core source). This requirement overrides stock OpenSpec artifact progression, not unrelated projects without OPSX. Before creating design.md, create and independently review architecture.md. If no current ARCHITECTURE-REVIEW.json receipt, pause and route to /opsx-architecture-review; never self-approve or jump ahead. The consumer-side read-only gate is `python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change <change>`. The reviewer attestation is a separate action, not a side effect of skill use.
+
+
 # STROY-SYSTEM TARGET OVERRIDE - HIGHEST PRIORITY
 
 This skill mirrors `/opsx-continue`. Product-specific realization MUST resolve

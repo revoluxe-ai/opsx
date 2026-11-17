@@ -205,6 +205,27 @@ def _validate_receipt_mandatory(
             )
 
 
+def _require_architecture_stage(result: GateResult, repo_root: Path, change_id: str) -> None:
+    """Enforce mandatory reviewed architecture before READY or implementation."""
+    path = Path(__file__).resolve().parents[3] / "tools" / "openspec" / "architecture_stage_gate.py"
+    if not path.is_file():
+        result.add("ARCHITECTURE_STAGE_BLOCKED", "mandatory Architecture gate implementation missing")
+        return
+    spec = importlib.util.spec_from_file_location("mandatory_opsx_architecture_stage", path)
+    if spec is None or spec.loader is None:
+        result.add("ARCHITECTURE_STAGE_BLOCKED", "cannot load mandatory Architecture gate")
+        return
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        outcome = module.inspect(repo_root, change_id)
+    except (ValueError, OSError, UnicodeError) as exc:
+        result.add("ARCHITECTURE_STAGE_BLOCKED", str(exc))
+        return
+    for finding in outcome["findings"]:
+        result.add("ARCHITECTURE_STAGE_BLOCKED", finding)
+
+
 def run_design_ready_gate(
     change_id: str,
     repo_root: Path,
@@ -245,6 +266,7 @@ def run_design_ready_gate(
         )
         return result
 
+    _require_architecture_stage(result, repo_root, normalized)
     oracle = _load_oracle()
     discovery = discover_for_change(change_root, repo_root)
     result.discovery_limitations = discovery.limitations
@@ -328,6 +350,7 @@ def run_tasks_ready_gate(
     design_path = change_root / "design.md"
     if not tasks_path.is_file() or not _tasks_is_ready(tasks_path.read_text(encoding="utf-8")):
         return result
+    _require_architecture_stage(result, repo_root, normalized)
     if not design_path.is_file():
         result.add("ARCH_EVIDENCE_MISSING", "tasks READY without design.md")
         return result
@@ -378,6 +401,7 @@ def run_planning_review_gate(
 
     outcome = run_design_ready_gate(change_id, repo_root, fetcher=fetcher)
     outcome.phase = "planning-review"
+    _require_architecture_stage(outcome, repo_root, outcome.change_id)
     normalized = outcome.change_id
     change_root = _change_root(repo_root, normalized)
     design_path = change_root / "design.md"
@@ -436,6 +460,7 @@ def run_apply_preflight_gate(
     if normalized is None:
         return result
     result.change_id = normalized
+    _require_architecture_stage(result, repo_root, normalized)
 
     change_root = _change_root(repo_root, normalized)
     design_path = change_root / "design.md"

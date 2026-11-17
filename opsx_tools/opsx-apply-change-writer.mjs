@@ -7,6 +7,7 @@ import { resourcePath } from "./opsx-repo-root.mjs";
  * No time-based lock stealing.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +20,53 @@ import {
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = defaultRepoRootFromToolFile(import.meta.url);
+
+/** Mandatory independently-reviewed Architecture gate for any APPLY writer lease.
+ * The read-only Python checker is part of pinned Core; no network calls.
+ * Failure / missing Python / missing Core fail closed. Not a review attestor.
+ */
+export function checkArchitectureForWriter({ repoRoot, changeRoot, changeId } = {}) {
+  const components = String(changeRoot || "").replaceAll("\\", "/").replace(/\/$/, "").split("/");
+  const changeIndex = components.lastIndexOf("changes");
+  const derivedId = changeIndex >= 0 && components[changeIndex - 1] === "openspec"
+    ? components[changeIndex + 1] : null;
+  const id = changeId || derivedId;
+  if (!derivedId || !id || id !== derivedId || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(id)) {
+    return { ok: false, code: "ARCHITECTURE_STAGE_BLOCKED", detail: "unbound_change_identity" };
+  }
+  if (!repoRoot) {
+    return { ok: false, code: "ARCHITECTURE_STAGE_BLOCKED", detail: "repository_root_missing" };
+  }
+  const checker = resolve(TOOL_DIR, "../tools/openspec/architecture_stage_gate.py");
+  if (!existsSync(checker)) {
+    return { ok: false, code: "ARCHITECTURE_STAGE_BLOCKED", detail: "checker_missing" };
+  }
+  const python = process.env.PYTHON && String(process.env.PYTHON).trim();
+  const candidates = python
+    ? [{ executable: python, prefix: [] }]
+    : process.platform === "win32"
+      ? [{ executable: "py", prefix: ["-3"] }, { executable: "python", prefix: [] }]
+      : [{ executable: "python3", prefix: [] }, { executable: "python", prefix: [] }];
+  for (const candidate of candidates) {
+    const run = spawnSync(candidate.executable, [
+      ...candidate.prefix, checker, "check", "--root", resolve(repoRoot), "--change", id,
+    ], { cwd: resolve(repoRoot), encoding: "utf8", timeout: 12000, windowsHide: true });
+    if (run.error?.code === "ENOENT") continue;
+    if (run.status === 0) {
+      try {
+        const payload = JSON.parse(run.stdout || "{}");
+        if (payload.status === "READY" && payload.change_id === id) {
+          return { ok: true, architecture_sha256: payload.architecture_sha256 };
+        }
+      } catch { /* fail closed */ }
+    }
+    return {
+      ok: false, code: "ARCHITECTURE_STAGE_BLOCKED",
+      detail: String(run.stdout || run.stderr || run.error?.message || "checker_failed").slice(0, 1200),
+    };
+  }
+  return { ok: false, code: "ARCHITECTURE_STAGE_BLOCKED", detail: "python_unavailable" };
+}
 
 export function computeWriterLeaseId(changeId, planningDigest) {
   return createHash("sha256")
@@ -193,6 +241,8 @@ export function acquireManualChangeWriterLock({
   if (!adoption.ok) {
     return adoption;
   }
+  const architecture = checkArchitectureForWriter({ repoRoot, changeRoot, changeId });
+  if (!architecture.ok) return architecture;
   const session = writerSessionId || newManualWriterSessionId();
   const pre = detectChangeWriterConflict({
     repoRoot,
@@ -250,6 +300,8 @@ export function acquireSuperChangeWriterLock({
   if (!adoption.ok) {
     return adoption;
   }
+  const architecture = checkArchitectureForWriter({ repoRoot, changeRoot, changeId: run?.change_id });
+  if (!architecture.ok) return architecture;
   const lease = superRunWriterLeaseId(run);
   const pre = detectChangeWriterConflict({
     repoRoot,
@@ -390,6 +442,8 @@ export function assertManualWriterLeaseForMutation({
   if (!adoption.ok) {
     return adoption;
   }
+  const architecture = checkArchitectureForWriter({ repoRoot, changeRoot, changeId });
+  if (!architecture.ok) return architecture;
   const explicitSession =
     writerSessionId || process.env.OPSX_CHANGE_WRITER_SESSION || null;
   const existingLock = readWriterLock(repoRoot, changeRoot);

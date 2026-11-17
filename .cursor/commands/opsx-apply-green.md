@@ -3,6 +3,25 @@ description: "Converge one IMPLEMENTATION_WRITTEN slice to GREEN_PROVEN by runni
 argument-hint: "change=<change-id>"
 ---
 
+## Mandatory planning Architecture acceptance
+
+**Precondition, before any APPLY-design/review, RED, SCAFFOLD, IMPLEMENT,
+GREEN or other stage work:** the selected product Change MUST have current
+independently reviewed `architecture.md`, per `.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md`.
+
+From the consumer project root run:
+```bash
+python opsx/core/tools/openspec/architecture_stage_gate.py check --root . --change <change-id>
+```
+Require `status: READY` (reviewed architecture bytes + current Owner/proposal/specs/
+decisions identity). No valid receipt / stale review / missing Core / unavailable
+gate => `ARCHITECTURE_STAGE_BLOCKED`: STOP before writing files, running stage
+tools or executing tests. Existing split-APPLY, cached GREEN, Super and
+ADOPTION receipts cannot substitute the current Architecture Gate. Do not
+create review acceptance within an APPLY command. This does not replace
+the existing split-APPLY preconditions or Owner GO.
+
+
 # /opsx-apply-green
 
 For **one slice per invoke**, the only APPLY stage that may **run tests → diagnose → fix production → rerun**. Prove this slice satisfies frozen RED (plus bounded adjacent checks), without editing tests or claiming archive/whole-change verify.

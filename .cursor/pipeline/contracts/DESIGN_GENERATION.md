@@ -2,6 +2,8 @@
 
 ## Purpose
 
+**Hard prerequisite (Owner-approved):** Architecture is a separate mandatory planning artifact before Technical Design. A READY `design.md` MUST declare `ARCHITECTURE_SHA256: <sha256 of accepted architecture.md>`; missing/mismatched digest blocks S2/tasks/apply even if the new Architecture revision is independently re-reviewed. Require `architecture.md` with `ARCHITECTURE_STATUS: READY` and independent review receipt accepted by `architecture_stage_gate.py check --root . --change <change>`. Apply also checks this gate. This precedes `DESIGN_READINESS`; the architecture author cannot self-review. See `ARCHITECTURE_STAGE_V1.md`. No design `READY` or tasks `READY` when Architecture is missing/stale, even if OpenSpec status reports the schema artifact complete. When an architecture choice arises while designing, return to Architecture review, do not choose it silently in Design.
+
 Shared SoT for creating `design.md` from upstream planning artifacts
 (owner-contract, proposal, specs, decisions) plus repository evidence.
 
@@ -15,13 +17,13 @@ Skill/prompt mirrors of those commands MUST follow this contract identically.
 This contract is **not** a user-facing command. It does **not** authorize
 Owner semantic decisions, product code edits, or rewriting reviewed
 `owner-contract.md` semantics. It does authorize (and require) the planning
-agent to resolve **technical** architecture choices needed for
-implementation readiness.
+agent to translate **already reviewed architecture** into a concrete technical
+implementation design. New structural choices require Architecture rereview.
 
 ## Authority invariant
 
 ```text
-DESIGN MUST RESOLVE ARCHITECTURE BEFORE IMPLEMENTATION
+ARCHITECTURE MUST BE REVIEWED BEFORE TECHNICAL DESIGN
 design.md = resolved technical plan for already-authorized product semantics
 same upstream context → semantically equivalent design
   (/opsx-continue ≡ /opsx-ff; advancement mode differs only)
@@ -308,7 +310,7 @@ Trusted tool-execution receipts and `REVIEW-ATTESTATION.json` are required for
 
 ## 1. TECHNICAL_CHOICE_RESOLUTION
 
-When a technical architecture choice exists, for example:
+When a technical architecture choice exists **in the mandatory Architecture stage**, for example:
 
 - PG vs Redis (or other persistence)
 - existing state vs new state
@@ -316,7 +318,7 @@ When a technical architecture choice exists, for example:
 - which component may write
 - how state is read / recovered after restart
 
-the design generator MUST:
+the architecture author MUST:
 
 0. Complete **§0 TECHNOLOGY_AWARE_CONTEXT_V0** when required (before
    declaring READY).
@@ -324,7 +326,7 @@ the design generator MUST:
 2. Study existing architecture decisions / patterns
    (context-first; bounded fallback — see architecture-decisions rule).
 3. Choose the minimal technical option that satisfies upstream semantics.
-4. Record the choice in `design.md` (and propose a change decision artifact
+4. Record the choice in `architecture.md`, then reference it in `design.md` (and propose a change decision artifact
    when reusable ownership/write-path rules are new).
 5. Record rationale / trade-off.
 6. Fix ownership and write boundary.

@@ -18,6 +18,20 @@ For an editable core development checkout:
 The repository is private. Git uses your normal GitHub authentication; OPSX does
 not copy credentials into project configuration.
 
+## Mandatory Architecture stage (every Change)
+
+OPSX planning requires a separate `architecture.md` **before** Technical Design,
+including changes that reuse the existing architecture. After Owner Contract,
+proposal/specs and decisions, use `/opsx-architecture` and an independent
+`/opsx-architecture-review`; only current, input-bound acceptance permits
+`design.md`, tasks, apply, verify and archive. There are no skip/reuse modes.
+
+The bundled stock OpenSpec `spec-driven` schema does not track this extra artifact;
+OPSX enforces it with its separate machine preflight. See
+`.cursor/pipeline/contracts/ARCHITECTURE_STAGE_V1.md` and
+`tools/openspec/architecture_stage_gate.py` in Core. This does not authorize
+migration of existing consumer projects or replacement of their installed pin.
+
 ## Connect a project
 
 Run at the root of an existing Git repository:

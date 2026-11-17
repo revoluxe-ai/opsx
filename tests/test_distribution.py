@@ -51,7 +51,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
                 shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__"))
             else:
                 shutil.copyfile(src, dest)
-        (self.origin / "pyproject.toml").write_text((SOURCE / "pyproject.toml").read_text())
+        (self.origin / "pyproject.toml").write_text((SOURCE / "pyproject.toml").read_text(encoding="utf-8"))
         commands = self.origin / ".cursor/commands"
         commands.mkdir(parents=True)
         (commands / "opsx-one.md").write_text("read opsx_tools/one.mjs; settings opsx/project/project.json\n")
@@ -95,8 +95,14 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         project = self.projects[0]
         self.assertEqual(result["status"], "INSTALLED")
         self.assertTrue((project.core / ".git").is_file())
-        self.assertIn("opsx/core/opsx_tools/", (project.root / ".cursor/commands/opsx-one.md").read_text())
-        self.assertIn("alwaysApply: false", (project.root / ".cursor/rules/opsx.mdc").read_text())
+        self.assertIn(
+            "opsx/core/opsx_tools/",
+            (project.root / ".cursor/commands/opsx-one.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "alwaysApply: false",
+            (project.root / ".cursor/rules/opsx.mdc").read_text(encoding="utf-8"),
+        )
         self.assertFalse((project.root / "AGENTS.md").exists())
         self.assertFalse((project.root / "src").exists())
         self.assertFalse((project.core / "opsx/project").exists())
@@ -107,13 +113,13 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         project.settings.write_text('{"custom": true}')
         result = await self.installed()
         self.assertEqual(result["status"], "ALREADY_INSTALLED")
-        self.assertEqual(json.loads(project.settings.read_text()), {"custom": True})
+        self.assertEqual(json.loads(project.settings.read_text(encoding="utf-8")), {"custom": True})
 
     async def test_two_projects_are_independent(self):
         await self.installed(self.projects[0])
         await self.installed(self.projects[1])
-        first = json.loads(self.projects[0].settings.read_text())
-        second = json.loads(self.projects[1].settings.read_text())
+        first = json.loads(self.projects[0].settings.read_text(encoding="utf-8"))
+        second = json.loads(self.projects[1].settings.read_text(encoding="utf-8"))
         self.assertNotEqual(first["project_id"], second["project_id"])
         self.assertNotEqual(self.projects[0].core, self.projects[1].core)
 
@@ -140,9 +146,9 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         self.version_two()
         result = await upgrade(project, ref="v2", no_runtime=True)
         self.assertEqual(result["status"], "UPGRADED")
-        self.assertEqual(project.settings.read_text(), '{"custom": "preserved"}')
-        self.assertEqual(receipt.read_text(), '{"accepted":true}')
-        self.assertEqual(unrelated.read_text(), "local")
+        self.assertEqual(project.settings.read_text(encoding="utf-8"), '{"custom": "preserved"}')
+        self.assertEqual(receipt.read_text(encoding="utf-8"), '{"accepted":true}')
+        self.assertEqual(unrelated.read_text(encoding="utf-8"), "local")
         self.assertTrue((project.root / ".cursor/commands/opsx-two.md").exists())
 
     async def test_manual_command_conflict_prevents_upgrade(self):
@@ -184,7 +190,10 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OpsxError):
             await upgrade(self.projects[0], ref="v2", no_runtime=True)
         self.assertEqual(git(self.projects[0].core, "rev-parse", "HEAD"), before["core_sha"])
-        self.assertEqual(json.loads(self.projects[0].installation.read_text())["core_sha"], before["core_sha"])
+        self.assertEqual(
+            json.loads(self.projects[0].installation.read_text(encoding="utf-8"))["core_sha"],
+            before["core_sha"],
+        )
 
     async def test_failed_environment_preserves_old_version(self):
         before = await self.installed()
@@ -234,7 +243,7 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
         await self.installed()
         project = self.projects[0]
         # Exercise the real web server without installing model dependencies.
-        meta = json.loads(project.installation.read_text())
+        meta = json.loads(project.installation.read_text(encoding="utf-8"))
         meta["runtime_python"] = sys.executable
         project.installation.write_text(json.dumps(meta))
         with socket.socket() as sock:
@@ -254,14 +263,31 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
 
 class PathTests(unittest.TestCase):
     def test_core_resources_and_project_data_resolve_separately(self):
+        """Core-owned prefixes resolve via bound core; project data stays under project root.
+
+        Сравнение через ``resolve()``: на Windows путь может отличаться только нормализацией
+        (``Temp`` vs ``temp``, long-path prefix), не физическим расположением.
+        """
         project = Path(tempfile.gettempdir()) / "opsx-path-project"
         core = project / "opsx/core"
         token = bind_project_context(project, core)
         try:
-            self.assertEqual(resource_path(project, "opsx_tools", "one.mjs"), core / "opsx_tools/one.mjs")
-            self.assertEqual(resource_path(project, "opsx", "project", "capabilities.yaml"), project / "opsx/project/capabilities.yaml")
-            self.assertEqual(resource_path(project, "opsx", "receipts", "a.json"), project / "opsx/receipts/a.json")
-            self.assertEqual(resource_path(project, "openspec", "changes", "a"), project / "openspec/changes/a")
+            self.assertEqual(
+                resource_path(project, "opsx_tools", "one.mjs"),
+                (core / "opsx_tools/one.mjs").resolve(),
+            )
+            self.assertEqual(
+                resource_path(project, "opsx", "project", "capabilities.yaml"),
+                (project / "opsx/project/capabilities.yaml").resolve(),
+            )
+            self.assertEqual(
+                resource_path(project, "opsx", "receipts", "a.json"),
+                (project / "opsx/receipts/a.json").resolve(),
+            )
+            self.assertEqual(
+                resource_path(project, "openspec", "changes", "a"),
+                (project / "openspec/changes/a").resolve(),
+            )
         finally:
             reset_project_context(token)
 

@@ -11,8 +11,8 @@
     h1{font-size:42px;letter-spacing:-2px;margin:0}
     .muted{color:#9da8bb}
     section{background:#1b2130;border:1px solid #30394c;border-radius:16px;padding:24px;margin:24px 0}
-    input,button{font:inherit;border-radius:8px;padding:11px 16px;border:1px solid #45526c}
-    input{background:#111722;color:#fff;min-width:240px}
+    input,select,button{font:inherit;border-radius:8px;padding:11px 16px;border:1px solid #45526c}
+    input,select{background:#111722;color:#fff;min-width:240px}
     button{background:#a8edbf;color:#10291a;cursor:pointer}
     button:disabled{opacity:.55;cursor:wait}
     table{border-collapse:collapse;width:100%;text-align:left}
@@ -69,6 +69,16 @@
         <div id="change-menu" role="listbox" aria-label="OpenSpec changes"></div>
         <p id="change-preview" class="muted"></p>
       </div>
+      <div id="provider-controls">
+        <label class="muted" for="provider-select">Исполнитель новых запусков</label>
+        <select id="provider-select" aria-label="Адаптер OPSX" disabled>
+          <option value="cursor">Cursor SDK (прежний)</option>
+          <option value="codex">Codex — ChatGPT</option>
+        </select>
+        <button type="button" id="save-provider" disabled>Сохранить адаптер</button>
+        <span class="muted" id="provider-status" role="status">Чтение настройки…</span>
+        <p class="muted">Хранится в opsx/project/project.json. Новая настройка действует только для новых запусков.</p>
+      </div>
       <label class="muted" for="workflow-timeout-min">Таймаут workflow, мин</label>
       <input id="workflow-timeout-min" name="workflow_timeout_minutes" type="number" min="1" step="1" value="45" title="Лимит одной попытки workflow" />
       <label class="muted" for="supervisor-timeout-min">Таймаут супер-агента, мин</label>
@@ -109,6 +119,11 @@
     const runBadge = document.querySelector("#run-badge");
     const runMeta = document.querySelector("#run-meta");
     const submitBtn = document.querySelector("#submit");
+    const providerSelect = document.querySelector("#provider-select");
+    const providerSave = document.querySelector("#save-provider");
+    const providerStatus = document.querySelector("#provider-status");
+    let providerRevision = null;
+    let providerSaving = false;
     let streamAbort = null;
     let activeRunId = null;
     let changeCatalog = [];
@@ -125,6 +140,50 @@
   let logFlushScheduled = false;
   let logLineCount = 0;
   let skippedLogLines = 0;
+
+    async function loadProvider() {
+      const response = await fetch("/api/provider");
+      if (!response.ok) throw new Error("Не удалось получить сохранённый адаптер");
+      const payload = await response.json();
+      providerRevision = payload.revision;
+      providerSelect.value = payload.provider;
+      providerSelect.disabled = submitBtn.disabled;
+      providerSave.disabled = submitBtn.disabled;
+      providerStatus.textContent = "Текущий: " + payload.provider + " · " + payload.model;
+    }
+
+    providerSave.addEventListener("click", async () => {
+      if (!providerRevision || providerSaving) return;
+      providerSaving = true;
+      providerSelect.disabled = true;
+      providerSave.disabled = true;
+      providerStatus.textContent = "Сохранение…";
+      try {
+        const response = await fetch("/api/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: providerSelect.value,
+            expected_revision: providerRevision,
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.detail || payload.message || "Ошибка сохранения");
+        }
+        const saved = await response.json();
+        providerRevision = saved.revision;
+        providerStatus.textContent = "Сохранено: " + saved.provider + " · " + saved.model;
+        await load();
+      } catch (err) {
+        providerStatus.textContent = "Не сохранено: " + String(err);
+        try { await loadProvider(); } catch (_) { /* останется ошибка */ }
+      } finally {
+        providerSaving = false;
+        providerSelect.disabled = submitBtn.disabled;
+        providerSave.disabled = submitBtn.disabled;
+      }
+    });
 
     function catalogById(id) {
       return changeCatalog.find((item) => item.id === id);
@@ -275,6 +334,8 @@
       runBadge.textContent = state === "running" ? "Выполняется" : state === "completed" ? "Завершено" : "Ошибка";
       runMeta.textContent = meta || "";
       submitBtn.disabled = state === "running";
+      providerSelect.disabled = state === "running" || providerSaving || !providerRevision;
+      providerSave.disabled = state === "running" || providerSaving || !providerRevision;
     }
 
     function parseEventData(raw) {
@@ -449,6 +510,7 @@
       }
     });
     load();
+    loadProvider().catch((err) => { providerStatus.textContent = String(err); });
     restoreActive();
     setInterval(load, 5000);
   </script>

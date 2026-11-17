@@ -49,6 +49,27 @@ class CodexServerHost:
         self.failed = False
         self.usage: Mapping[str, Any] | None = None
 
+    async def response_for_async(self, event: Mapping[str, Any]) -> dict[str, Any] | None:
+        if event.get("method") != "item/tool/call":
+            return self.response_for(event)
+        params = event.get("params")
+        if not isinstance(params, Mapping) or params.get("tool") != "run_pytest":
+            return self.response_for(event)
+        if ("id" not in event or not self.thread_id or not self.turn_id
+                or params.get("threadId") != self.thread_id
+                or params.get("turnId") != self.turn_id
+                or params.get("namespace") not in (None, "opsx")):
+            self.failed = True
+            return self._deny(event, "CODEX_TOOL_IDENTITY_MISMATCH")
+        try:
+            data = await self.gateway.dispatch_async("run_pytest", params.get("arguments"))
+        except CodexToolDenied as exc:
+            self.failed = True
+            return self._deny(event, exc.code)
+        return {"id": event["id"], "result": {
+            "contentItems": [{"type": "inputText", "text": data}], "success": True,
+        }}
+
     def response_for(self, event: Mapping[str, Any]) -> dict[str, Any] | None:
         method = event.get("method")
         params = event.get("params")
@@ -290,7 +311,7 @@ async def run_guarded_codex_turn(
                         host.turn_id = turn["id"]
                     else:
                         raise CodexProviderError("CODEX_APP_SERVER_TURN_START_FAILED")
-                reply = host.response_for(event)
+                reply = await host.response_for_async(event)
                 if reply is not None:
                     await _send(proc, reply)
                 if host.failed:

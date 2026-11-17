@@ -4,6 +4,8 @@ No Codex-native command or patch tool is trusted as a substitute for this gate.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import hashlib
 import os
 import re
@@ -16,7 +18,7 @@ from .codex_write_journal import CodexWriteJournal
 
 READ_TOOLS = frozenset({"read", "grep", "glob", "ls"})
 EDIT_TOOLS = frozenset({"edit"})
-SUPPORTED_TOOLS = READ_TOOLS | EDIT_TOOLS
+SUPPORTED_TOOLS = READ_TOOLS | EDIT_TOOLS | frozenset({"run_pytest"})
 MAX_READ_BYTES = 1_000_000
 MAX_RESULTS = 100
 
@@ -33,6 +35,8 @@ def dynamic_tool_specs(tools: Sequence[str]) -> list[dict[str, Any]]:
         raise CodexToolDenied("CODEX_UNSUPPORTED_TOOL_AUTHORITY")
     spec = {
         "edit": ("Replace exactly one authorized text span with revision precondition", {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}}, ["path", "old_string", "new_string"]),
+        "run_pytest": ("Run a bounded pytest node through the registered OPSX host tool",
+                       {"node_id": {"type": "string"}}, ["node_id"]),
         "read": ("Read one explicitly authorized workspace file", {"path": {"type": "string"}}, ["path"]),
         "ls": ("List an explicitly authorized workspace directory", {"path": {"type": "string"}}, ["path"]),
         "glob": ("Find files using an authorized relative glob", {"pattern": {"type": "string"}}, ["pattern"]),
@@ -66,6 +70,7 @@ class CodexToolGateway:
         guard: Callable[..., None] | None,
         read_scope: Any | None,
         journal: CodexWriteJournal | None = None,
+        registered_tools: Mapping[str, Any] | None = None,
     ) -> None:
         self.root = root.resolve()
         self.allowed = frozenset(tools)
@@ -77,6 +82,11 @@ class CodexToolGateway:
         self.calls: list[dict[str, str]] = []
         self._edited_before: dict[Path, bytes] = {}
         self.journal = journal
+        self.registered_tools = dict(registered_tools or {})
+        if set(self.registered_tools) - {"run_pytest"}:
+            raise CodexToolDenied("CODEX_CUSTOM_TOOL_UNREGISTERED")
+        if "run_pytest" in self.allowed and "run_pytest" not in self.registered_tools:
+            raise CodexToolDenied("CODEX_PYTEST_TOOL_UNBOUND")
         if "edit" in self.allowed:
             if not getattr(read_scope, "restrict_write_allow", None):
                 raise CodexToolDenied("CODEX_WRITE_SCOPE_REQUIRED")
@@ -188,6 +198,29 @@ class CodexToolGateway:
             raise
         self.calls.append({"tool": "edit", "verdict": "ALLOWED"})
         return "EDIT_APPLIED sha256=" + hashlib.sha256(after).hexdigest()
+
+    async def dispatch_async(self, tool: str, args: Mapping[str, Any]) -> str:
+        if tool != "run_pytest":
+            return self.dispatch(tool, args)
+        if tool not in self.allowed or "run_pytest" not in self.registered_tools:
+            raise CodexToolDenied("CODEX_PYTEST_TOOL_UNBOUND")
+        if not isinstance(args, Mapping) or set(args) != {"node_id"}:
+            raise CodexToolDenied("CODEX_BAD_TOOL_ARGUMENTS")
+        node_id = args["node_id"]
+        if not isinstance(node_id, str) or not node_id or len(node_id) > 500:
+            raise CodexToolDenied("CODEX_PYTEST_NODE_INVALID")
+        self._authorize("run_pytest", {"node_id": node_id})
+        spec = self.registered_tools["run_pytest"]
+        try:
+            # This is a deterministic pre-registered tool; it never receives a shell command.
+            result = await asyncio.wait_for(spec.execute({"node_id": node_id}, None), timeout=150)
+        except Exception as exc:
+            self.calls.append({"tool": tool, "verdict": "FAILED"})
+            raise CodexToolDenied("CODEX_PYTEST_TOOL_FAILED") from exc
+        if not isinstance(result, Mapping):
+            raise CodexToolDenied("CODEX_PYTEST_RESULT_INVALID")
+        self.calls.append({"tool": tool, "verdict": "ALLOWED"})
+        return json.dumps(dict(result), ensure_ascii=False)
 
     def dispatch(self, tool: str, args: Mapping[str, Any]) -> str:
         if tool not in self.allowed:

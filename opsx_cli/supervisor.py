@@ -27,6 +27,7 @@ from .supervisor_subprocess import kill_process_tree, read_log_tail, run_worker_
 from .supervisor_timeouts import SupervisorTimeouts
 from .site_status import keep_site_running
 from .storage import read_json, write_json
+from .provider_settings import validate_provider, PROVIDER_MODULES
 
 if TYPE_CHECKING:
     from .service import RunService
@@ -170,7 +171,10 @@ class WorkflowSupervisor:
         change_id: str,
         run_id: str,
         echo: bool = False,
+        provider: str = "cursor",
     ) -> None:
+        self._provider = validate_provider(provider)
+        self._provider_module = PROVIDER_MODULES[self._provider]
         self._service = service
         self._timeouts = timeouts
         self._change_id = change_id
@@ -240,6 +244,9 @@ class WorkflowSupervisor:
         log_path: Path | None = None,
     ) -> tuple[int, str | None]:
         interpreter, env = await self._load_runtime()
+        env["OPSX_ADAPTER_MODULE"] = self._provider_module
+        request_payload = dict(request_payload)
+        request_payload["execution_provider"] = self._provider
         target_log = log_path or self._log_path
         request_path = Path(request_name) if not isinstance(request_name, Path) else request_name
         if not request_path.is_absolute():
@@ -270,6 +277,7 @@ class WorkflowSupervisor:
             "project_root": str(self._project.root),
             "core_root": str(self._project.core),
             "supervised_run_id": self._run_id,
+            "execution_provider": self._provider,
             "attempt": attempt,
         }
         code, hang = await self._run_worker_mode(
@@ -401,6 +409,7 @@ class WorkflowSupervisor:
             "core_root": str(self._project.core),
             "timeout_seconds": remaining,
             "entry_id": entry_id,
+            "execution_provider": self._provider,
             "classification": asdict(classification),
             "log_tail": read_log_tail(self._log_path),
             "log_path": str(self._log_path),
@@ -615,6 +624,7 @@ class WorkflowSupervisor:
             "status": "RUNNING",
             "mode": "workflow",
             "change_id": self._change_id,
+            "provider": self._provider,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "log": str(self._log_path),
             "supervisor": True,

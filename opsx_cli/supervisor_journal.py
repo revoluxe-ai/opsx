@@ -236,6 +236,7 @@ class SupervisorJournal:
                     "VALUES (1, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
                     (JOURNAL_SCHEMA_VERSION,),
                 )
+            _backfill_normalized_rows(conn)
             conn.commit()
 
     def append(self, entry: JournalEntry) -> None:
@@ -481,6 +482,22 @@ class SupervisorJournal:
 
     async def read_entry_sidecar(self, entry_id: str) -> dict[str, Any]:
         return await read_json(self.path.parent / "entries" / f"{entry_id}.json", {})
+
+
+def _backfill_normalized_rows(conn: sqlite3.Connection) -> None:
+    """Однократно заполнить ``journal_event_norm`` для legacy payload-only rows."""
+    existing = conn.execute("SELECT COUNT(*) FROM journal_event_norm").fetchone()
+    if existing is not None and int(existing[0]) > 0:
+        return
+    for event_id, wire in conn.execute(
+        "SELECT id, payload_json FROM journal_events ORDER BY id",
+    ):
+        try:
+            row = json.loads(wire)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            _insert_normalized_row(conn, int(event_id), row)
 
 
 def find_journal_entry(journal_path: Path, entry_id: str) -> dict[str, Any]:

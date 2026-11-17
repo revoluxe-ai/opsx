@@ -60,3 +60,27 @@ bash или PowerShell. Tool-list — **фиксированный набор и
 5. Нет ручной правки продукта / `openspec/changes/**` супервизором.
 6. Нет нового канала доставки prompt.
 7. Tool-list скопирован с образца; **`shell` не добавлять**.
+
+
+## Mandatory agent tool authority (Owner policy, 2026-11-17)
+
+The supervisor MUST NOT grant any agent a generic command executor:
+shell, terminal, bash, PowerShell, exec, subprocess, run_command, unrestricted
+MCP, or native provider command/patch tools. This applies to both currently
+selected and future model providers. Git worktree isolation does not relax it.
+
+The supervisor may request only explicitly registered, narrowly typed tools.
+Currently authorised for PROCESS_SUPERVISOR_FIX: read, grep, glob, ls, edit,
+and the bounded run_pytest custom tool. All tools use existing read/write scope
+and evidence contracts. Registration, validation, and path permissions happen
+before the agent is created. Provider options MUST continue to disable shell.
+A provider or wrapper that cannot enforce this contract MUST fail closed.
+
+If a new capability is needed, repair the existing tool implementation or
+register a new named tool with a fixed argument schema, scoped authority,
+failure semantics, and acceptance tests in the authorised OPSX META contour.
+Only then may a separate reviewed policy change expose that tool to agents.
+No model-generated command string, script, one-off shell, or generic MCP bridge
+may substitute for a missing tool. Deterministic supervisor process code is
+not an agent tool; this rule does not prohibit its independently authorised
+internal subprocesses (e.g. bounded checks and Git operations).

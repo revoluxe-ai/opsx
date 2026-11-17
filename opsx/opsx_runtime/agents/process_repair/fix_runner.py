@@ -8,20 +8,14 @@ from typing import Any
 
 from agents.process_repair.meta_surface import format_meta_surface_prompt
 from agents.process_repair.schemas import ProcessFixReport
+from agents.process_repair.supervisor_tool_policy import (
+    SUPERVISOR_FIX_TOOLS,
+    assert_supervisor_agent_tools,
+)
 from runtime_bootstrap import ensure_adapter_factories_registered
 
 # ``run_pytest`` — вход в адаптер: для этого agent_key он ставит MCP ``run_opsx_pytest``.
 # Имя ``run_opsx_pytest`` в списке builtin адаптер отвергает до старта модели.
-SUPERVISOR_FIX_TOOLS: tuple[str, ...] = (
-    "read",
-    "grep",
-    "glob",
-    "ls",
-    "edit",
-    "run_pytest",
-)
-
-
 def _emit_fix_line(text: str) -> None:
     """Строка супервизора в общий stdout, который сайт читает как лог агентов."""
     print(f"supervisor: {text}", flush=True)
@@ -42,6 +36,9 @@ async def run_process_supervisor_fix(request: dict[str, Any]) -> dict[str, Any]:
     core_root = Path(request["core_root"]).resolve()
     attempt_dir = Path(request["attempt_dir"])
     attempt_dir.mkdir(parents=True, exist_ok=True)
+    # Validate the finite, registered tool set before constructing an LLM agent.
+    # Any shell/exec/terminal capability is a contract violation, never fallback.
+    assert_supervisor_agent_tools(SUPERVISOR_FIX_TOOLS)
     ensure_adapter_factories_registered()
     import importlib.util
 

@@ -31,6 +31,11 @@ from agents.adapters.repair_tool_policy import (
     READ_ONLY_TOOLS,
     tools_for_adapter_create,
 )
+from agents.process_repair.supervisor_tool_policy import (
+    SUPERVISOR_FIX_AGENT_KEY,
+    assert_supervisor_agent_tools,
+    assert_supervisor_provider_options,
+)
 from agents.verify.impl_verify.scoped_read_tool import (
     build_impl_verify_scoped_read_sdk_options,
     hop_uses_scoped_read_tool,
@@ -157,6 +162,11 @@ class RepairCursorSDKAdapter(ABCAdapter):
         model = state["model"]
         requested = tuple(tools)
         capability_manifest = state.get("capability_manifest")
+        supervisor_hop = str(agent_key or "").strip().upper() == SUPERVISOR_FIX_AGENT_KEY
+        if supervisor_hop:
+            assert_supervisor_agent_tools(
+                requested, capability_manifest=capability_manifest,
+            )
 
         if not workspace.is_dir():
             raise ValueError(f"Workspace not found: {workspace}")
@@ -307,6 +317,8 @@ class RepairCursorSDKAdapter(ABCAdapter):
                                 **cursor_sdk_builtin_tools_only_extras(),
                             }
                             send_kwargs = {"tools": allowed}
+                if supervisor_hop:
+                    assert_supervisor_provider_options(options, requested=requested)
                 stream_log = state.get("stream_log")
                 stream_label = str(state.get("stream_label") or "repair")
                 repo_root = Path(

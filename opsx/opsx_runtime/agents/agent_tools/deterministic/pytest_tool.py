@@ -150,7 +150,45 @@ def host_runtime_prefixes() -> list[str]:
     return deduped
 
 
-def _is_host_runtime(path: str | Path, hosts: list[str]) -> bool:
+def _repo_venv_roots(repo_root: Path) -> list[Path]:
+    """Корни локальных venv продукта в репозитории (не opsx-cli / panel host)."""
+    root = repo_root.resolve()
+    return [root / name for name in _REPO_VENV_DIR_NAMES]
+
+
+def _under_repo_product_venv(path: str | Path, repo_root: Path) -> bool:
+    """True, если путь лежит в ``.venv*`` корня репозитория продукта."""
+    try:
+        resolved = Path(path).resolve()
+    except OSError:
+        resolved = Path(path)
+    for venv_root in _repo_venv_roots(repo_root):
+        try:
+            venv_resolved = venv_root.resolve()
+        except OSError:
+            venv_resolved = venv_root
+        if _same_dir(venv_resolved, resolved):
+            return True
+        try:
+            if resolved.is_relative_to(venv_resolved):  # py3.11+
+                return True
+        except (OSError, ValueError):
+            normalized = _norm_path_key(resolved)
+            prefix = _norm_path_key(venv_resolved)
+            if normalized.startswith(prefix + os.sep) or normalized.startswith(prefix + "\\"):
+                return True
+    return False
+
+
+def _is_host_runtime(
+    path: str | Path,
+    hosts: list[str],
+    *,
+    repo_root: Path | None = None,
+) -> bool:
+    """OPSX host venv (opsx-cli/panel), never the product repo ``.venv``."""
+    if repo_root is not None and _under_repo_product_venv(path, repo_root):
+        return False
     for host in hosts:
         if _same_dir(host, Path(path)):
             return True
@@ -279,10 +317,10 @@ def resolve_repository_venv_python(
     root = repo_root.resolve()
     for name in _REPO_VENV_DIR_NAMES:
         venv_root = root / name
-        if _is_host_runtime(venv_root, hosts):
+        if _is_host_runtime(venv_root, hosts, repo_root=root):
             continue
         python = _venv_python(venv_root)
-        if python is not None and not _python_is_host(python, hosts):
+        if python is not None and not _python_is_host(python, hosts, repo_root=root):
             return python
     return None
 
@@ -316,17 +354,31 @@ def _iter_poetry_env_list(stdout: str) -> list[tuple[Path, bool]]:
     return found
 
 
-def _python_is_host(python: Path, hosts: list[str]) -> bool:
+def _python_is_host(
+    python: Path,
+    hosts: list[str],
+    *,
+    repo_root: Path | None = None,
+) -> bool:
     parent = python.parent
     root = parent.parent if parent.name.lower() in {"scripts", "bin"} else parent
-    return _is_host_runtime(root, hosts) or _is_host_runtime(python, hosts)
+    return _is_host_runtime(root, hosts, repo_root=repo_root) or _is_host_runtime(
+        python,
+        hosts,
+        repo_root=repo_root,
+    )
 
 
-def _python_from_venv_root(root: Path, hosts: list[str]) -> Path | None:
-    if _is_host_runtime(root, hosts):
+def _python_from_venv_root(
+    root: Path,
+    hosts: list[str],
+    *,
+    repo_root: Path | None = None,
+) -> Path | None:
+    if _is_host_runtime(root, hosts, repo_root=repo_root):
         return None
     python = _venv_python(root)
-    if python is None or _python_is_host(python, hosts):
+    if python is None or _python_is_host(python, hosts, repo_root=repo_root):
         return None
     return python
 
@@ -342,6 +394,7 @@ def resolve_product_pytest_python(
     не-хостовый env из ``poetry env list --full-path`` (кэш Poetry, не только
     ``.venv`` в корне репозитория).
     """
+    root = repo_root.resolve()
     hosts = host_runtime_prefixes()
     prefix = _resolve_poetry(repo_root)
     info = run_subprocess_utf8(
@@ -353,7 +406,7 @@ def resolve_product_pytest_python(
     if int(info.returncode) == 0:
         info_root = _poetry_stdout_path(info.stdout or "")
         if info_root is not None:
-            python = _python_from_venv_root(info_root, hosts)
+            python = _python_from_venv_root(info_root, hosts, repo_root=root)
             if python is not None:
                 return python
     listed = run_subprocess_utf8(
@@ -366,8 +419,9 @@ def resolve_product_pytest_python(
         return None
     candidates = [
         (activated, python)
-        for root, activated in _iter_poetry_env_list(listed.stdout or "")
-        if (python := _python_from_venv_root(root, hosts)) is not None
+        for env_root, activated in _iter_poetry_env_list(listed.stdout or "")
+        if (python := _python_from_venv_root(env_root, hosts, repo_root=root))
+        is not None
     ]
     activated_ones = [python for activated, python in candidates if activated]
     if activated_ones:
@@ -436,10 +490,12 @@ def run_repair_hop_pytest_sync(
     )
     tail = _tail_output(completed.stdout or "", completed.stderr or "")
     exit_code = int(completed.returncode)
+    interpreter = str(cmd[0]) if cmd else ""
     return {
         "ok": exit_code == 0,
         "exit_code": exit_code,
         "node_id": normalized,
+        "python_executable": interpreter,
         "tail": tail,
         "timed_out": False,
     }

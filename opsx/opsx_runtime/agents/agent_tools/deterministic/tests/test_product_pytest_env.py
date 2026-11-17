@@ -158,6 +158,78 @@ def test_run_pytest_sync_poetry_fallback_strips_host_venv(
     assert base_env.get("POETRY_VIRTUALENVS_PREFER_ACTIVE") == "false"
 
 
+def test_product_venv_stays_selectable_when_panel_runs_inside_it(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Панель в ``repo/.venv`` не должна отбрасывать product interpreter."""
+    repo = tmp_path / "adv-bot"
+    repo.mkdir()
+    product_python = _touch_venv_python(repo / ".venv")
+    opsx_host = tmp_path / "opsx-cli-host"
+    opsx_host.mkdir()
+    monkeypatch.setenv("VIRTUAL_ENV", str(repo / ".venv"))
+
+    def fake_run(cmd, **kwargs):
+        del kwargs
+        tail = tuple(cmd[-3:])
+
+        class Completed:
+            returncode = 0
+            stdout = str(repo / ".venv")
+            stderr = ""
+
+        if tail == ("env", "info", "-p"):
+            return Completed()
+        if tail == ("env", "list", "--full-path"):
+            completed = Completed()
+            completed.stdout = f"{repo / '.venv'} (Activated)\n"
+            return completed
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(pytest_tool, "run_subprocess_utf8", fake_run)
+    resolved = pytest_tool.resolve_product_pytest_python(
+        repo,
+        pytest_tool.product_pytest_subprocess_env(),
+    )
+    assert resolved == product_python
+
+
+def test_resolved_python_never_under_opsx_cli_cache(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "adv-bot"
+    repo.mkdir()
+    product_python = _touch_venv_python(repo / ".venv")
+    opsx_cli = tmp_path / "pypoetry" / "Cache" / "virtualenvs" / "opsx-cli-abc-py3.11"
+    monkeypatch.setenv("VIRTUAL_ENV", str(opsx_cli))
+
+    def fake_run(cmd, **kwargs):
+        del kwargs
+        tail = tuple(cmd[-3:])
+
+        class Completed:
+            returncode = 0
+            stdout = str(opsx_cli)
+            stderr = ""
+
+        if tail == ("env", "info", "-p"):
+            return Completed()
+        if tail == ("env", "list", "--full-path"):
+            listed = Completed()
+            listed.stdout = (
+                f"{opsx_cli} (Activated)\n{repo / '.venv'}\n"
+            )
+            return listed
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(pytest_tool, "run_subprocess_utf8", fake_run)
+    resolved = pytest_tool.resolve_product_pytest_python(
+        repo,
+        pytest_tool.product_pytest_subprocess_env(),
+    )
+    assert resolved == product_python
+    assert "opsx-cli" not in str(resolved).casefold()
+
+
 def test_run_pytest_sync_uses_poetry_env_list_when_info_returns_process_prefix(
     tmp_path: Path,
     monkeypatch,

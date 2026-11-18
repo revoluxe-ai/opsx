@@ -6,6 +6,8 @@ shell/patch paths are denied, and mutating tools remain disabled until proven.
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import nullcontext
+from dataclasses import replace
 import subprocess
 from typing import Any, Mapping, Sequence
 
@@ -19,6 +21,7 @@ from opsx_cli.codex_app_server import run_guarded_codex_turn
 from opsx_cli.codex_provider import DEFAULT_CODEX_MODEL, CodexProviderError
 from opsx_cli.codex_tool_gateway import CodexToolDenied, CodexToolGateway, SUPPORTED_TOOLS
 from opsx_cli.codex_write_journal import CodexWriteJournal
+from opsx_cli.codex_turn_ledger import CodexTurnLedger, working_tree_revision
 
 
 def _require_linked_worktree(workspace: Path) -> None:
@@ -46,6 +49,38 @@ def _require_linked_worktree(workspace: Path) -> None:
         raise CodexProviderError("CODEX_WRITE_REQUIRES_LINKED_WORKTREE")
 
 
+_SPLIT_APPLY_MUTATORS = frozenset({
+    "apply_scaffold", "apply_red", "apply_implement", "apply_green",
+})
+
+
+def _bind_codex_split_apply_write_scope(
+    scope: ReadScope, state: Mapping[str, Any], agent_key: str | None,
+) -> ReadScope:
+    """Use *exactly* legacy OPSX's effective edit allowlist, never expand it.
+
+    Cursor's scope policy uses restrict_allow for edit when no separate
+    write restriction exists. Codex needs an explicit write field so the
+    host guard can prove the same authority in a linked worktree.
+    """
+    if scope.restrict_write_allow:
+        return scope
+    if agent_key not in _SPLIT_APPLY_MUTATORS:
+        raise CodexProviderError("CODEX_WRITE_SCOPE_REQUIRED")
+    expected=str(agent_key).replace("apply_", "APPLY_").upper()
+    if (
+        str(state.get("implementation_stage") or "").upper() != expected
+        or not str(state.get("implementation_slice_id") or "").strip()
+        or not str(state.get("change_id") or "").strip()
+    ):
+        raise CodexProviderError("CODEX_SPLIT_APPLY_STAGE_IDENTITY_REQUIRED")
+    from agents.config import effective_restrict_allow_for_tool
+    allowed=effective_restrict_allow_for_tool(scope, "edit") or ()
+    if not allowed or any(p in ("*", "**") for p in allowed):
+        raise CodexProviderError("CODEX_WRITE_SCOPE_REQUIRED")
+    return replace(scope, restrict_write_allow=tuple(allowed))
+
+
 class CodexAppServerAdapter(ABCAdapter):
     """Provider-native tool proxy with OPSX callback invoked before file I/O."""
 
@@ -67,67 +102,173 @@ class CodexAppServerAdapter(ABCAdapter):
         read_scope: ReadScope | None = None,
         agent_key: str | None = None,
     ) -> AgentResult:
-        if resume_agent_id:
-            raise CodexProviderError("CODEX_RESUME_NOT_PROVEN")
-        if len(set(tools)) != len(tools) or set(tools) - SUPPORTED_TOOLS:
-            raise CodexProviderError("CODEX_TOOL_AUTHORITY_UNPROVEN")
+        if resume_agent_id and not str(state.get("run_uuid") or "").strip():
+            raise CodexProviderError("CODEX_RESUME_EXECUTION_ID_REQUIRED")
+        workspace = Path(str(state.get("repository_path") or state.get("workspace") or "")).resolve()
+        if not workspace.is_dir():
+            raise CodexProviderError("CODEX_WORKSPACE_MISSING")
+        change_id = str(state.get("change_id") or "").strip()
         registered_tools: dict[str, Any] = {}
+        capability_specs: dict[str, Any] = {}
+        if state.get("capability_manifest") is not None:
+            from agents.capabilities.manifest import AgentCapabilityManifest
+            from agents.implementation.apply_design.tool_runtime import ApplyDesignToolRuntime
+            from agents.adapters.agent_capability_options import build_provider_agent_options
+            manifest = state["capability_manifest"]
+            runtime = state.get("apply_design_tool_runtime")
+            if (
+                agent_key != "apply_design" or tools
+                or not isinstance(manifest, AgentCapabilityManifest)
+                or not isinstance(runtime, ApplyDesignToolRuntime)
+                or runtime._manifest is not manifest
+                or manifest.change_id != change_id
+                or manifest.repo_root.resolve() != workspace
+            ):
+                raise CodexProviderError("CODEX_CAPABILITY_MANIFEST_UNAUTHORIZED")
+            target = manifest.design_submission
+            if target is not None and (
+                target.change_id != change_id
+                or not target.json_path.resolve().is_relative_to(workspace)
+                or not target.md_path.resolve().is_relative_to(workspace)
+            ):
+                raise CodexProviderError("CODEX_CAPABILITY_WRITE_SCOPE_MISMATCH")
+            options = build_provider_agent_options(
+                manifest, api_key="", model={"id": DEFAULT_CODEX_MODEL},
+                local={}, tool_runtime=runtime,
+            )
+            capability_specs = dict(options["local"]["custom_tools"])
+            if set(capability_specs) != {
+                "search_repository", "read_source", "submit_apply_design",
+            }:
+                raise CodexProviderError("CODEX_CAPABILITY_SET_MISMATCH")
+            tools = tuple(capability_specs)
+        if len(set(tools)) != len(tools) or set(tools) - (
+            SUPPORTED_TOOLS | set(capability_specs)
+        ):
+            raise CodexProviderError("CODEX_TOOL_AUTHORITY_UNPROVEN")
         if "run_pytest" in tools:
-            if agent_key != "PROCESS_SUPERVISOR_FIX":
+            from agents.agent_tools.deterministic.registry import (
+                build_deterministic_custom_tools,
+                hop_includes_run_pytest_tool,
+            )
+            if not hop_includes_run_pytest_tool(agent_key):
                 raise CodexProviderError("CODEX_PYTEST_AGENT_AUTHORITY_MISMATCH")
-            from agents.agent_tools.deterministic.registry import build_deterministic_custom_tools
-            specs = build_deterministic_custom_tools(agent_key, repo_root=Path(
-                str(state.get("repository_path") or state.get("workspace") or "")
-            ).resolve())
-            if set(specs) != {"run_opsx_pytest"}:
+            specs = build_deterministic_custom_tools(
+                agent_key, repo_root=Path(
+                    str(state.get("repository_path") or state.get("workspace") or "")
+                ).resolve(),
+            )
+            key = "run_opsx_pytest" if agent_key == "PROCESS_SUPERVISOR_FIX" else "run_pytest"
+            if set(specs) != {key}:
                 raise CodexProviderError("CODEX_PYTEST_TOOL_UNBOUND")
-            registered_tools["run_pytest"] = specs["run_opsx_pytest"]
-        writable = "edit" in tools
+            registered_tools["run_pytest"] = specs[key]
+        writable = bool({"edit", "run_pytest", "submit_apply_design"}.intersection(tools))
         # Never silently substitute a hard-selected Cursor model/tool tier.
         declared = state.get("model")
         if declared is not None:
             if not isinstance(declared, Mapping) or declared.get("id") != DEFAULT_CODEX_MODEL:
                 raise CodexProviderError("CODEX_MODEL_AUTHORITY_MISMATCH")
         model = DEFAULT_CODEX_MODEL
-        workspace = Path(str(state.get("repository_path") or state.get("workspace") or "")).resolve()
-        if not workspace.is_dir():
-            raise CodexProviderError("CODEX_WORKSPACE_MISSING")
         if read_scope is None:
             read_scope = resolve_effective_read_scope(agent_key, state)
+        if "edit" in tools and not read_scope.restrict_write_allow:
+            read_scope = _bind_codex_split_apply_write_scope(
+                read_scope, state, agent_key,
+            )
         if tool_call_guard is None:
             tool_call_guard = build_tool_call_guard(read_scope, workspace, agent_key=agent_key)
-        if writable:
-            from agents.config import read_scope_enforcement_mode
-            if read_scope_enforcement_mode() != "enforce":
-                raise CodexProviderError("CODEX_WRITE_SCOPE_ENFORCEMENT_REQUIRED")
-            _require_linked_worktree(workspace)
-            # No write is attempted until stale pending edits are recovered.
-            with CodexWriteJournal(workspace) as journal:
-                journal.recover(CodexToolGateway._atomic_replace)
-                try:
-                    gateway = CodexToolGateway(
-                        workspace, tools, guard=tool_call_guard,
-                        read_scope=read_scope, journal=journal,
-                        registered_tools=registered_tools,
+        execution_id = str(state.get("run_uuid") or "").strip()
+        if bool(execution_id) != bool(change_id):
+            raise CodexProviderError("CODEX_PARENT_EXECUTION_IDENTITY_MISSING")
+        # Parent dispatch is journaled before model invocation. The direct
+        # read-only probe interface remains compatible without a parent run.
+        ledger_context = CodexTurnLedger(workspace) if execution_id else nullcontext(None)
+        with ledger_context as ledger:
+            operation_id = ""
+            if ledger is not None:
+                ledger.reconcile()
+                if resume_agent_id:
+                    ledger.require_resume(
+                        thread_id=resume_agent_id,
+                        execution_id=execution_id,
+                        change_id=change_id,
+                        model=model, tools=tools,
+                        current_revision=working_tree_revision(workspace),
                     )
-                except CodexToolDenied as exc:
-                    raise CodexProviderError(exc.code) from exc
-                outcome = await run_guarded_codex_turn(
-                    gateway, prompt=prompt, model=model,
-                    reasoning_effort="low", timeout_seconds=self.timeout_seconds,
+                operation_id = ledger.begin(
+                    execution_id=execution_id, change_id=change_id,
+                    agent_key=str(agent_key or "unnamed"),
+                    model=model, tools=tools, prompt=prompt,
+                    input_revision=working_tree_revision(workspace),
                 )
-        else:
+
+            def observe_identity(kind: str, value: str) -> None:
+                if ledger is None:
+                    return
+                if kind == "thread":
+                    ledger.record_thread(operation_id, value)
+                elif kind == "turn":
+                    ledger.record_turn(operation_id, value)
+                else:
+                    raise CodexProviderError("CODEX_IDENTITY_EVENT_UNKNOWN")
+
             try:
-                gateway = CodexToolGateway(
-                    workspace, tools, guard=tool_call_guard, read_scope=read_scope,
-                    registered_tools=registered_tools,
+                if writable:
+                    from agents.config import read_scope_enforcement_mode
+                    if read_scope_enforcement_mode() != "enforce":
+                        raise CodexProviderError("CODEX_WRITE_SCOPE_ENFORCEMENT_REQUIRED")
+                    _require_linked_worktree(workspace)
+                    # No write is attempted until stale pending edits are recovered.
+                    with CodexWriteJournal(workspace) as journal:
+                        journal.recover(CodexToolGateway._atomic_replace)
+                        try:
+                            gateway = CodexToolGateway(
+                                workspace, tools, guard=tool_call_guard,
+                                read_scope=read_scope, journal=journal,
+                                registered_tools=registered_tools,
+                                capability_specs=capability_specs,
+                            )
+                        except CodexToolDenied as exc:
+                            raise CodexProviderError(exc.code) from exc
+                        outcome = await run_guarded_codex_turn(
+                            gateway, prompt=prompt, model=model,
+                            reasoning_effort="low", timeout_seconds=self.timeout_seconds,
+                            identity_observer=observe_identity,
+                            resume_thread_id=resume_agent_id,
+                            ephemeral=not bool(execution_id),
+                        )
+                else:
+                    try:
+                        gateway = CodexToolGateway(
+                            workspace, tools, guard=tool_call_guard, read_scope=read_scope,
+                            registered_tools=registered_tools,
+                            capability_specs=capability_specs,
+                        )
+                    except CodexToolDenied as exc:
+                        raise CodexProviderError(exc.code) from exc
+                    outcome = await run_guarded_codex_turn(
+                        gateway, prompt=prompt, model=model,
+                        reasoning_effort="low", timeout_seconds=self.timeout_seconds,
+                        identity_observer=observe_identity,
+                        resume_thread_id=resume_agent_id,
+                        ephemeral=not bool(execution_id),
+                    )
+            except BaseException as exc:
+                if ledger is not None:
+                    safe = not bool({"edit", "run_pytest", "submit_apply_design"}.intersection(tools))
+                    ledger.failure(
+                        operation_id,
+                        code=str(getattr(exc, "code", type(exc).__name__)),
+                        safe=safe,
+                    )
+                raise
+            if ledger is not None:
+                ledger.complete(
+                    operation_id, thread_id=outcome.thread_id,
+                    turn_id=outcome.turn_id, response=outcome.text,
+                    calls=outcome.calls,
+                    output_revision=working_tree_revision(workspace),
                 )
-            except CodexToolDenied as exc:
-                raise CodexProviderError(exc.code) from exc
-            outcome = await run_guarded_codex_turn(
-                gateway, prompt=prompt, model=model,
-                reasoning_effort="low", timeout_seconds=self.timeout_seconds,
-            )
         result = AgentResult(
             text=outcome.text,
             status="COMPLETED",

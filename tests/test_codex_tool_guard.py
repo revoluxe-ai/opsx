@@ -39,6 +39,25 @@ class CodexGatewayTests(unittest.TestCase):
             guard=guard, read_scope=object(),
         )
 
+    def test_missing_host_tool_evidence_fails_closed(self):
+        with self.assertRaises(CodexToolDenied) as caught:
+            self.gateway.require_tool_evidence()
+        self.assertEqual(caught.exception.code, "CODEX_NO_TOOL_EVIDENCE")
+        self.gateway.dispatch("read", {"path": "allowed/a.txt"})
+        self.gateway.require_tool_evidence()
+
+    def test_native_thread_turn_identity_callback(self):
+        events = []
+        host = CodexServerHost(
+            self.gateway, identity_observer=lambda kind, value:
+                events.append((kind, value)),
+        )
+        host.response_for({
+            "method": "turn/started",
+            "params": {"turn": {"id": "native-turn-123"}},
+        })
+        self.assertEqual(events, [("turn", "native-turn-123")])
+
     def test_read_allowed_calls_guard_before_io(self):
         self.assertEqual(self.gateway.dispatch("read", {"path": "allowed/a.txt"}), "alpha\nbeta\n")
         self.assertEqual(self.calls[0], ("read", {"path": "allowed/a.txt"}))

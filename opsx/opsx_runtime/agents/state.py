@@ -46,6 +46,7 @@ class GraphState(TypedDict, total=False):
     repository_path: str
     workspace: str
     model: dict[str, Any]
+    execution_provider: str
     run_uuid: str | None
     # Cross-execution, content-bound check receipt provenance (not a graph cache).
     check_receipt: dict[str, Any]

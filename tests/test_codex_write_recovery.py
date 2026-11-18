@@ -135,6 +135,126 @@ class CodexWriteRecoveryTests(unittest.TestCase):
                 })
             self.assertEqual(caught.exception.code, "CODEX_WRITE_DENIED_PATH")
 
+    def test_model_completion_without_edit_is_not_proof(self):
+        scope = SimpleNamespace(restrict_write_allow=("allowed/test.txt",), deny=())
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *_: None,
+                read_scope=scope, journal=journal,
+            )
+            with self.assertRaises(CodexToolDenied) as caught:
+                gateway.require_net_edit()
+            self.assertEqual(caught.exception.code, "CODEX_NO_EDIT_EVIDENCE")
+            self.assertEqual(self.path.read_bytes(), b"BEFORE\n")
+
+    def test_edit_then_revert_cannot_claim_net_change(self):
+        scope = SimpleNamespace(restrict_write_allow=("allowed/test.txt",), deny=())
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *_: None,
+                read_scope=scope, journal=journal,
+            )
+            gateway.dispatch("edit", {
+                "path": "allowed/test.txt", "old_string": "BEFORE",
+                "new_string": "AFTER",
+            })
+            gateway.dispatch("edit", {
+                "path": "allowed/test.txt", "old_string": "AFTER",
+                "new_string": "BEFORE",
+            })
+            with self.assertRaises(CodexToolDenied) as caught:
+                gateway.require_net_edit()
+            self.assertEqual(caught.exception.code, "CODEX_NO_NET_EDIT")
+            gateway.rollback_edits()
+            self.assertEqual(self.path.read_bytes(), b"BEFORE\n")
+
+    def test_permitted_host_edit_proves_effective_write(self):
+        scope = SimpleNamespace(restrict_write_allow=("allowed/test.txt",), deny=())
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *_: None,
+                read_scope=scope, journal=journal,
+            )
+            gateway.dispatch("edit", {
+                "path": "allowed/test.txt", "old_string": "BEFORE",
+                "new_string": "AFTER",
+            })
+            gateway.require_net_edit()
+            gateway.confirm_edits()
+            self.assertEqual(self.path.read_bytes(), b"AFTER\n")
+
+    def test_create_new_file_is_durable_and_no_clobber(self):
+        scope = SimpleNamespace(restrict_write_allow=("allowed/**",), deny=())
+        target = self.root / "allowed/new_test.py"
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *a: None,
+                read_scope=scope, journal=journal,
+            )
+            receipt = gateway.dispatch("edit", {
+                "path": "allowed/new_test.py", "old_string": "",
+                "new_string": "def test_generated(): assert True\n",
+            })
+            self.assertIn("FILE_CREATED", receipt)
+            gateway.require_net_edit()
+            gateway.confirm_edits()
+            self.assertEqual(journal.pending_count(), 0)
+        self.assertTrue(target.is_file())
+        self.assertIn("test_generated", target.read_text())
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *a: None,
+                read_scope=scope, journal=journal,
+            )
+            with self.assertRaises(CodexToolDenied) as caught:
+                gateway.dispatch("edit", {
+                    "path": "allowed/new_test.py", "old_string": "",
+                    "new_string": "OVERWRITE",
+                })
+            self.assertEqual(caught.exception.code, "CODEX_CREATE_PRECONDITION_FAILED")
+            self.assertIn("test_generated", target.read_text())
+
+    def test_crash_after_create_restores_absence(self):
+        target = self.root / "allowed/from_crash.txt"
+        with self._journal() as journal:
+            journal.begin_create("allowed/from_crash.txt", b"CREATED\n")
+            CodexToolGateway._atomic_create(target, b"CREATED\n")
+        self.assertTrue(target.is_file())
+        with self._journal() as journal:
+            self.assertEqual(
+                journal.recover(CodexToolGateway._atomic_replace), 1,
+            )
+            self.assertEqual(journal.pending_count(), 0)
+        self.assertFalse(target.exists())
+
+    def test_created_foreign_modification_cannot_be_deleted_on_recovery(self):
+        target = self.root / "allowed/foreign.txt"
+        with self._journal() as journal:
+            journal.begin_create("allowed/foreign.txt", b"EXPECTED")
+            CodexToolGateway._atomic_create(target, b"EXPECTED")
+        target.write_bytes(b"EXTERNAL_EDIT")
+        with self._journal() as journal:
+            with self.assertRaises(WriteRecoveryError) as caught:
+                journal.recover(CodexToolGateway._atomic_replace)
+            self.assertEqual(caught.exception.code, "CODEX_RECOVERY_CONCURRENT_CHANGE")
+            self.assertEqual(journal.pending_count(), 1)
+        self.assertEqual(target.read_bytes(), b"EXTERNAL_EDIT")
+
+    def test_create_does_not_make_parent_directories(self):
+        scope = SimpleNamespace(restrict_write_allow=("allowed/**",), deny=())
+        with self._journal() as journal:
+            gateway = CodexToolGateway(
+                self.root, ["edit"], guard=lambda *a: None,
+                read_scope=scope, journal=journal,
+            )
+            with self.assertRaises(CodexToolDenied) as caught:
+                gateway.dispatch("edit", {
+                    "path": "allowed/missing/nested.py",
+                    "old_string": "", "new_string": "pass",
+                })
+            self.assertEqual(caught.exception.code, "CODEX_CREATE_PRECONDITION_FAILED")
+            self.assertFalse((self.root / "allowed/missing").exists())
+
     def test_main_checkout_is_not_worktree_write_authority(self):
         with tempfile.TemporaryDirectory() as d:
             local = Path(d)

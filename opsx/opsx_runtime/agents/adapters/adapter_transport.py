@@ -17,7 +17,12 @@ def adapter_transport_state(state: Mapping[str, Any], **overrides: Any) -> dict[
     }
     if state.get("model") is not None:
         transport["model"] = state["model"]
-    for key in ("change_id", "run_uuid", "isolated_workspace", "run_dialog_agent"):
+    for key in (
+        "change_id", "run_uuid", "isolated_workspace", "run_dialog_agent",
+        # Required to bind the exact split-APPLY write scope at the provider
+        # boundary. The graph already owns these; do not infer from agent text.
+        "implementation_stage", "implementation_slice_id",
+    ):
         if state.get(key) is not None:
             transport[key] = state[key]
     for key in (

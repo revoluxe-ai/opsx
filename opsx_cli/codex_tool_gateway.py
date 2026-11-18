@@ -46,7 +46,13 @@ def dynamic_tool_specs(
         "edit": ("Replace exactly one authorized text span; to create a new file, set old_string to empty and require absent path", {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}}, ["path", "old_string", "new_string"]),
         "run_pytest": ("Run a bounded pytest node through the registered OPSX host tool",
                        {"node_id": {"type": "string"}}, ["node_id"]),
-        "read": ("Read one explicitly authorized workspace file", {"path": {"type": "string"}}, ["path"]),
+        "read": (
+            "Read the contents of one existing authorized regular file, not a directory. "
+            "This tool cannot list directories; a directory path returns "
+            "CODEX_READ_REQUIRES_FILE. Missing files return CODEX_FILE_NOT_READABLE. "
+            "A read failure alone is not evidence that OPSX denied the path.",
+            {"path": {"type": "string"}}, ["path"],
+        ),
         "ls": ("List an explicitly authorized workspace directory", {"path": {"type": "string"}}, ["path"]),
         "glob": ("Find files using an authorized relative glob", {"pattern": {"type": "string"}}, ["pattern"]),
         "grep": (
@@ -132,6 +138,10 @@ class CodexToolGateway:
             raise CodexToolDenied("CODEX_OPSX_TOOL_GUARD_DENIED") from exc
 
     def _read_one(self, target: Path) -> str:
+        if target.is_dir():
+            # A directory read is a tool-shape mismatch, not an authority
+            # violation. Never turn the file-only read into implicit ls.
+            raise CodexToolDenied("CODEX_READ_REQUIRES_FILE")
         if not target.is_file() or target.stat().st_size > MAX_READ_BYTES:
             raise CodexToolDenied("CODEX_FILE_NOT_READABLE")
         return target.read_text(encoding="utf-8", errors="replace")

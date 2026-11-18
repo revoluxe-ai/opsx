@@ -143,6 +143,54 @@ class CodexGatewayTests(unittest.TestCase):
         self.assertFalse(host.failed)
         self.gateway.require_tool_evidence()
 
+    def test_authorized_directory_read_is_recoverable_but_not_implicit_ls(self):
+        host = CodexServerHost(self.gateway)
+        host.thread_id = "t1"
+        host.turn_id = "turn1"
+        def call(request_id, path):
+            return host.response_for({
+                "method": "item/tool/call", "id": request_id,
+                "params": {
+                    "threadId": "t1", "turnId": "turn1",
+                    "namespace": None, "tool": "read",
+                    "arguments": {"path": path},
+                },
+            })
+        denied = call(41, "allowed")
+        self.assertFalse(denied["result"]["success"])
+        self.assertEqual(
+            denied["result"]["contentItems"][0]["text"],
+            "CODEX_READ_REQUIRES_FILE",
+        )
+        self.assertFalse(host.failed)
+        with self.assertRaisesRegex(CodexToolDenied, "CODEX_NO_TOOL_EVIDENCE"):
+            self.gateway.require_tool_evidence()
+        accepted = call(42, "allowed/a.txt")
+        self.assertTrue(accepted["result"]["success"])
+        self.assertFalse(host.failed)
+        self.gateway.require_tool_evidence()
+
+    def test_directory_read_outside_existing_scope_is_fatal(self):
+        from pathlib import Path
+        (self.repo / "private_dir").mkdir()
+        host = CodexServerHost(self.gateway)
+        host.thread_id = "t1"
+        host.turn_id = "turn1"
+        denied = host.response_for({
+            "method": "item/tool/call", "id": 49,
+            "params": {
+                "threadId": "t1", "turnId": "turn1",
+                "namespace": None, "tool": "read",
+                "arguments": {"path": "private_dir"},
+            },
+        })
+        self.assertFalse(denied["result"]["success"])
+        self.assertEqual(
+            denied["result"]["contentItems"][0]["text"],
+            "CODEX_OPSX_TOOL_GUARD_DENIED",
+        )
+        self.assertTrue(host.failed)
+
     def test_missing_read_outside_scope_still_fails_closed(self):
         host = CodexServerHost(self.gateway)
         host.thread_id = "t1"

@@ -113,7 +113,10 @@ class CodexServerHost:
                 # this inside the same turn; Codex must receive the same
                 # chance without ever widening the OPSX read/write scope.
                 # A successful host call remains mandatory for PASS.
-                if tool != "read" or exc.code != "CODEX_FILE_NOT_READABLE":
+                if tool != "read" or exc.code not in {
+                    "CODEX_FILE_NOT_READABLE",
+                    "CODEX_READ_REQUIRES_FILE",
+                }:
                     self.failed = True
                 return self._deny(event, exc.code)
             return {

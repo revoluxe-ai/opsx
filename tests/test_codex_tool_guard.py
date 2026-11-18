@@ -39,6 +39,15 @@ class CodexGatewayTests(unittest.TestCase):
             guard=guard, read_scope=object(),
         )
 
+    def test_direct_supervisor_adapter_caps_one_turn_without_expanding_budget(self):
+        from agents.adapters.codex_app_server.codex_adapter import CodexAppServerAdapter
+        self.assertEqual(CodexAppServerAdapter(timeout_seconds=10800).timeout_seconds, 3600)
+        self.assertEqual(CodexAppServerAdapter(timeout_seconds=300).timeout_seconds, 300)
+        for invalid in (0, -1, float("nan"), float("inf"), "3600"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    CodexAppServerAdapter(timeout_seconds=invalid)
+
     def test_missing_host_tool_evidence_fails_closed(self):
         with self.assertRaises(CodexToolDenied) as caught:
             self.gateway.require_tool_evidence()
@@ -104,6 +113,53 @@ class CodexGatewayTests(unittest.TestCase):
         self.assertEqual(resp["id"], 17)
         self.assertIn("alpha", resp["result"]["contentItems"][0]["text"])
         self.assertEqual(self.calls[-1][0], "read")
+
+    def test_authorized_missing_read_is_recoverable_in_same_turn(self):
+        host = CodexServerHost(self.gateway)
+        host.thread_id = "t1"
+        host.turn_id = "turn1"
+
+        def call(request_id, path):
+            return host.response_for({
+                "method": "item/tool/call", "id": request_id,
+                "params": {
+                    "threadId": "t1", "turnId": "turn1", "namespace": None,
+                    "tool": "read", "arguments": {"path": path},
+                },
+            })
+
+        failed = call(21, "allowed/test_<hash>.py")
+        self.assertFalse(failed["result"]["success"])
+        self.assertEqual(
+            failed["result"]["contentItems"][0]["text"],
+            "CODEX_FILE_NOT_READABLE",
+        )
+        self.assertFalse(host.failed)
+        # A failed read alone must not count as accepted tool evidence.
+        with self.assertRaisesRegex(CodexToolDenied, "CODEX_NO_TOOL_EVIDENCE"):
+            self.gateway.require_tool_evidence()
+        recovered = call(22, "allowed/a.txt")
+        self.assertTrue(recovered["result"]["success"])
+        self.assertFalse(host.failed)
+        self.gateway.require_tool_evidence()
+
+    def test_missing_read_outside_scope_still_fails_closed(self):
+        host = CodexServerHost(self.gateway)
+        host.thread_id = "t1"
+        host.turn_id = "turn1"
+        response = host.response_for({
+            "method": "item/tool/call", "id": 19,
+            "params": {
+                "threadId": "t1", "turnId": "turn1", "namespace": None,
+                "tool": "read", "arguments": {"path": "private_missing.py"},
+            },
+        })
+        self.assertFalse(response["result"]["success"])
+        self.assertTrue(host.failed)
+        self.assertEqual(
+            response["result"]["contentItems"][0]["text"],
+            "CODEX_OPSX_TOOL_GUARD_DENIED",
+        )
 
     def test_host_denial_marks_entire_turn_failed(self):
         host = CodexServerHost(self.gateway)

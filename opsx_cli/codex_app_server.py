@@ -108,7 +108,13 @@ class CodexServerHost:
             try:
                 data = self.gateway.dispatch(tool, args)
             except CodexToolDenied as exc:
-                self.failed = True
+                # A missing *authorized* read is an ordinary tool failure,
+                # not an authority violation. Cursor SDK can recover from
+                # this inside the same turn; Codex must receive the same
+                # chance without ever widening the OPSX read/write scope.
+                # A successful host call remains mandatory for PASS.
+                if tool != "read" or exc.code != "CODEX_FILE_NOT_READABLE":
+                    self.failed = True
                 return self._deny(event, exc.code)
             return {
                 "id": event["id"],

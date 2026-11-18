@@ -2310,13 +2310,28 @@ async def invoke_checkpointed_graph(
     repo_root = resolve_opsx_repository_root(repo_root)
     from workflows.repair.repair_adapter_port import default_hop_model_selection
 
-    model_selection = default_hop_model_selection()
+    model_selection = initial_state.get("model") or default_hop_model_selection()
     path_patch = graph_repo_path_patch(initial_state, repo_root)
     initial_state = {**initial_state, **path_patch, "model": model_selection}
     config = {"configurable": {"thread_id": thread_id}}
     snapshot = await graph.aget_state(config)
+    if snapshot and snapshot.values:
+        prior_provider = str(snapshot.values.get("execution_provider") or "cursor")
+        target_provider = str(initial_state.get("execution_provider") or "cursor")
+        if prior_provider != target_provider:
+            raise RuntimeError(
+                "PROVIDER_IDENTITY_MISMATCH: prior=" + prior_provider
+                + " selected=" + target_provider
+            )
+        if target_provider == "codex":
+            prior_model = snapshot.values.get("model")
+            prior_id = prior_model.get("id") if isinstance(prior_model, Mapping) else None
+            if prior_id != model_selection.get("id"):
+                raise RuntimeError("MODEL_IDENTITY_MISMATCH")
     update = getattr(graph, "aupdate_state", None)
     resume_patch = {**path_patch, "model": model_selection}
+    if initial_state.get("execution_provider"):
+        resume_patch["execution_provider"] = initial_state["execution_provider"]
     if update is not None and snapshot and snapshot.values:
         prior = snapshot.values.get("model")
         if prior != model_selection:
@@ -2573,7 +2588,7 @@ async def invoke_ephemeral_workflow_graph(
     repo_root = resolve_opsx_repository_root(repo_root)
     from workflows.repair.repair_adapter_port import default_hop_model_selection
 
-    model_selection = default_hop_model_selection()
+    model_selection = initial_state.get("model") or default_hop_model_selection()
     path_patch = graph_repo_path_patch(initial_state, repo_root)
     merged_initial: GraphState = {
         **initial_state,

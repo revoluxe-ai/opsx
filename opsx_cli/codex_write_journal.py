@@ -38,9 +38,10 @@ class CodexWriteJournal:
         if self.path.is_relative_to(self.root):
             raise WriteRecoveryError("CODEX_JOURNAL_INSIDE_WORKTREE")
         self._lock_file = None
-        self.db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+        self.db = sqlite3.connect(self.path, timeout=0.35, isolation_level=None)
+        self.db.execute("PRAGMA busy_timeout=350")
+        self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
-        self.db.execute("PRAGMA busy_timeout=5000")
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS pending_edits(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +54,14 @@ class CodexWriteJournal:
                 occurred_at TEXT NOT NULL
             )
         """)
+        # Existing edit journals remain valid; CREATE is a distinct
+        # reversible operation with an absent-file precondition.
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(pending_edits)")}
+        if "op_kind" not in columns:
+            self.db.execute(
+                "ALTER TABLE pending_edits ADD COLUMN op_kind TEXT NOT NULL "
+                "DEFAULT 'REPLACE' CHECK(op_kind IN ('REPLACE','CREATE'))"
+            )
 
     def __enter__(self):
         lock_path = self.path.with_suffix(".lock")
@@ -126,9 +135,32 @@ class CodexWriteJournal:
             self.db.execute("ROLLBACK")
             raise
 
+    def begin_create(self, rel_path: str, after: bytes) -> int:
+        """Durable absent-file intent; caller must use atomic no-clobber create."""
+        self._require_lock()
+        target = self._target(rel_path)
+        if target.exists() or not target.parent.is_dir():
+            raise WriteRecoveryError("CODEX_CREATE_PRECONDITION_FAILED")
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self.db.execute(
+                """INSERT INTO pending_edits
+                (repo_root,rel_path,before_data,before_digest,after_digest,state,
+                 occurred_at,op_kind)
+                VALUES(?,?,?,?,?,'PENDING',?,'CREATE')""",
+                (str(self.root), rel_path, b"", _digest(b""), _digest(after),
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            receipt = cursor.lastrowid
+            self.db.execute("COMMIT")
+            return int(receipt)
+        except BaseException:
+            self.db.execute("ROLLBACK")
+            raise
+
     def _pending(self):
         return self.db.execute(
-            """SELECT id,repo_root,rel_path,before_data,before_digest,after_digest
+            """SELECT id,repo_root,rel_path,before_data,before_digest,after_digest,op_kind
                FROM pending_edits WHERE state='PENDING' ORDER BY id DESC"""
         ).fetchall()
 
@@ -136,17 +168,25 @@ class CodexWriteJournal:
         """Reverse pending edits in order; do not overwrite foreign modifications."""
         self._require_lock()
         count = 0
-        for receipt, root, rel, before, prior_sha, after_sha in self._pending():
+        for receipt, root, rel, before, prior_sha, after_sha, op_kind in self._pending():
             if root != str(self.root) or _digest(bytes(before)) != prior_sha:
                 raise WriteRecoveryError("CODEX_RECOVERY_IDENTITY_MISMATCH")
             target = self._target(rel)
-            if not target.is_file():
-                raise WriteRecoveryError("CODEX_RECOVERY_TARGET_MISSING")
-            current_sha = _digest(target.read_bytes())
-            if current_sha == after_sha:
-                atomic_replace(target, bytes(before))
-            elif current_sha != prior_sha:
-                raise WriteRecoveryError("CODEX_RECOVERY_CONCURRENT_CHANGE")
+            if op_kind == "CREATE":
+                if target.exists():
+                    if not target.is_file() or _digest(target.read_bytes()) != after_sha:
+                        raise WriteRecoveryError("CODEX_RECOVERY_CONCURRENT_CHANGE")
+                    target.unlink()  # restore proven absence, never replace foreign bytes
+            elif op_kind == "REPLACE":
+                if not target.is_file():
+                    raise WriteRecoveryError("CODEX_RECOVERY_TARGET_MISSING")
+                current_sha = _digest(target.read_bytes())
+                if current_sha == after_sha:
+                    atomic_replace(target, bytes(before))
+                elif current_sha != prior_sha:
+                    raise WriteRecoveryError("CODEX_RECOVERY_CONCURRENT_CHANGE")
+            else:
+                raise WriteRecoveryError("CODEX_RECOVERY_KIND_UNKNOWN")
             self.db.execute(
                 "UPDATE pending_edits SET state='ROLLED_BACK', before_data=X'' WHERE id=? AND state='PENDING'",
                 (receipt,),
@@ -158,7 +198,7 @@ class CodexWriteJournal:
         """Finalize only after completed turn and current revision verification."""
         self._require_lock()
         latest = {}
-        for receipt, root, rel, before, prior_sha, after_sha in self._pending():
+        for receipt, root, rel, before, prior_sha, after_sha, op_kind in self._pending():
             if rel not in latest:
                 latest[rel] = after_sha
         for rel, expected in latest.items():

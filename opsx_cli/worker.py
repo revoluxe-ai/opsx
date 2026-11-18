@@ -56,19 +56,53 @@ async def execute_request(request: dict) -> int | tuple[int, dict]:
     try:
         mode = request["mode"]
         if mode == "workflow":
+            selected = validate_provider(str(pinned_provider)) if pinned_provider is not None else validate_provider(
+                "codex" if adapter_module == PROVIDER_MODULES["codex"] else "cursor"
+            )
+            from agents.adapters.execution_workspace_port import open_execution_workspace
             from run_verify_impl import execute
             from workflows.verify.cli_outcome import (
                 raise_if_implementation_lane_terminal,
                 raise_unless_security_pass,
             )
 
-            outcome = await execute(
-                request["change_id"],
-                repo_root=project,
-                timeout_seconds=request["timeout_seconds"],
-            )
-            raise_if_implementation_lane_terminal(outcome, change_id=request["change_id"])
-            raise_unless_security_pass(outcome, change_id=request["change_id"])
+            run_scope = str(request.get("supervised_run_id") or request.get("run_id") or "")
+            if selected == "codex" and not run_scope:
+                raise RuntimeError("CODEX_WORKTREE_RUN_ID_REQUIRED")
+            # The selected provider owns workspace isolation. The control plane
+            # owns one unchanged implementation -> verification state machine.
+            async with open_execution_workspace(
+                project, run_id=run_scope or "cursor-legacy",
+                provider_module=PROVIDER_MODULES[selected],
+            ) as execution_root:
+                previous_root = os.environ.get("OPSX_PROJECT_ROOT")
+                previous_execution = os.environ.get("OPSX_PARENT_EXECUTION_ID")
+                os.environ["OPSX_PROJECT_ROOT"] = str(execution_root)
+                if selected == "codex":
+                    os.environ["OPSX_PARENT_EXECUTION_ID"] = run_scope
+                execution_token = bind_project_context(execution_root, core)
+                try:
+                    outcome = await execute(
+                        request["change_id"],
+                        repo_root=execution_root,
+                        timeout_seconds=request["timeout_seconds"],
+                    )
+                    raise_if_implementation_lane_terminal(
+                        outcome, change_id=request["change_id"],
+                    )
+                    raise_unless_security_pass(
+                        outcome, change_id=request["change_id"],
+                    )
+                finally:
+                    reset_project_context(execution_token)
+                    if previous_root is None:
+                        os.environ.pop("OPSX_PROJECT_ROOT", None)
+                    else:
+                        os.environ["OPSX_PROJECT_ROOT"] = previous_root
+                    if previous_execution is None:
+                        os.environ.pop("OPSX_PARENT_EXECUTION_ID", None)
+                    else:
+                        os.environ["OPSX_PARENT_EXECUTION_ID"] = previous_execution
             print("SECURITY_COMPLETE: PASS", flush=True)
             return 0, {
                 "workflow_status": "WORKFLOW_TERMINAL",

@@ -37,25 +37,62 @@ from .repair_cursor_sdk_adapter import (
 )
 from agents.adapters import provider_registry
 
+# Explicit registration fixes provider authority even when other modules are imported.
+_PROVIDER_MODULE = "agents.adapters.cursor_sdk"
+
+
+def _register_review(factory):
+    return provider_registry.register_review_adapter_factory(
+        factory, provider_module=_PROVIDER_MODULE,
+    )
+
+
+def _register_repair(factory):
+    return provider_registry.register_repair_adapter_factory(
+        factory, provider_module=_PROVIDER_MODULE,
+    )
+
+
+def _register_bootstrap(name, hook):
+    return provider_registry.register_bootstrap_hook(
+        name, hook, provider_module=_PROVIDER_MODULE,
+    )
+
+
+def _register_reconcile(name, hook):
+    return provider_registry.register_reconcile_hook(
+        name, hook, provider_module=_PROVIDER_MODULE,
+    )
+
+
 from .containers import AdaptersContainer, BridgeContainer, build_cursor_sdk_adapter_bundle
 from .reconcile_async_client import async_client_type, launch_bridge_client
 from .reconcile_billing import refresh_saved_run_billing
 from .wheel_bootstrap import ensure_cursor_sdk_importable
 
-provider_registry.register_review_adapter_factory(CursorSDKAdapter)
-provider_registry.register_repair_adapter_factory(RepairCursorSDKAdapter)
-provider_registry.register_bootstrap_hook(
+_register_review(CursorSDKAdapter)
+_register_repair(RepairCursorSDKAdapter)
+_register_bootstrap(
     "ensure_wheel_importable", ensure_cursor_sdk_importable
 )
-provider_registry.register_bootstrap_hook("token_counts_from_usage", _token_counts)
-provider_registry.register_reconcile_hook("launch_bridge_client", launch_bridge_client)
-provider_registry.register_reconcile_hook("async_client_type", async_client_type)
-provider_registry.register_reconcile_hook("bridge_runtime_type", lambda: CursorBridgeRuntime)
-provider_registry.register_reconcile_hook(
+_register_bootstrap("token_counts_from_usage", _token_counts)
+_register_reconcile("launch_bridge_client", launch_bridge_client)
+_register_reconcile("async_client_type", async_client_type)
+_register_reconcile("bridge_runtime_type", lambda: CursorBridgeRuntime)
+
+from .execution_session import CursorExecutionSession
+provider_registry.register_execution_session_factory(
+    "agents.adapters.cursor_sdk", CursorExecutionSession,
+)
+from .execution_workspace import CursorExecutionWorkspace
+provider_registry.register_execution_workspace_factory(
+    "agents.adapters.cursor_sdk", CursorExecutionWorkspace,
+)
+_register_reconcile(
     "refresh_saved_run_billing", refresh_saved_run_billing
 )
-provider_registry.register_reconcile_hook("stream_debug_unknown_tally", stream_debug_unknown_tally)
-provider_registry.register_reconcile_hook("run_minimal_probe", run_minimal_probe)
+_register_reconcile("stream_debug_unknown_tally", stream_debug_unknown_tally)
+_register_reconcile("run_minimal_probe", run_minimal_probe)
 
 __all__ = [
     "CURSOR_HOP_CANCEL_DRAIN_SECONDS",
@@ -91,6 +128,6 @@ __all__ = [
 ]
 
 from .failure_classification import classify_failure
-provider_registry.register_bootstrap_hook("classify_failure", classify_failure)
+_register_bootstrap("classify_failure", classify_failure)
 from .capability_options import custom_tool_specs_to_provider as _convert_custom_tools
-provider_registry.register_bootstrap_hook("custom_tool_specs_to_provider", _convert_custom_tools)
+_register_bootstrap("custom_tool_specs_to_provider", _convert_custom_tools)

@@ -34,6 +34,35 @@ class SupervisorClassifyTests(unittest.TestCase):
         self.assertEqual(row.owner, FailureOwner.META)
         self.assertTrue(row.repair_eligible)
 
+    def test_codex_unknown_outcome_stops_before_solver_hop(self) -> None:
+        for code in (
+            "CODEX_EXECUTION_OUTCOME_UNKNOWN",
+            "CODEX_PENDING_WRITE_RECOVERY_REQUIRED",
+            "CODEX_CROSS_PROVIDER_ACTIVE_DISPATCH",
+            "CODEX_WORKSPACE_REPLAY_IDENTITY_MISMATCH",
+            "CODEX_MODEL_AUTHORITY_MISMATCH",
+            "CODEX_RESUME_NOT_PROVEN",
+            "CODEX_APP_SERVER_RPC_FRAME_TOO_LARGE",
+            "CODEX_APP_SERVER_DISCONNECTED",
+            "CODEX_TURN_SQLITE_BUSY",
+            "CODEX_WORKSPACE_SQLITE_BUSY",
+            "CODEX_SPLIT_APPLY_STAGE_IDENTITY_REQUIRED",
+            "PROVIDER_IDENTITY_MISMATCH",
+        ):
+            with self.subTest(code=code):
+                record = {
+                    "process_status": "FAILED",
+                    "verification_status": "FAIL",
+                    "workflow_status": "UNKNOWN",
+                    "error": "RuntimeError: " + code,
+                }
+                category = classify_attempt(record, log_tail="Traceback: " + code)
+                self.assertEqual(category.owner, FailureOwner.INFRA)
+                self.assertFalse(category.repair_eligible)
+                verdict = qualify_failure(record, log_tail="Traceback: " + code)
+                self.assertEqual(verdict.owner, "INFRA")
+                self.assertFalse(verdict.fix_hop_allowed)
+
     def test_infra_not_repair_eligible(self) -> None:
         record = {"error": "CURSOR_PROVIDER_UNAVAILABLE"}
         row = classify_attempt(record, log_tail="")

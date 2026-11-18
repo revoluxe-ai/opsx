@@ -14,7 +14,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .codex_provider import (
     CodexProviderError,
@@ -33,6 +33,12 @@ class CodexAppServerOutcome:
     calls: tuple[Mapping[str, str], ...]
 
 
+# Codex JSON-RPC notifications can include long agent reasoning/tool payloads.
+# The default asyncio subprocess stdout StreamReader limit is only 64 KiB.
+# Keep a finite bound and fail closed on oversized protocol messages.
+CODEX_RPC_FRAME_LIMIT_BYTES = 8 * 1024 * 1024
+
+
 class CodexServerHost:
     """Handle one RPC event without exposing direct filesystem authority to Codex."""
 
@@ -40,8 +46,12 @@ class CodexServerHost:
         {"commandExecution", "fileChange", "mcpToolCall", "collabAgentToolCall"}
     )
 
-    def __init__(self, gateway: CodexToolGateway) -> None:
+    def __init__(
+        self, gateway: CodexToolGateway,
+        identity_observer: Callable[[str, str], None] | None = None,
+    ) -> None:
         self.gateway = gateway
+        self.identity_observer = identity_observer
         self.thread_id = ""
         self.turn_id = ""
         self.final_text = ""
@@ -53,7 +63,10 @@ class CodexServerHost:
         if event.get("method") != "item/tool/call":
             return self.response_for(event)
         params = event.get("params")
-        if not isinstance(params, Mapping) or params.get("tool") != "run_pytest":
+        if not isinstance(params, Mapping) or (
+            params.get("tool") != "run_pytest"
+            and params.get("tool") not in self.gateway.capability_specs
+        ):
             return self.response_for(event)
         if ("id" not in event or not self.thread_id or not self.turn_id
                 or params.get("threadId") != self.thread_id
@@ -62,7 +75,9 @@ class CodexServerHost:
             self.failed = True
             return self._deny(event, "CODEX_TOOL_IDENTITY_MISMATCH")
         try:
-            data = await self.gateway.dispatch_async("run_pytest", params.get("arguments"))
+            data = await self.gateway.dispatch_async(
+                str(params.get("tool")), params.get("arguments"),
+            )
         except CodexToolDenied as exc:
             self.failed = True
             return self._deny(event, exc.code)
@@ -129,6 +144,8 @@ class CodexServerHost:
             turn = params.get("turn")
             if isinstance(turn, Mapping) and isinstance(turn.get("id"), str):
                 self.turn_id = turn["id"]
+                if self.identity_observer is not None:
+                    self.identity_observer("turn", self.turn_id)
         if method == "turn/completed":
             turn = params.get("turn")
             self.done = True
@@ -163,6 +180,10 @@ async def _line(proc: asyncio.subprocess.Process, deadline: float) -> dict[str, 
         raw = await asyncio.wait_for(proc.stdout.readline(), timeout=max(0.01, deadline - time.monotonic()))
     except TimeoutError as exc:
         raise CodexProviderError("CODEX_APP_SERVER_TIMEOUT") from exc
+    except ValueError as exc:
+        raise CodexProviderError("CODEX_APP_SERVER_RPC_FRAME_TOO_LARGE") from exc
+    if len(raw) > CODEX_RPC_FRAME_LIMIT_BYTES:
+        raise CodexProviderError("CODEX_APP_SERVER_RPC_FRAME_TOO_LARGE")
     if not raw:
         raise CodexProviderError("CODEX_APP_SERVER_DISCONNECTED")
     try:
@@ -197,6 +218,9 @@ async def run_guarded_codex_turn(
     reasoning_effort: str = "low",
     timeout_seconds: int = 300,
     executable: str | None = None,
+    identity_observer: Callable[[str, str], None] | None = None,
+    resume_thread_id: str | None = None,
+    ephemeral: bool = True,
 ) -> CodexAppServerOutcome:
     """One bounded, isolated read-only turn. Never resumes an unknown active run."""
     if not prompt.strip():
@@ -232,13 +256,14 @@ async def run_guarded_codex_turn(
         ]
         proc = await asyncio.create_subprocess_exec(
             *command,
+            limit=CODEX_RPC_FRAME_LIMIT_BYTES,
             cwd=isolated,
             env=env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        host = CodexServerHost(gateway)
+        host = CodexServerHost(gateway, identity_observer=identity_observer)
         deadline = time.monotonic() + timeout_seconds
         try:
             await _send(proc, {
@@ -261,26 +286,45 @@ async def run_guarded_codex_turn(
             else:
                 raise CodexProviderError("CODEX_APP_SERVER_HANDSHAKE_LIMIT")
             await _send(proc, {"method": "initialized", "params": {}})
-            await _send(proc, {
-                "method": "thread/start", "id": 2,
-                "params": {
+            developer_instructions = (
+                "Use only the explicitly provided OPSX host tools for all "
+                "file reads and writes. Never invoke shell, native patch, "
+                "MCP/app tools, or subagents. The Codex execution workspace "
+                "is intentionally empty; all project operations go through "
+                "host tools guarded by OPSX. If this turn grants any "
+                "dynamicTools, invoke at least one of those named tools "
+                "before providing a final answer. Available names: "
+                + ", ".join(sorted(gateway.allowed))
+                + ". A response without an actual host tool call fails."
+            )
+            if resume_thread_id:
+                method = "thread/resume"
+                params = {
+                    "threadId": resume_thread_id,
+                    "model": model,
+                    "modelProvider": "openai",
+                    "cwd": str(sandbox),
+                    "approvalPolicy": "never",
+                    "sandbox": "read-only",
+                    "developerInstructions": developer_instructions,
+                }
+            else:
+                method = "thread/start"
+                params = {
                     "model": model,
                     "allowProviderModelFallback": False,
                     "modelProvider": "openai",
                     "cwd": str(sandbox),
                     "approvalPolicy": "never",
                     "sandbox": "read-only",
-                    "ephemeral": True,
-                    "dynamicTools": dynamic_tool_specs(tuple(gateway.allowed)),
-                    "developerInstructions": (
-                        "Use only the explicitly provided OPSX host tools for all "
-                        "file reads and writes. Never invoke shell, native patch, "
-                        "MCP/app tools, or subagents. The Codex execution workspace "
-                        "is intentionally empty; all project operations go through "
-                        "host tools guarded by OPSX."
+                    "ephemeral": ephemeral,
+                    "dynamicTools": dynamic_tool_specs(
+                        tuple(sorted(gateway.allowed)),
+                        capability_specs=gateway.capability_specs,
                     ),
-                },
-            })
+                    "developerInstructions": developer_instructions,
+                }
+            await _send(proc, {"method": method, "id": 2, "params": params})
             for _ in range(300):
                 event = await _line(proc, deadline)
                 if event.get("id") == 2:
@@ -288,6 +332,17 @@ async def run_guarded_codex_turn(
                     if not isinstance(thread, dict) or not isinstance(thread.get("id"), str):
                         raise CodexProviderError("CODEX_APP_SERVER_THREAD_START_FAILED")
                     host.thread_id = thread["id"]
+                    if resume_thread_id:
+                        reply = event.get("result") or {}
+                        if (
+                            host.thread_id != resume_thread_id
+                            or reply.get("model") != model
+                            or reply.get("modelProvider") != "openai"
+                            or Path(str(reply.get("cwd") or "")).resolve() != sandbox
+                        ):
+                            raise CodexProviderError("CODEX_RESUME_PROVIDER_IDENTITY_MISMATCH")
+                    if identity_observer is not None:
+                        identity_observer("thread", host.thread_id)
                     break
             else:
                 raise CodexProviderError("CODEX_APP_SERVER_THREAD_LIMIT")
@@ -309,6 +364,8 @@ async def run_guarded_codex_turn(
                     turn = (event.get("result") or {}).get("turn")
                     if isinstance(turn, Mapping) and isinstance(turn.get("id"), str):
                         host.turn_id = turn["id"]
+                        if identity_observer is not None:
+                            identity_observer("turn", host.turn_id)
                     else:
                         raise CodexProviderError("CODEX_APP_SERVER_TURN_START_FAILED")
                 reply = await host.response_for_async(event)
@@ -322,7 +379,14 @@ async def run_guarded_codex_turn(
                     break
             if not host.done or not host.final_text or not host.turn_id:
                 raise CodexProviderError("CODEX_APP_SERVER_INCOMPLETE")
-            gateway.confirm_edits()  # verified convergence before durable success
+            gateway.require_tool_evidence()
+            # An edit grant does not force a write: verify-only/adoption hops may
+            # have edit capability without using it. But any submitted edit
+            # must have a proven net effect, never an agent self-report.
+            if any(c.get("tool") == "edit" and c.get("verdict") == "ALLOWED"
+                   for c in gateway.calls):
+                gateway.require_net_edit()
+            gateway.confirm_edits()  # evidence-bound completion
             return CodexAppServerOutcome(
                 text=host.final_text, thread_id=host.thread_id,
                 turn_id=host.turn_id, usage=host.usage,

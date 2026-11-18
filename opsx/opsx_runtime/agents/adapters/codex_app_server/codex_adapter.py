@@ -52,9 +52,15 @@ class CodexAppServerAdapter(ABCAdapter):
     """Provider-native tool proxy with OPSX callback invoked before file I/O."""
 
     def __init__(self, *, timeout_seconds: float = 300, **unused: Any) -> None:
-        if not 1 <= timeout_seconds <= 3600:
+        # The supervisor has a multi-hour budget, but a single native Codex
+        # turn has a 3600s cap. Reuse the existing session-level per-turn
+        # semantics for direct (supervisor-fix) adapter construction.
+        import math
+        if not isinstance(timeout_seconds, (int, float)) or (
+            not math.isfinite(timeout_seconds) or timeout_seconds < 1
+        ):
             raise ValueError("invalid Codex timeout")
-        self.timeout_seconds = int(timeout_seconds)
+        self.timeout_seconds = min(3600, int(timeout_seconds))
         self.last_result: AgentResult | None = None
 
     async def _run_turn(

@@ -198,11 +198,15 @@ class CodexGatewayTests(unittest.TestCase):
         self.assertEqual((self.repo / "allowed/a.txt").read_text(), "alpha\nbeta\n")
 
     def test_edit_requires_write_allowlist(self):
+        from agents.config import ReadScope
         from types import SimpleNamespace
         with self.assertRaises(CodexToolDenied) as caught:
             CodexToolGateway(
                 self.repo, ["edit"], guard=lambda *args: None,
-                read_scope=SimpleNamespace(restrict_write_allow=None),
+                read_scope=ReadScope(
+                    allow=(), deny=(), restrict_allow=None,
+                    restrict_write_allow=None,
+                ),
             )
         self.assertEqual(caught.exception.code, "CODEX_WRITE_SCOPE_REQUIRED")
 

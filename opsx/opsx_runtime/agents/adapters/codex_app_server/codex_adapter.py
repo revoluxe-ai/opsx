@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from contextlib import nullcontext
-from dataclasses import replace
 import subprocess
 from typing import Any, Mapping, Sequence
 
@@ -47,38 +46,6 @@ def _require_linked_worktree(workspace: Path) -> None:
             or not (workspace / ".git").is_file()
             or not git_dir.is_dir() or not common.is_dir()):
         raise CodexProviderError("CODEX_WRITE_REQUIRES_LINKED_WORKTREE")
-
-
-_SPLIT_APPLY_MUTATORS = frozenset({
-    "apply_scaffold", "apply_red", "apply_implement", "apply_green",
-})
-
-
-def _bind_codex_split_apply_write_scope(
-    scope: ReadScope, state: Mapping[str, Any], agent_key: str | None,
-) -> ReadScope:
-    """Use *exactly* legacy OPSX's effective edit allowlist, never expand it.
-
-    Cursor's scope policy uses restrict_allow for edit when no separate
-    write restriction exists. Codex needs an explicit write field so the
-    host guard can prove the same authority in a linked worktree.
-    """
-    if scope.restrict_write_allow:
-        return scope
-    if agent_key not in _SPLIT_APPLY_MUTATORS:
-        raise CodexProviderError("CODEX_WRITE_SCOPE_REQUIRED")
-    expected=str(agent_key).replace("apply_", "APPLY_").upper()
-    if (
-        str(state.get("implementation_stage") or "").upper() != expected
-        or not str(state.get("implementation_slice_id") or "").strip()
-        or not str(state.get("change_id") or "").strip()
-    ):
-        raise CodexProviderError("CODEX_SPLIT_APPLY_STAGE_IDENTITY_REQUIRED")
-    from agents.config import effective_restrict_allow_for_tool
-    allowed=effective_restrict_allow_for_tool(scope, "edit") or ()
-    if not allowed or any(p in ("*", "**") for p in allowed):
-        raise CodexProviderError("CODEX_WRITE_SCOPE_REQUIRED")
-    return replace(scope, restrict_write_allow=tuple(allowed))
 
 
 class CodexAppServerAdapter(ABCAdapter):
@@ -171,10 +138,6 @@ class CodexAppServerAdapter(ABCAdapter):
         model = DEFAULT_CODEX_MODEL
         if read_scope is None:
             read_scope = resolve_effective_read_scope(agent_key, state)
-        if "edit" in tools and not read_scope.restrict_write_allow:
-            read_scope = _bind_codex_split_apply_write_scope(
-                read_scope, state, agent_key,
-            )
         if tool_call_guard is None:
             tool_call_guard = build_tool_call_guard(read_scope, workspace, agent_key=agent_key)
         execution_id = str(state.get("run_uuid") or "").strip()

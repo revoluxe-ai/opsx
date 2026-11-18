@@ -99,7 +99,8 @@ class CodexToolGateway:
         if "run_pytest" in self.allowed and "run_pytest" not in self.registered_tools:
             raise CodexToolDenied("CODEX_PYTEST_TOOL_UNBOUND")
         if "edit" in self.allowed:
-            if not getattr(read_scope, "restrict_write_allow", None):
+            from agents.config import effective_restrict_allow_for_tool
+            if not effective_restrict_allow_for_tool(read_scope, "edit"):
                 raise CodexToolDenied("CODEX_WRITE_SCOPE_REQUIRED")
             if journal is None:
                 raise CodexToolDenied("CODEX_WRITE_JOURNAL_REQUIRED")
@@ -167,16 +168,21 @@ class CodexToolGateway:
 
     def _check_static_write_scope(self, rel_path: str) -> None:
         """Enforce explicit allow/deny independently of OPSX warn/off mode."""
-        try:
-            from agents.config import path_matches_pattern
-        except ImportError as exc:
-            raise CodexToolDenied("CODEX_SCOPE_MATCHER_UNAVAILABLE") from exc
-        patterns = tuple(getattr(self.read_scope, "restrict_write_allow", None) or ())
-        deny = tuple(getattr(self.read_scope, "deny", ()) or ())
-        if not patterns or not any(path_matches_pattern(rel_path, pat) for pat in patterns):
-            raise CodexToolDenied("CODEX_WRITE_OUTSIDE_ALLOWLIST")
-        if any(path_matches_pattern(rel_path, pat) for pat in deny):
+        from agents.config import (
+            effective_restrict_allow_for_tool,
+            path_allowed_by_scope,
+            path_matches_pattern,
+        )
+        # The common OPSX policy is authoritative; preserve the distinct
+        # deny-path receipt code without inventing another permission rule.
+        if any(path_matches_pattern(rel_path, p) for p in
+               (getattr(self.read_scope, "deny", ()) or ())):
             raise CodexToolDenied("CODEX_WRITE_DENIED_PATH")
+        patterns = effective_restrict_allow_for_tool(self.read_scope, "edit")
+        if not patterns or not path_allowed_by_scope(
+            self.read_scope, rel_path, restrict_allow=patterns,
+        ):
+            raise CodexToolDenied("CODEX_WRITE_OUTSIDE_ALLOWLIST")
 
     @staticmethod
     def _atomic_replace(target: Path, content: bytes) -> None:

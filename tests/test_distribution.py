@@ -325,9 +325,14 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(first["instance_id"], second["instance_id"])
             state = json.loads(project.panel_state.read_text())
             opener = urllib.request.build_opener(
-                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+                urllib.request.ProxyHandler({}),
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
             )
-            home = opener.open(state["url"] + "/").read().decode("utf-8")
+            # Uvicorn is on this asyncio loop; synchronous URL open would
+            # deadlock the loop once the loopback proxy bypass works.
+            home = (await asyncio.to_thread(
+                lambda: opener.open(state["url"] + "/", timeout=3).read()
+            )).decode("utf-8")
             self.assertIn("Запуск workflow", home)
             self.assertIn("Implementation", home)
             self.assertNotIn('href="/repair"', home)
@@ -335,7 +340,9 @@ class DistributionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("workflow-timeout-min", home)
             self.assertIn("supervisor-timeout-min", home)
             with self.assertRaises(urllib.error.HTTPError) as missing:
-                opener.open(state["url"] + "/repair")
+                await asyncio.to_thread(
+                    lambda: opener.open(state["url"] + "/repair", timeout=3)
+                )
             self.assertEqual(missing.exception.code, 404)
             self.assertEqual((await stop_panel(project))["status"], "STOPPED")
             self.assertFalse((await panel_status(project))["running"])

@@ -77,7 +77,11 @@ async def _http(state: dict, path: str, *, method: str = "GET") -> dict:
             raise OpsxError("PANEL_STATE_INVALID", "Panel state is not a loopback URL.")
         req = urllib.request.Request(url + path, method=method,
                                      headers={"X-OPSX-Token": state["token"]})
-        with urllib.request.urlopen(req, timeout=2) as response:
+        # OPSX panel is loopback-only. Never route authenticated local
+        # requests via system HTTP proxy: on Windows urllib may inherit
+        # proxy settings for 127.0.0.1 and return a false 503.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req, timeout=2) as response:
             return json.load(response)
     return await asyncio.to_thread(request)
 
